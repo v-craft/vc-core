@@ -1,0 +1,57 @@
+[package]
+name = "vc_core"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.92"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/VoidCraft-Engine/vc-core"
+exclude = [".github"]
+
+[workspace]
+resolver = "3"
+members = [
+    "crates/*"
+]
+
+[features]
+default = ["std"]
+
+std = [
+    "vc_cfg/std"
+]
+
+[dependencies]
+vc_cfg = { path = "./crates/vc_cfg" }
+
+[workspace.lints.clippy]
+needless_lifetimes = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
+
+std_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+alloc_instead_of_core = "warn"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+needless_lifetimes = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
+
+std_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+alloc_instead_of_core = "warn"
+
+[lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "warn"
+unused_qualifications = "warn"
+
+[package.metadata.docs.rs]
+rustdoc-args = ["-Zunstable-options", "--generate-link-to-definition"]
+all-features = true
+
