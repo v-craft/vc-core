@@ -1,55 +1,74 @@
-[package]
-name = "vc_core"
+[workspace]
+resolver = "3"
+members = [ "crates/*" ]
+
+[workspace.package]
 version = "0.0.1"
 edition = "2024"
 rust-version = "1.92"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/VoidCraft-Engine/vc-core"
-exclude = [".github"]
 
-[workspace]
-resolver = "3"
-members = [
-    "crates/*"
-]
+[package]
+name = "vc_core"
+exclude = [".github"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [features]
-default = ["std"]
+default = [ "std", "debug", "auto_register" ]
 
 std = [
-    "vc_cfg/std"
+    "vc_os/std",
+    "vc_reflect/std",
+]
+
+# Even if turned on, it only takes effect in Debug mode.
+debug = [
+    "std",
+    "vc_reflect/debug"
+]
+
+auto_register = [ "vc_reflect/auto_register" ]
+
+reflect_docs = [ "vc_reflect/reflect_docs" ]
+
+rayon = [ "vc_utils/rayon" ]
+
+web = [ "vc_os/web" ]
+
+# Open documents for inactive codes.
+docsrs_dev = [
+    "vc_os/docsrs_dev"
 ]
 
 [dependencies]
 vc_cfg = { path = "./crates/vc_cfg" }
+vc_ptr = { path = "./crates/vc_ptr" }
+vc_utils = { path = "./crates/vc_utils" }
+
+vc_os = { path = "./crates/vc_os", default-features = false }
+vc_reflect = { path = "./crates/vc_reflect", default-features = false }
+vc_task = { path = "./crates/vc_task", default-features = false }
 
 [workspace.lints.clippy]
-needless_lifetimes = "allow"
-too_many_arguments = "allow"
-type_complexity = "allow"
-
 std_instead_of_core = "warn"
 std_instead_of_alloc = "warn"
 alloc_instead_of_core = "warn"
+
+type_complexity = "allow"
+too_many_arguments = "allow"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
 unsafe_op_in_unsafe_fn = "warn"
 unused_qualifications = "warn"
 
-[lints.clippy]
-needless_lifetimes = "allow"
-too_many_arguments = "allow"
-type_complexity = "allow"
-
-std_instead_of_core = "warn"
-std_instead_of_alloc = "warn"
-alloc_instead_of_core = "warn"
-
-[lints.rust]
-unsafe_code = "deny"
-unsafe_op_in_unsafe_fn = "warn"
-unused_qualifications = "warn"
+[lints]
+workspace = true
 
 [package.metadata.docs.rs]
 rustdoc-args = ["-Zunstable-options", "--generate-link-to-definition"]

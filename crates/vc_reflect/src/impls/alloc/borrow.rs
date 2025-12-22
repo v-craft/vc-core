@@ -1,0 +1,210 @@
+use crate::{
+    FromReflect, Reflect,
+    derive::impl_type_path,
+    impls::{GenericTypeInfoCell, NonGenericTypeInfoCell},
+    info::{ListInfo, OpaqueInfo, TypeInfo, TypePath, Typed},
+    ops::{ApplyError, List, ListItemIter},
+    registry::{
+        FromType, GetTypeMeta, TypeMeta, TypeRegistry, TypeTraitDeserialize, TypeTraitFromPtr,
+        TypeTraitFromReflect, TypeTraitSerialize,
+    },
+};
+use alloc::{
+    borrow::{Cow, ToOwned},
+    boxed::Box,
+    vec::Vec,
+};
+
+impl_type_path!(::alloc::borrow::Cow<'a: 'static, T: ToOwned + ?Sized>);
+
+impl Typed for Cow<'static, str> {
+    fn type_info() -> &'static TypeInfo {
+        static CELL: NonGenericTypeInfoCell = NonGenericTypeInfoCell::new();
+        CELL.get_or_init(|| TypeInfo::Opaque(OpaqueInfo::new::<Self>()))
+    }
+}
+
+impl Reflect for Cow<'static, str> {
+    crate::reflection::impl_reflect_cast_fn!(Opaque);
+
+    fn to_dynamic(&self) -> Box<dyn Reflect> {
+        Box::new(self.clone())
+    }
+
+    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        if let Some(value) = value.downcast_ref::<Self>() {
+            self.clone_from(value);
+        } else {
+            return Err(ApplyError::MismatchedTypes {
+                from_type: value.reflect_type_path().into(),
+                to_type: <Self as TypePath>::type_path().into(),
+            });
+        }
+        Ok(())
+    }
+
+    fn reflect_clone(&self) -> Result<Box<dyn Reflect>, crate::ops::ReflectCloneError> {
+        Ok(Box::new(self.clone()))
+    }
+
+    fn reflect_partial_eq(&self, value: &dyn Reflect) -> Option<bool> {
+        if let Some(value) = value.downcast_ref::<Self>() {
+            Some(PartialEq::eq(self, value))
+        } else {
+            Some(false)
+        }
+    }
+
+    fn reflect_hash(&self) -> Option<u64> {
+        let mut hasher = crate::reflect_hasher();
+        core::hash::Hash::hash(self, &mut hasher);
+        Some(core::hash::Hasher::finish(&hasher))
+    }
+
+    fn reflect_debug(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Debug::fmt(self, f)
+    }
+}
+
+impl GetTypeMeta for Cow<'static, str> {
+    fn get_type_meta() -> TypeMeta {
+        let mut meta = TypeMeta::with_capacity::<Self>(4);
+        meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
+        meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
+        meta.insert_trait::<TypeTraitSerialize>(FromType::<Self>::from_type());
+        meta.insert_trait::<TypeTraitDeserialize>(FromType::<Self>::from_type());
+        meta
+    }
+}
+
+impl FromReflect for Cow<'static, str> {
+    fn from_reflect(reflect: &dyn Reflect) -> Option<Self> {
+        Some(reflect.downcast_ref::<Self>()?.clone())
+    }
+}
+
+crate::derive::impl_auto_register!(Cow<'static, str>);
+
+impl<T: FromReflect + Typed + Clone> Typed for Cow<'static, [T]> {
+    fn type_info() -> &'static TypeInfo {
+        static CELL: GenericTypeInfoCell = GenericTypeInfoCell::new();
+        CELL.get_or_insert::<Self>(|| TypeInfo::List(ListInfo::new::<Self, T>()))
+    }
+}
+
+impl<T: FromReflect + Typed + Clone> Reflect for Cow<'static, [T]> {
+    crate::reflection::impl_reflect_cast_fn!(List);
+
+    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::list_try_apply(self, value)
+    }
+
+    fn to_dynamic(&self) -> Box<dyn Reflect> {
+        Box::new(self.clone())
+    }
+    fn reflect_clone(&self) -> Result<Box<dyn Reflect>, crate::ops::ReflectCloneError> {
+        Ok(Box::new(self.clone()))
+    }
+
+    fn reflect_partial_eq(&self, value: &dyn Reflect) -> Option<bool> {
+        crate::impls::list_partial_eq(self, value)
+    }
+
+    fn reflect_hash(&self) -> Option<u64> {
+        crate::impls::list_hash(self)
+    }
+
+    fn reflect_debug(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        crate::impls::list_debug(self, f)
+    }
+}
+
+impl<T: FromReflect + Typed + Clone> List for Cow<'static, [T]> {
+    fn get(&self, index: usize) -> Option<&dyn Reflect> {
+        <[T]>::get(self.as_ref(), index).map(Reflect::as_reflect)
+    }
+
+    fn get_mut(&mut self, index: usize) -> Option<&mut dyn Reflect> {
+        <[T]>::get_mut(self.to_mut(), index).map(Reflect::as_reflect_mut)
+    }
+
+    fn insert(&mut self, index: usize, element: Box<dyn Reflect>) {
+        let element = match T::take_from_reflect(element) {
+            Ok(v) => v,
+            Err(e) => panic! {
+                "incompatible type: from {} to {}",
+                e.reflect_type_path(),
+                T::type_path(),
+            },
+        };
+        self.to_mut().insert(index, element);
+    }
+
+    fn remove(&mut self, index: usize) -> Box<dyn Reflect> {
+        Box::new(self.to_mut().remove(index))
+    }
+
+    fn push(&mut self, value: Box<dyn Reflect>) {
+        let value = match T::take_from_reflect(value) {
+            Ok(v) => v,
+            Err(e) => panic! {
+                "incompatible type: from {} to {}",
+                e.reflect_type_path(),
+                T::type_path(),
+            },
+        };
+        self.to_mut().push(value);
+    }
+
+    fn try_push(&mut self, value: Box<dyn Reflect>) -> Result<(), Box<dyn Reflect>> {
+        let value = T::take_from_reflect(value)?;
+        self.to_mut().push(value);
+        Ok(())
+    }
+
+    fn pop(&mut self) -> Option<Box<dyn Reflect>> {
+        self.to_mut().pop().map(Reflect::into_boxed_reflect)
+    }
+
+    fn len(&self) -> usize {
+        self.as_ref().len()
+    }
+
+    fn iter(&self) -> ListItemIter<'_> {
+        ListItemIter::new(self)
+    }
+
+    fn drain(&mut self) -> Vec<Box<dyn Reflect>> {
+        self.to_mut()
+            .drain(..)
+            .map(Reflect::into_boxed_reflect)
+            .collect()
+    }
+}
+
+impl<T: FromReflect + Typed + Clone> FromReflect for Cow<'static, [T]> {
+    fn from_reflect(reflect: &dyn Reflect) -> Option<Self> {
+        let ref_list = reflect.reflect_ref().as_list().ok()?;
+
+        let mut temp_vec = Vec::with_capacity(ref_list.len());
+
+        for field in ref_list.iter() {
+            temp_vec.push(T::from_reflect(field)?);
+        }
+
+        Some(temp_vec.into())
+    }
+}
+
+impl<T: FromReflect + Typed + Clone + GetTypeMeta> GetTypeMeta for Cow<'static, [T]> {
+    fn get_type_meta() -> TypeMeta {
+        let mut meta = TypeMeta::with_capacity::<Self>(2);
+        meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
+        meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
+        meta
+    }
+
+    fn register_dependencies(registry: &mut TypeRegistry) {
+        registry.register::<T>();
+    }
+}

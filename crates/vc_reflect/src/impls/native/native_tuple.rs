@@ -1,0 +1,427 @@
+//! Implement reflection traits for tuples with a field count of 12 or less.
+//!
+//! - [`TypePath`] -> [`DynamicTypePath`]
+//! - [`Typed`] -> [`DynamicTyped`]
+//! - [`Tuple`]
+//! - [`Reflect`]
+//! - [`GetTypeTraits`]
+//! - [`FromReflect`]
+//!
+//! [`DynamicTypePath`]: crate::info::DynamicTypePath
+//! [`DynamicTyped`]: crate::info::DynamicTyped
+
+use crate::{
+    FromReflect, Reflect,
+    impls::{GenericTypeInfoCell, GenericTypePathCell, NonGenericTypeInfoCell},
+    info::{TupleInfo, TypeInfo, TypePath, Typed, UnnamedField},
+    ops::{ApplyError, ReflectCloneError, Tuple, TupleFieldIter},
+    registry::{
+        FromType, GetTypeMeta, TypeMeta, TypeRegistry, TypeTraitDefault, TypeTraitDeserialize,
+        TypeTraitFromPtr, TypeTraitFromReflect, TypeTraitSerialize,
+    },
+};
+use alloc::{boxed::Box, vec, vec::Vec};
+use core::fmt;
+use vc_utils::range_invoke;
+
+macro_rules! impl_type_path_tuple {
+    (0: []) => {
+        impl TypePath for () {
+            #[inline]
+            fn type_path() -> &'static str {
+                "()"
+            }
+            #[inline]
+            fn type_name() -> &'static str {
+                "()"
+            }
+            #[inline]
+            fn type_ident() -> &'static str {
+                "()"
+            }
+        }
+    };
+    (1: [$zero:ident]) => {
+        #[cfg_attr(docsrs, doc(fake_variadic))]
+        impl<$zero: TypePath> TypePath for ($zero,) {
+            fn type_path() -> &'static str {
+                static CELL: GenericTypePathCell = GenericTypePathCell::new();
+                CELL.get_or_insert::<Self>(|| {
+                    $crate::impls::concat(&["(" , $zero::type_path() , ",)"])
+                })
+            }
+
+            fn type_name() -> &'static str {
+                static CELL: GenericTypePathCell = GenericTypePathCell::new();
+                CELL.get_or_insert::<Self>(|| {
+                    $crate::impls::concat(&["(" , $zero::type_name() , ",)"])
+                })
+            }
+
+            fn type_ident() -> &'static str {
+                static CELL: GenericTypePathCell = GenericTypePathCell::new();
+                CELL.get_or_insert::<Self>(|| {
+                    $crate::impls::concat(&["(" , $zero::type_ident() , ",)"])
+                })
+            }
+        }
+    };
+    ($_:literal: [$zero:ident, $($index:ident),*]) => {
+        #[cfg_attr(docsrs, doc(hidden))]
+        impl<$zero: TypePath, $($index: TypePath),*> TypePath for ($zero, $($index),*) {
+            fn type_path() -> &'static str {
+                static CELL: GenericTypePathCell = GenericTypePathCell::new();
+                CELL.get_or_insert::<Self>(|| {
+                    $crate::impls::concat(&["(", $zero::type_path() $(, ", ", $index::type_path())* , ")"])
+                })
+            }
+
+            fn type_name() -> &'static str {
+                static CELL: GenericTypePathCell = GenericTypePathCell::new();
+                CELL.get_or_insert::<Self>(|| {
+                    $crate::impls::concat(&["(", $zero::type_name() $(, ", ", $index::type_name())* , ")"])
+                })
+            }
+
+            fn type_ident() -> &'static str {
+                static CELL: GenericTypePathCell = GenericTypePathCell::new();
+                CELL.get_or_insert::<Self>(|| {
+                    $crate::impls::concat(&["(", $zero::type_ident() $(, ", ", $index::type_ident())* , ")"])
+                })
+            }
+        }
+    };
+}
+
+range_invoke!(impl_type_path_tuple, 12);
+
+macro_rules! impl_reflect_tuple {
+    (0: []) => {
+        impl Typed for () {
+            fn type_info() -> &'static TypeInfo {
+                static CELL: NonGenericTypeInfoCell = NonGenericTypeInfoCell::new();
+                CELL.get_or_init(|| {
+                    TypeInfo::Tuple(TupleInfo::new::<Self>(&[]))
+                })
+            }
+        }
+
+        impl Tuple for () {
+            #[inline]
+            fn field(&self, _index: usize) -> Option<&dyn Reflect> {
+                None
+            }
+
+            #[inline]
+            fn field_mut(&mut self, _index: usize) -> Option<&mut dyn Reflect> {
+                None
+            }
+
+            #[inline]
+            fn field_len(&self) -> usize {
+                0
+            }
+
+            #[inline]
+            fn iter_fields(&self) -> TupleFieldIter<'_> {
+                TupleFieldIter::new(self)
+            }
+
+            #[inline]
+            fn drain(self: Box<Self>) -> Vec<Box<dyn Reflect>> {
+                Vec::new()
+            }
+        }
+
+        impl Reflect for () {
+            crate::reflection::impl_reflect_cast_fn!(Tuple);
+
+            #[inline]
+            fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+                crate::impls::tuple_try_apply(self, value)
+            }
+
+            #[inline]
+            fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
+                if other.is::<Self>() {
+                    Some(true)
+                } else {
+                    Some(false)
+                }
+            }
+
+            #[inline]
+            fn to_dynamic(&self) -> Box<dyn Reflect> {
+                Box::new(())
+            }
+
+            #[inline]
+            fn reflect_clone(&self) -> Result<Box<dyn Reflect>, ReflectCloneError> {
+                Ok(Box::new(()))
+            }
+
+            #[inline]
+            fn reflect_hash(&self) -> Option<u64> {
+                let mut hasher = crate::reflect_hasher();
+                <() as core::hash::Hash>::hash(self, &mut hasher);
+                Some(core::hash::Hasher::finish(&hasher))
+            }
+
+            #[inline]
+            fn reflect_debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                fmt::Debug::fmt(self, f)
+            }
+        }
+
+        impl GetTypeMeta for () {
+            fn get_type_meta() -> TypeMeta {
+                let mut type_meta = TypeMeta::with_capacity::<Self>(5);
+                type_meta.insert_trait::<TypeTraitDefault>(FromType::<Self>::from_type());
+                type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
+                type_meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
+                type_meta.insert_trait::<TypeTraitSerialize>(FromType::<Self>::from_type());
+                type_meta.insert_trait::<TypeTraitDeserialize>(FromType::<Self>::from_type());
+                type_meta
+            }
+        }
+
+        impl FromReflect for () {
+            fn from_reflect(reflect: &dyn Reflect) -> Option<Self> {
+                let y = reflect.reflect_ref().as_tuple().ok()?;
+
+                if 0 != y.field_len() {
+                    return None;
+                }
+
+                Some(())
+            }
+        }
+    };
+    (1 : [ $index:tt : $name:ident ]) => {
+        #[cfg_attr(docsrs, doc(fake_variadic))]
+        impl<$name: Reflect + Typed> Typed for ($name,) {
+            fn type_info() -> &'static TypeInfo {
+                static CELL: GenericTypeInfoCell = GenericTypeInfoCell::new();
+                CELL.get_or_insert::<Self>(|| {
+                    TypeInfo::Tuple(TupleInfo::new::<Self>(&[
+                        UnnamedField::new::<$name>($index)
+                    ]))
+                })
+            }
+        }
+
+        #[cfg_attr(docsrs, doc(fake_variadic))]
+        impl<$name: Reflect + Typed> Tuple for ($name,) {
+            #[inline]
+            fn field(&self, index: usize) -> Option<&dyn Reflect> {
+                match index {
+                    $index => Some(&self.$index as &dyn Reflect),
+                    _ => None,
+                }
+            }
+
+            #[inline]
+            fn field_mut(&mut self, index: usize) -> Option<&mut dyn Reflect> {
+                match index {
+                    $index => Some(&mut self.$index as &mut dyn Reflect),
+                    _ => None,
+                }
+            }
+
+            #[inline]
+            fn field_len(&self) -> usize {
+                1
+            }
+
+            #[inline]
+            fn iter_fields(&self) -> TupleFieldIter<'_> {
+                TupleFieldIter::new(self)
+            }
+
+            #[inline]
+            fn drain(self: Box<Self>) -> Vec<Box<dyn Reflect>> {
+                vec![
+                    Box::new(self.$index),
+                ]
+            }
+        }
+
+        #[cfg_attr(docsrs, doc(fake_variadic))]
+        impl<$name: Reflect + Typed> Reflect for ($name,) {
+            crate::reflection::impl_reflect_cast_fn!(Tuple);
+            #[inline]
+            fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+                crate::impls::tuple_try_apply(self, value)
+            }
+
+            #[inline]
+            fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
+                crate::impls::tuple_partial_eq(self, other)
+            }
+
+            fn reflect_clone(&self) -> Result<Box<dyn Reflect>, ReflectCloneError> {
+                Ok(Box::new((
+                    self.$index.reflect_clone()?
+                        .take::<$name>()
+                        .expect("`Reflect::reflect_clone` should return the same type"),
+                )))
+            }
+
+            #[inline]
+            fn reflect_hash(&self) -> Option<u64> {
+                crate::impls::tuple_hash(self)
+            }
+
+            #[inline]
+            fn reflect_debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                crate::impls::tuple_debug(self, f)
+            }
+        }
+
+        #[cfg_attr(docsrs, doc(fake_variadic))]
+        impl<$name: Reflect + Typed + GetTypeMeta> GetTypeMeta for ($name,) {
+            fn get_type_meta() -> TypeMeta {
+                let mut type_meta =  TypeMeta::with_capacity::<($name,)>(1);
+                type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
+                type_meta
+            }
+
+            fn register_dependencies(_registry: &mut TypeRegistry) {
+                _registry.register::<$name>();
+            }
+        }
+
+        #[cfg_attr(docsrs, doc(fake_variadic))]
+        impl<$name: FromReflect + Typed> FromReflect for ($name,) {
+            fn from_reflect(reflect: &dyn Reflect) -> Option<Self> {
+                let _ref_tuple = reflect.reflect_ref().as_tuple().ok()?;
+
+                if _ref_tuple.field_len() != 1 {
+                    return None;
+                }
+
+                Some((<$name as FromReflect>::from_reflect(_ref_tuple.field($index)?)?,))
+            }
+        }
+    };
+    ($num:literal : [$($index:tt : $name:ident),*]) => {
+        #[cfg_attr(docsrs, doc(hidden))]
+        impl<$($name: Reflect + Typed),*> Typed for ($($name,)*) {
+            fn type_info() -> &'static TypeInfo {
+                static CELL: GenericTypeInfoCell = GenericTypeInfoCell::new();
+                CELL.get_or_insert::<Self>(|| {
+                    let fields = [
+                        $(UnnamedField::new::<$name>($index),)*
+                    ];
+                    let info = TupleInfo::new::<Self>(&fields);
+                    TypeInfo::Tuple(info)
+                })
+            }
+        }
+
+        #[cfg_attr(docsrs, doc(hidden))]
+        impl<$($name: Reflect + Typed),*> Tuple for ($($name,)*) {
+            #[inline]
+            fn field(&self, index: usize) -> Option<&dyn Reflect> {
+                match index {
+                    $($index => Some(&self.$index as &dyn Reflect),)*
+                    _ => None,
+                }
+            }
+
+            #[inline]
+            fn field_mut(&mut self, index: usize) -> Option<&mut dyn Reflect> {
+                match index {
+                    $($index => Some(&mut self.$index as &mut dyn Reflect),)*
+                    _ => None,
+                }
+            }
+
+            #[inline]
+            fn field_len(&self) -> usize {
+                $num
+            }
+
+            #[inline]
+            fn iter_fields(&self) -> TupleFieldIter<'_> {
+                TupleFieldIter::new(self)
+            }
+
+            #[inline]
+            fn drain(self: Box<Self>) -> Vec<Box<dyn Reflect>> {
+                vec![
+                    $(Box::new(self.$index),)*
+                ]
+            }
+        }
+
+        #[cfg_attr(docsrs, doc(hidden))]
+        impl<$($name: Reflect + Typed),*> Reflect for ($($name,)*) {
+            crate::reflection::impl_reflect_cast_fn!(Tuple);
+
+            #[inline]
+            fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+                crate::impls::tuple_try_apply(self, value)
+            }
+
+            #[inline]
+            fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
+                crate::impls::tuple_partial_eq(self, other)
+            }
+
+            fn reflect_clone(&self) -> Result<Box<dyn Reflect>, ReflectCloneError> {
+                Ok(Box::new((
+                    $(
+                        self.$index.reflect_clone()?
+                            .take::<$name>()
+                            .expect("`Reflect::reflect_clone` should return the same type"),
+                    )*
+                )))
+            }
+
+            #[inline]
+            fn reflect_hash(&self) -> Option<u64> {
+                crate::impls::tuple_hash(self)
+            }
+
+            #[inline]
+            fn reflect_debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                crate::impls::tuple_debug(self, f)
+            }
+        }
+
+        #[cfg_attr(docsrs, doc(hidden))]
+        impl<$($name: Reflect + Typed + GetTypeMeta),*> GetTypeMeta for ($($name,)*) {
+            fn get_type_meta() -> TypeMeta {
+                let mut type_meta =  TypeMeta::with_capacity::<($($name,)*)>(1);
+                type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
+                type_meta
+            }
+
+            fn register_dependencies(_registry: &mut TypeRegistry) {
+                $(_registry.register::<$name>();)*
+            }
+        }
+
+        #[cfg_attr(docsrs, doc(hidden))]
+        impl<$($name: FromReflect + Typed),*> FromReflect for ($($name,)*) {
+            fn from_reflect(reflect: &dyn Reflect) -> Option<Self> {
+                let _ref_tuple = reflect.reflect_ref().as_tuple().ok()?;
+
+                if _ref_tuple.field_len() != $num {
+                    return None;
+                }
+
+                Some((
+                    $(
+                        <$name as FromReflect>::from_reflect(_ref_tuple.field($index)?)?,
+                    )*
+                ))
+            }
+        }
+    };
+}
+
+range_invoke!(impl_reflect_tuple, 12: P);
+
+crate::derive::impl_auto_register!(());

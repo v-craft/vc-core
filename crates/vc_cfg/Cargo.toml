@@ -1,12 +1,10 @@
 [package]
 name = "vc_cfg"
-version = "0.0.1"
-edition = "2024"
-
-[features]
-default = ["std"]
-
-std = []
+version = "0.0.1" # Fixed preview version.
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 

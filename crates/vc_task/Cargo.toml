@@ -1,0 +1,30 @@
+[package]
+name = "vc_task"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+
+# Open documents for inactive codes.
+docsrs_dev = []
+
+[dependencies]
+
+vc_cfg = { path = "../vc_cfg" }
+
+vc_os = { path = "../vc_os", default-features = false }
+
+futures-lite = { version = "2.6", default-features = false, features = [ "alloc"] }
+
+async-task = { version = "4.7", default-features = false }
+atomic-waker = { version = "1", default-features = false }
+
+[target.'cfg(not(all(target_has_atomic = "8", target_has_atomic = "16", target_has_atomic = "32", target_has_atomic = "64")))'.dependencies]
+async-task = { version = "4.7", default-features = false, features = [ "portable-atomic" ] }
+atomic-waker = { version = "1", default-features = false, features = [ "portable-atomic" ] }
+
+[lints]
+workspace = true
