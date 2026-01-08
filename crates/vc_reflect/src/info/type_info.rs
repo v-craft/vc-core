@@ -276,7 +276,7 @@ impl TypeInfo {
     ///
     /// ```
     /// # use vc_reflect::{derive::Reflect, info::Typed};
-    ///
+    /// #
     /// /// This is type A.
     /// #[derive(Reflect)]
     /// struct A;
@@ -295,7 +295,7 @@ impl TypeInfo {
     ///
     /// ```
     /// # use vc_reflect::{derive::Reflect, info::Typed};
-    ///
+    /// #
     /// /// This is type A.
     /// #[derive(Reflect)]
     /// #[reflect(doc = "This is type B")]
@@ -315,7 +315,7 @@ impl TypeInfo {
     ///
     /// ```
     /// # use vc_reflect::{derive::Reflect, info::Typed};
-    ///
+    /// #
     /// /// This is type A.
     /// #[derive(Reflect)]
     /// #[reflect(doc = "This is type B")]

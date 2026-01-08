@@ -15,21 +15,27 @@ crate::cfg::switch! {
     }
 }
 
+// -----------------------------------------------------------------------------
+// available_parallelism
+
+use core::num::NonZero;
+
 /// Returns an estimate of the default amount of parallelism a program should use.
 ///
 /// It's similar to [`std::thread::available_parallelism`],
 /// but when this function fails or in the no_std environment, it directly returns `1`.
 ///
 /// We ensure that `result > 0` .
-pub fn available_parallelism() -> usize {
+pub fn available_parallelism() -> NonZero<usize> {
     crate::cfg::switch! {
         crate::cfg::std => {
+            #[expect(unsafe_code, reason = "`1` is non-zero")]
             std::thread::available_parallelism()
-                .map(core::num::NonZero::<usize>::get)
-                .unwrap_or(1)
+                .unwrap_or(unsafe{ NonZero::new_unchecked(1) })
         }
         _ => {
-            1
+            #[expect(unsafe_code, reason = "`1` is non-zero")]
+            unsafe{ NonZero::new_unchecked(1) }
         }
     }
 }

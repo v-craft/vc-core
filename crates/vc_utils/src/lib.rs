@@ -24,6 +24,7 @@ mod default;
 mod range_invoke;
 mod typeid_map;
 
+pub mod collections;
 pub mod hash;
 pub mod vec;
 

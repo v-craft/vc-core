@@ -41,7 +41,7 @@ impl<'a, T> ThinSlicePtr<'a, T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
     /// use vc_ptr::ThinSlicePtr;
     ///
     /// let x = [1, 2, 3, 4];

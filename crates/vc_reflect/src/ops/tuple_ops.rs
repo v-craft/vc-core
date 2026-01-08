@@ -599,8 +599,8 @@ impl<'a> Iterator for TupleFieldIter<'a> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = self.tuple.field_len();
-        (size - self.index, Some(size))
+        let hint = self.tuple.field_len() - self.index;
+        (hint, Some(hint))
     }
 }
 

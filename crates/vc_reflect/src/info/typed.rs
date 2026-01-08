@@ -45,8 +45,8 @@ use crate::info::{TypeInfo, TypePath};
 ///         static CELL: NonGenericTypeInfoCell = NonGenericTypeInfoCell::new();
 ///         CELL.get_or_init(|| TypeInfo::Struct(
 ///             StructInfo::new::<Self>(&[
-///                 NamedField::new::<usize >("foo"),
-///                 NamedField::new::<(f32, f32) >("bar"),
+///                 NamedField::new::<usize>("foo"),
+///                 NamedField::new::<(f32, f32)>("bar"),
 ///             ])
 ///         ))
 ///     }

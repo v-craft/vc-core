@@ -1,4 +1,4 @@
-//! Re-exports [`fastvec`]'s containers.
+//! Re-exports *[fastvec]*.
 //!
 //! It's a high-performance vector crate tuned for small data sizes.
 

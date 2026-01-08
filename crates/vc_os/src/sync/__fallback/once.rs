@@ -87,6 +87,10 @@ impl Once {
     /// See the [standard library] for further details.
     ///
     /// [standard library]: https://doc.rust-lang.org/std/sync/struct.Once.html#method.new
+    #[allow(
+        clippy::new_without_default,
+        reason = "`std::sync::Once` does not implement `Default`.")
+    ]
     #[inline]
     #[must_use]
     pub const fn new() -> Once {
@@ -467,7 +471,7 @@ impl<T> OnceLock<T> {
     pub fn take(&mut self) -> Option<T> {
         if self.is_initialized() {
             self.once = Once::new();
-            unsafe { Some((&mut *self.value.get()).assume_init_read()) }
+            unsafe { Some((&*self.value.get()).assume_init_read()) }
         } else {
             None
         }

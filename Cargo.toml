@@ -21,9 +21,9 @@ repository.workspace = true
 [features]
 default = [ "std", "debug", "auto_register" ]
 
-std = [
-    "vc_os/std",
-    "vc_reflect/std",
+# Open some documents for inactive codes.
+docsrs_dev = [
+    "vc_os/docsrs_dev"
 ]
 
 # Even if turned on, it only takes effect in Debug mode.
@@ -32,18 +32,26 @@ debug = [
     "vc_reflect/debug"
 ]
 
+
+std = [
+    "vc_os/std",
+    "vc_reflect/std",
+    "vc_task/std",
+]
+
+web = [
+    "vc_os/web",
+    "vc_task/web",
+]
+
 auto_register = [ "vc_reflect/auto_register" ]
 
 reflect_docs = [ "vc_reflect/reflect_docs" ]
 
 rayon = [ "vc_utils/rayon" ]
 
-web = [ "vc_os/web" ]
+async_io = [ "vc_task/async_io" ]
 
-# Open documents for inactive codes.
-docsrs_dev = [
-    "vc_os/docsrs_dev"
-]
 
 [dependencies]
 vc_cfg = { path = "./crates/vc_cfg" }

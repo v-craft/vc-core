@@ -20,10 +20,6 @@ pub(crate) fn match_reflect_impls(ast: DeriveInput, source: ImplSourceKind) -> T
         ReflectDerive::Opaque(meta) => crate::impls::impl_opaque(&meta),
     };
 
-    // if ast.ident.to_string() == "Option" {
-    //     eprintln!("\n\n\n{reflect_impls}");
-    // }
-
     TokenStream::from(quote! {
         const _: () = {
             #reflect_impls

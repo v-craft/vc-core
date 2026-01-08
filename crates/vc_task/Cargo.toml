@@ -1,30 +1,54 @@
 [package]
 name = "vc_task"
-version.workspace = true
+version = "0.0.1" # Fixed preview version.
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [features]
+default = [ "std" ]
 
-# Open documents for inactive codes.
-docsrs_dev = []
+web = [
+    "vc_os/web",
+    "vc_os/std",
+    "dep:async-channel",
+    "futures-lite/std",
+    "async-task/std",
+]
+
+std = [
+    "vc_os/std",
+    "dep:async-channel",
+    "dep:atomic-waker",
+    "futures-lite/std",
+    "async-task/std",
+]
+
+# Use async-io's implementation of block_on instead of futures-lite
+# Can only be used in std env.
+# This is preferred if your application uses async-io.
+async_io = [ "dep:async-io" ]
 
 [dependencies]
 
 vc_cfg = { path = "../vc_cfg" }
+vc_utils = { path = "../vc_utils" }
 
 vc_os = { path = "../vc_os", default-features = false }
 
+async-task = { version = "4.7", default-features = false }
 futures-lite = { version = "2.6", default-features = false, features = [ "alloc"] }
 
-async-task = { version = "4.7", default-features = false }
-atomic-waker = { version = "1", default-features = false }
+atomic-waker = { version = "1", default-features = false, optional = true }
+
+async-channel = { version = "2.5", optional = true }
+async-io = { version = "2.6", optional = true }
 
 [target.'cfg(not(all(target_has_atomic = "8", target_has_atomic = "16", target_has_atomic = "32", target_has_atomic = "64")))'.dependencies]
+async-channel = { version = "2.5", optional = true, features = [ "portable-atomic" ] }
 async-task = { version = "4.7", default-features = false, features = [ "portable-atomic" ] }
-atomic-waker = { version = "1", default-features = false, features = [ "portable-atomic" ] }
+atomic-waker = { version = "1", default-features = false, features = [ "portable-atomic" ], optional = true }
 
 [lints]
 workspace = true

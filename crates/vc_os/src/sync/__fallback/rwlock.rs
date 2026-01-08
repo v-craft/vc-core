@@ -189,7 +189,7 @@ impl<T: ?Sized> RwLock<T> {
         let res = self
             .state
             .fetch_update(Acquire, Relaxed, |s| {
-                is_unlocked(s).then(|| s | WRITE_LOCKED)
+                is_unlocked(s).then_some(s | WRITE_LOCKED)
             })
             .is_ok();
 
@@ -212,7 +212,7 @@ impl<T: ?Sized> RwLock<T> {
     ///
     /// [standard library]: https://doc.rust-lang.org/std/sync/struct.RwLock.html#method.read
     #[inline]
-    pub fn read(&self) -> TryLockResult<RwLockReadGuard<'_, T>> {
+    pub fn read(&self) -> LockResult<RwLockReadGuard<'_, T>> {
         let state = self.state.load(Relaxed);
         if !is_read_lockable(state)
             || self
@@ -253,14 +253,12 @@ impl<T: ?Sized> RwLock<T> {
             );
 
             // Make sure the readers waiting bit is set before we go to sleep.
-            if !has_readers_waiting(state) {
-                if let Err(s) =
-                    self.state
-                        .compare_exchange(state, state | READERS_WAITING, Relaxed, Relaxed)
-                {
-                    state = s;
-                    continue;
-                }
+            if !has_readers_waiting(state)
+                && let Err(s) = self.state
+                    .compare_exchange(state, state | READERS_WAITING, Relaxed, Relaxed)
+            {
+                state = s;
+                continue;
             }
 
             backoff.spin();
@@ -317,14 +315,12 @@ impl<T: ?Sized> RwLock<T> {
             }
 
             // Set the waiting bit indicating that we're waiting on it.
-            if !has_writers_waiting(state) {
-                if let Err(s) =
-                    self.state
-                        .compare_exchange(state, state | WRITERS_WAITING, Relaxed, Relaxed)
-                {
-                    state = s;
-                    continue;
-                }
+            if !has_writers_waiting(state)
+                && let Err(s) = self.state
+                    .compare_exchange(state, state | WRITERS_WAITING, Relaxed, Relaxed)
+            {
+                state = s;
+                continue;
             }
 
             backoff.spin();
@@ -578,7 +574,6 @@ mod tests {
     use std::{hint, mem, thread};
     use std::vec::Vec;
     use super::{RwLock, RwLockWriteGuard, RwLockReadGuard, TryLockError};
-    use crate::utils::tests::test_thread_panic;
 
     #[derive(Eq, PartialEq, Debug)]
     struct NonCopy(i32);
@@ -864,6 +859,8 @@ mod tests {
     #[cfg(panic = "unwind")]
     #[test]
     fn test_rw_arc_access_in_unwind() {
+        use crate::utils::tests::test_thread_panic;
+
         let arc = Arc::new(RwLock::new(1));
         let arc2 = arc.clone();
         

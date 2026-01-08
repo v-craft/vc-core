@@ -13,7 +13,6 @@ use super::{DeserializeDriver, DeserializeProcessor};
 use crate::info::{EnumInfo, StructVariantInfo, TupleVariantInfo, VariantInfo};
 use crate::ops::{DynamicEnum, DynamicStruct, DynamicTuple, DynamicVariant};
 use crate::registry::TypeRegistry;
-use crate::serde::SkipSerde;
 
 // -----------------------------------------------------------------------------
 // Enum Visitor
@@ -59,7 +58,7 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for EnumVisitor<'_, P> {
 
                 crate::cfg::debug! {
                     assert!(
-                        !field.has_attribute::<SkipSerde>(),
+                        !field.has_attribute::<crate::serde::SkipSerde>(),
                         "newtype can not skip field in serialization and deserialization."
                     );
                 }

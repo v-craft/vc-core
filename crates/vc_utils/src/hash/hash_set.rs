@@ -49,7 +49,6 @@ pub type Entry<'a, T, S = FixedHashState> = hb::Entry<'a, T, S>;
 /// names.insert("b");
 /// names.insert("c");
 ///
-///
 /// for name in &names {
 ///     // Fixed printing order,
 ///     // but may not a -> b -> c .
@@ -76,8 +75,8 @@ impl<T> HashSet<T> {
     /// # Example
     ///
     /// ```rust
-    /// # use vc_utils::hash::HashSet;
-    /// #
+    /// use vc_utils::hash::HashSet;
+    ///
     /// let map = HashSet::new();
     /// #
     /// # let mut map = map;

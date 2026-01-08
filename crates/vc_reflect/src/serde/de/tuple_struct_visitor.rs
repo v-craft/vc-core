@@ -7,7 +7,6 @@ use serde_core::de::{DeserializeSeed, SeqAccess, Visitor};
 use crate::info::TupleStructInfo;
 use crate::ops::{DynamicTuple, DynamicTupleStruct};
 use crate::registry::TypeRegistry;
-use crate::serde::SkipSerde;
 
 use super::error_utils::make_custom_error;
 use super::tuple_like_utils::visit_tuple;
@@ -62,7 +61,7 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for TupleStructVisitor<'_, P> {
 
         crate::cfg::debug! {
             assert!(
-                !field_info.has_attribute::<SkipSerde>(),
+                !field_info.has_attribute::<crate::serde::SkipSerde>(),
                 "newtype can not skip field in serialization and deserialization."
             );
         }

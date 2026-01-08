@@ -104,7 +104,7 @@ macro_rules! impl_ptr {
 ///
 /// Its target must not be changed while this pointer is alive.
 ///
-/// Usually, Rust's borrow checkers can ensure this through their lifecycle.
+/// Usually, Rust's borrow checker can ensure this through their lifetime.
 ///
 /// # Examples
 ///
@@ -196,7 +196,7 @@ impl<'a> Ptr<'a> {
 
     /// Convert this [`Ptr`] into a `&T` with the same lifetime `'a`.
     ///
-    /// But the concrete pointee type is unknown at compile time.
+    /// The concrete pointee type is unknown at compile time.
     /// The caller must ensure the pointer is suitable for `T`.
     ///
     /// It is recommended to use [`debug_assert_aligned`](Self::debug_assert_aligned)
@@ -260,7 +260,7 @@ impl<'a, T: ?Sized> From<&'a mut T> for Ptr<'a> {
 ///
 /// It cannot be cloned, and the caller must comply with Rust alias rules.
 ///
-/// Usually, Rust's borrow checkers can ensure this through their lifecycle.
+/// Usually, Rust's borrow checker can ensure this through their lifetime.
 ///
 /// # Examples
 ///
@@ -519,7 +519,7 @@ impl<'a, T: ?Sized> From<&'a mut T> for PtrMut<'a> {
 ///
 /// It cannot be cloned, and the caller must comply with Rust alias rules.
 ///
-/// Usually, Rust's borrow checkers can ensure this through their lifecycle.
+/// Usually, Rust's borrow checker can ensure this through their lifetime.
 ///
 /// # Examples
 ///

@@ -55,6 +55,7 @@ pub(crate) fn macro_utils_(vc_reflect_path: &syn::Path) -> TokenStream {
     }
 }
 
+#[cfg(feature = "auto_register")]
 #[inline(always)]
 pub(crate) fn auto_register_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {

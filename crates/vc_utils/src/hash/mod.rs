@@ -1,4 +1,4 @@
-//! Provide hash containers, re-exports *hashbrown* and *foldhash*.
+//! Provide hash containers, re-exports *[hashbrown]* and *[foldhash]*.
 
 // -----------------------------------------------------------------------------
 // Modules

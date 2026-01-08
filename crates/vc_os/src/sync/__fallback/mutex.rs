@@ -190,7 +190,7 @@ impl<T> From<T> for Mutex<T> {
     }
 }
 
-impl<T: ?Sized + Default> Default for Mutex<T> {
+impl<T: Default> Default for Mutex<T> {
     /// Creates a `Mutex<T>`, with the `Default` value for T.
     #[inline]
     fn default() -> Mutex<T> {
@@ -262,7 +262,6 @@ mod tests {
     use std::sync::{Arc, mpsc::channel};
     use std::{hint, mem, thread};
 
-    use crate::utils::tests::*;
     use super::Mutex;
 
     #[test]
@@ -396,6 +395,8 @@ mod tests {
     #[cfg(panic = "unwind")] // Requires unwinding support.
     #[test]
     fn test_panics() {
+        use crate::utils::tests::test_unwind_panic;
+
         let mutex = Mutex::new(42);
 
         let result = test_unwind_panic(|| {
@@ -421,6 +422,8 @@ mod tests {
     #[cfg(panic = "unwind")] // Requires unwinding support.
     #[test]
     fn test_mutex_arc_access_in_unwind() {
+        use crate::utils::tests::test_thread_panic;
+
         let arc = Arc::new(Mutex::new(1));
         let arc2 = arc.clone();
 

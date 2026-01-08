@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![no_std]
 
@@ -6,44 +7,54 @@
 
 pub mod cfg {
     pub use vc_os::cfg::{std, web};
+
+    pub(crate) use vc_cfg::switch;
+
     vc_cfg::define_alias! {
-        #[cfg(target_arch = "wasm32")] => {
-            /// Indicates the current target requires additional `?Send` bounds.
-            optional_send
-        }
+        #[cfg(all(feature = "std", feature = "async_io"))] => async_io,
+        #[cfg(all(feature = "std", not(feature = "web")))] => multi_thread,
+        #[cfg(any(not(feature = "std"), feature = "web"))] => single_thread,
     }
 }
 
 // -----------------------------------------------------------------------------
 // no_std support
 
+cfg::std! {
+    extern crate std;
+}
+
 extern crate alloc;
 
 // -----------------------------------------------------------------------------
 // Modules
 
-pub mod mini_executor;
+mod cond_send;
+mod macro_utils;
+
+mod platform;
+
+mod iter;
+mod slice;
+
+pub mod futures;
 
 // -----------------------------------------------------------------------------
-// Top-Level Exports
+// Exports
 
-/// Blocks on the supplied `future`.
-/// This implementation will busy-wait until it is completed.
-/// Consider enabling the `async-io` or `futures-lite` features.
-pub fn block_on<T>(future: impl Future<Output = T>) -> T {
-    use core::task::{Context, Poll};
+pub use cond_send::{BoxedFuture, CondSendFuture};
 
-    // Pin the future on the stack.
-    let mut future = core::pin::pin!(future);
+pub use platform::tick_local_executor_on_main_thread;
+pub use platform::{AsyncComputeTaskPool, ComputeTaskPool, IOTaskPool};
+pub use platform::{Scope, TaskPool, TaskPoolBuilder};
+pub use platform::{ScopeExecutor, ScopeExecutorTicker};
+pub use platform::{Task, block_on};
 
-    // We don't care about the waker as we're just going to poll as fast as possible.
-    let cx = &mut Context::from_waker(core::task::Waker::noop());
+pub use iter::ParallelIterator;
+pub use slice::{ParallelSlice, ParallelSliceMut};
 
-    // Keep polling until the future is ready.
-    loop {
-        match future.as_mut().poll(cx) {
-            Poll::Ready(output) => return output,
-            Poll::Pending => core::hint::spin_loop(),
-        }
-    }
-}
+// -----------------------------------------------------------------------------
+// Re-Exports
+
+pub use futures_lite;
+pub use futures_lite::future::poll_once;

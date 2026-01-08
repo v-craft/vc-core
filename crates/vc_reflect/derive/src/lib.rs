@@ -465,7 +465,7 @@ pub fn impl_type_path(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn impl_auto_register(_input: TokenStream) -> TokenStream {
     #[cfg(not(feature = "auto_register"))]
-    return crate::utils::empty().into();
+    return utils::empty().into();
 
     #[cfg(feature = "auto_register")]
     {
@@ -510,13 +510,13 @@ pub fn impl_auto_register(_input: TokenStream) -> TokenStream {
 ///
 /// impl MyDebug for String { /* ... */ }
 ///
-/// let registry = TypeRegistry::new()
+/// let reg = TypeRegistry::new()
 ///     .register::<String>()
 ///     .register_type_trait::<String, ReflectMyDebug>();
 ///
 /// let x: Box<dyn Reflect> = Box::new(String::from("123"));
 ///
-/// let reflect_my_debug = register.get_type_trait::<ReflectMyDebug>::(x.ty_id()).unwrap();
+/// let reflect_my_debug = reg.get_type_trait::<ReflectMyDebug>::(x.ty_id()).unwrap();
 /// let x: Box<dyn MyDebug> = reflect_my_debug.get_boxed(x);
 /// x.debug();
 /// ```

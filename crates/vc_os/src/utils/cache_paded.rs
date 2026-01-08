@@ -120,7 +120,7 @@ use core::ops::{Deref, DerefMut};
     )),
     repr(align(64))
 )]
-pub(super) struct CachePadded<T> {
+pub struct CachePadded<T> {
     value: T,
 }
 

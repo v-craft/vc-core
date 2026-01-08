@@ -1,10 +1,10 @@
-use quote::quote_spanned;
-
 use crate::derive_data::ReflectMeta;
 
 /// Generate `auto_register` implementation
 #[cfg(feature = "auto_register")]
 pub(crate) fn get_auto_register_impl(meta: &ReflectMeta) -> proc_macro2::TokenStream {
+    use quote::quote_spanned;
+
     if let Some(span) = meta.attrs().auto_register {
         // Invalid for generic types.
         if meta.impl_with_generic() {

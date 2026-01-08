@@ -143,8 +143,8 @@ impl<'a> Iterator for VariantFieldIter<'a> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = self.container.field_len();
-        (size - self.index, Some(size))
+        let hint = self.container.field_len() - self.index;
+        (hint, Some(hint))
     }
 }
 

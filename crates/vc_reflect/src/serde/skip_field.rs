@@ -1,6 +1,5 @@
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
-use alloc::format;
 use core::any::TypeId;
 
 use crate::Reflect;
@@ -138,7 +137,7 @@ impl SkipSerde {
                         }
                         match reflect.reflect_clone() {
                             Ok(val) => Ok(Some(val)),
-                            Err(err) => Err(E::custom(format!(
+                            Err(err) => Err(E::custom(alloc::format!(
                                 "`SkipSerde::Clone` but `reflect_clone` failed: {err} ."
                             ))),
                         }

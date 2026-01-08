@@ -64,7 +64,7 @@ impl error::Error for VariantKindError {}
 ///
 /// ```
 /// # use vc_reflect::{derive::Reflect, info::{Typed}};
-///
+/// #
 /// #[derive(Reflect)]
 /// enum MyEnum {
 ///   A {  // <-- struct variant
@@ -166,7 +166,7 @@ impl StructVariantInfo {
 ///
 /// ```
 /// # use vc_reflect::{derive::Reflect, info::{Typed}};
-///
+/// #
 /// #[derive(Reflect)]
 /// enum MyEnum {
 ///   A(usize),  // <-- tuple variant
@@ -242,7 +242,7 @@ impl TupleVariantInfo {
 ///
 /// ```
 /// # use vc_reflect::{derive::Reflect, info::{Typed}};
-///
+/// #
 /// #[derive(Reflect)]
 /// enum MyEnum {
 ///   A,  // <-- unit variant

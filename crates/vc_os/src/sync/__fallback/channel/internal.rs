@@ -14,7 +14,7 @@ impl<T> ListChannel<T> {
     #[inline]
     pub fn new() -> Self {
         Self {
-            queue: ListQueue::new(),
+            queue: ListQueue::default(),
             senders: AtomicUsize::new(1),
             receivers: AtomicUsize::new(1),
         }

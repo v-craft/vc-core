@@ -79,6 +79,10 @@ impl<T: ?Sized> SpinLock<T> {
         SpinLockGuard { lock: self }
     }
 
+    pub fn is_locked(&self) -> bool {
+        self.futex.is_locked()
+    }
+
     /// Attempts to acquire this lock.
     ///
     /// If the lock could not be acquired at this time, then [`None`] is returned.

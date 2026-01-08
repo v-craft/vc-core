@@ -8,6 +8,9 @@ Includes the following components:
     - Re-exports of `hashbrown` and `foldhash`
     - Newtype wrappers based on fixed hash states
     - Pre-hashed containers and no-op hash calculators
+- **Custom Collections**:
+    - `ArrayDeque`: A fixed-capacity ring buffer with stack-based storage.
+    - `BlockList`: A block-based linked list queue that improves cache locality.
 - **Type ID Tables**:
     - Maps using `TypeId` as keys
 - **Stack-optimized Linear Collections**:

@@ -46,7 +46,6 @@ pub type Entry<'a, K, V, S = FixedHashState> = hb::Entry<'a, K, V, S>;
 /// scores.insert("b", 24);
 /// scores.insert("c", 12);
 ///
-///
 /// for (name, score) in &scores {
 ///     // Fixed printing order,
 ///     // but may not a -> b -> c .
@@ -73,7 +72,7 @@ impl<K, V> HashMap<K, V> {
     /// # Example
     ///
     /// ```rust
-    /// # use vc_utils::hash::HashMap;
+    /// use vc_utils::hash::HashMap;
     ///
     /// let map = HashMap::new();
     /// # // docs test
@@ -92,7 +91,7 @@ impl<K, V> HashMap<K, V> {
     ///
     /// ```rust
     /// # use vc_utils::hash::HashMap;
-    ///
+    /// #
     /// let map = HashMap::with_capacity(5);
     /// # // docs test
     /// # let mut map = map;

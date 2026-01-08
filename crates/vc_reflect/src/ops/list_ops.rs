@@ -768,8 +768,8 @@ impl<'a> Iterator for ListItemIter<'a> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = self.list.len();
-        (size - self.index, Some(size))
+        let hint = self.list.len() - self.index;
+        (hint, Some(hint))
     }
 }
 

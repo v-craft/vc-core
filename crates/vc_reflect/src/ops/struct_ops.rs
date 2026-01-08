@@ -731,8 +731,8 @@ impl<'a> Iterator for StructFieldIter<'a> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = self.struct_val.field_len();
-        (size - self.index, Some(size))
+        let hint = self.struct_val.field_len() - self.index;
+        (hint, Some(hint))
     }
 }
 

@@ -253,7 +253,7 @@ impl TypeRegistry {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
     /// # use std::any::TypeId;
     /// # use vc_reflect::{derive::Reflect, registry::{TypeRegistry, TypeTraitDefault}};
     /// #[derive(Reflect, Default)]

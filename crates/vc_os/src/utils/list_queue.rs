@@ -2,6 +2,7 @@
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::cell::Cell;
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::panic::{RefUnwindSafe, UnwindSafe};
@@ -9,7 +10,7 @@ use core::{fmt, ptr};
 
 use crate::sync::atomic::AtomicU64;
 use crate::sync::atomic::Ordering::{Acquire, Release};
-use crate::utils::{CachePadded, SpinLock};
+use crate::utils::{CachePadded, SpinLock, SpinLockGuard};
 
 // -----------------------------------------------------------------------------
 // Bit Flags
@@ -23,10 +24,8 @@ const BLOCK_SIZE: usize = 64;
 struct Block<T> {
     /// **field_0**: the index of head.
     ///
-    /// For example the buffer is `[0, 0, 1, 1, 0]`,
-    /// then this index is `2`.
-    ///
-    /// (`0` indicates no data)
+    /// For example the buffer is `[0, 0, 1, 1, 0]`
+    /// (`0` indicates no data), then this index is `2`.
     ///
     /// **field_1**: the cache of buffer state.
     ///
@@ -39,10 +38,8 @@ struct Block<T> {
 
     /// **field_0**: the index of tail.
     ///
-    /// For example the buffer is `[0, 0, 1, 1, 0]`,
-    /// then this index is `4`.
-    ///
-    /// (`0` indicates no data)
+    /// For example the buffer is `[0, 0, 1, 1, 0]`
+    /// (`0` indicates no data), then this index is `4`.
     ///
     /// **field_1**: buffer state.
     ///
@@ -53,17 +50,17 @@ struct Block<T> {
     /// then this state value is `0x11100` .
     tail_state: CachePadded<(usize, AtomicU64)>,
 
-    /// Storage slots.
+    /// data storage.
     slots: [MaybeUninit<T>; BLOCK_SIZE],
 
-    /// Link to the next block.
+    /// Link to the next block, null_ptr if it's tail block.
     next: *mut Block<T>,
 }
 
 impl<T> Block<T> {
     /// Create a empty block.
     ///
-    /// inline(never): result the stack size of `IdleQueue::get`.
+    /// inline(never): reduce the stack size of `IdleQueue::get`.
     #[cold]
     #[inline(never)]
     fn new() -> Box<Self> {
@@ -97,14 +94,15 @@ impl<T> Block<T> {
 /// Only elements in range [head_index, tail_index) are valid.
 impl<T> Drop for Block<T> {
     fn drop(&mut self) {
-        let mut index = self.head_cache.0;
+        let index = self.head_cache.0;
         let end = self.tail_state.0;
-        while index < end {
-            // SAFETY: ptr point to valid data.
+        if index < end {
             unsafe {
-                ptr::drop_in_place::<T>(self.slots.as_mut_ptr().add(index) as *mut T);
+                ptr::drop_in_place(ptr::slice_from_raw_parts_mut::<T>(
+                    self.slots.as_mut_ptr().add(index) as *mut T,
+                    end - index,
+                ));
             }
-            index += 1;
         }
     }
 }
@@ -119,25 +117,16 @@ impl<T> Drop for Block<T> {
 /// - detached from queue
 struct IdleQueue<T> {
     blocks: SpinLock<Vec<Box<Block<T>>>>,
-    max_num: usize,
+    max_num: Cell<usize>,
 }
 
 impl<T> IdleQueue<T> {
     /// Create a `IdleQueue` with specific max number.
-    ///
-    /// If the max number >= 1, this function will create a block into idle queue.
-    /// Because at least one idle block is required to implement the loop.
     #[inline]
-    fn new(max_blocks: usize) -> Self {
-        // Avoid being too large.
-        let mut vec = Vec::with_capacity(max_blocks.min(1024));
-        if max_blocks > 0 {
-            // Pre allocate a block and optimize the loop.
-            vec.push(Block::<T>::new());
-        }
+    const fn new(idle_limit: usize) -> Self {
         IdleQueue {
-            blocks: SpinLock::new(vec),
-            max_num: max_blocks,
+            blocks: SpinLock::new(Vec::new()),
+            max_num: Cell::new(idle_limit),
         }
     }
 
@@ -154,7 +143,7 @@ impl<T> IdleQueue<T> {
     fn push(&self, ptr: *mut Block<T>) {
         let boxed = unsafe { Box::from_raw(ptr) };
         let mut blocks = self.blocks.lock();
-        if blocks.len() < self.max_num {
+        if blocks.len() < self.max_num.get() {
             blocks.push(boxed);
         }
         // Ensure that lockguard drop before boxed,
@@ -210,7 +199,7 @@ impl<T> IdleQueue<T> {
 /// const COUNT: usize = 25_000;
 /// const THREADS: usize = 4;
 ///
-/// let q = ListQueue::<usize>::new();
+/// let q = ListQueue::<usize>::default();
 /// let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
 ///
 /// thread::scope(|scope| {
@@ -272,12 +261,12 @@ impl<T> Drop for ListQueue<T> {
 impl<T> Default for ListQueue<T> {
     /// Create an [`ListQueue`] with [`DEFAULT_LIMIT`](ListQueue::DEFAULT_LIMIT).
     ///
-    /// This is equivalent to `new` and `with_limit(DEFAULT_LIMIT)`.
+    /// This is equivalent to `new(DEFAULT_LIMIT)`.
     ///
-    /// See more infomation in [`ListQueue::with_limit`].
+    /// See more infomation in [`ListQueue::new`].
     #[inline]
     fn default() -> Self {
-        Self::with_limit(Self::DEFAULT_LIMIT)
+        Self::new(Self::DEFAULT_LIMIT)
     }
 }
 
@@ -294,24 +283,30 @@ impl<T> ListQueue<T> {
     /// At present, the average memory usage when the idle queue is full is around 150KB by default.
     ///
     /// This is not suitable for all scenarios, and it is recommended that
-    /// users manually specify the limit using [`ListQueue::with_limit`].
+    /// users manually specify the limit using [`ListQueue::new`].
     pub const DEFAULT_LIMIT: usize = {
         if size_of::<T>() > 1024 {
             2
-        } else if size_of::<T>() > 512 {
+        } else if size_of::<T>() > 256 {
             4
-        } else if size_of::<T>() > 128 {
-            8
         } else if size_of::<T>() > 64 {
-            16
+            8
         } else {
-            32
+            16
         }
     };
 
-    /// Create a [`ListQueue`] that retains at most `idle_limit` detached blocks.
+    /// Create a [`ListQueue`] with specific limit (the number of max idle block).
     ///
     /// Note that a block can hold **64** elements.
+    ///
+    /// Can also call [`ListQueue::default`](Self::default) to use
+    /// [`DEFAULT_LIMIT`] if you unsure what value to choose.
+    ///
+    /// # Rules
+    ///
+    /// No matter what the limit is, a non-idle block will be allocated.
+    /// But will not pre-alloc idle block.
     ///
     /// When the number of blocks in the idle pool reaches `idle_limit`, any
     /// subsequently detached blocks will be dropped immediately instead of being
@@ -320,61 +315,32 @@ impl<T> ListQueue<T> {
     /// This is useful to bound memory usage in programs that can experience large,
     /// short-lived bursts of activity.
     ///
-    /// `with_limit(0)` is valid, it's behavior similar to crossbeem's
+    /// `idle_limit == 0` is valid, it's behavior similar to crossbeem's
     /// `SegQueue`, without any block reuse.
-    ///
-    /// No matter what the limit is, a non-idle block will be allocated.
-    ///
-    /// If limit >= 1, it will pre allocate an idle block, because
-    /// at least 2 block is required to implement the reuse loop.
     ///
     /// # Examples
     ///
     /// ```
     /// use vc_os::utils::ListQueue;
     ///
-    /// // Keep at most one idle block cached.
-    /// let q = ListQueue::<i32>::with_limit(1);
-    /// q.push(10);
-    /// assert_eq!(q.pop(), Some(10));
+    /// let q = ListQueue::<i32>::new(4);
+    /// q.push(1);
+    /// assert_eq!(q.pop(), Some(1));
+    /// assert!(q.pop().is_none());
     /// ```
+    ///
+    /// [`DEFAULT_LIMIT`]: Self::DEFAULT_LIMIT
     #[inline]
-    pub fn with_limit(idle_limit: usize) -> Self {
+    pub fn new(idle_limit: usize) -> Self {
         let idea_queue = IdleQueue::new(idle_limit);
         // Leak block after `IdleQueue::new` to avoid memory leakage if IdleQueue paniced.
         let block = Box::leak(Block::<T>::new());
-
         Self {
             idle: idea_queue,
             head_id: CachePadded::new(SpinLock::new((block, 0))),
             tail_id: CachePadded::new(SpinLock::new((block, 0))),
             _marker: PhantomData,
         }
-    }
-
-    /// Create an [`ListQueue`] with [`DEFAULT_LIMIT`](Self::DEFAULT_LIMIT).
-    ///
-    /// Note that a block can hold **64** elements.
-    ///
-    /// When the number of blocks in the idle pool reaches `max_idle_blocks`, any
-    /// subsequently detached blocks will be dropped immediately instead of being
-    /// pushed into the pool, allowing their memory to be released.
-    ///
-    /// See more infomation in [`ListQueue::with_limit`].
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use vc_os::utils::ListQueue;
-    ///
-    /// let q = ListQueue::<i32>::new();
-    /// q.push(1);
-    /// assert_eq!(q.pop(), Some(1));
-    /// assert!(q.pop().is_none());
-    /// ```
-    #[inline(always)]
-    pub fn new() -> Self {
-        Self::with_limit(Self::DEFAULT_LIMIT)
     }
 
     /// Push a value into the queue.
@@ -393,7 +359,7 @@ impl<T> ListQueue<T> {
     /// ```
     /// use vc_os::utils::ListQueue;
     ///
-    /// let q = ListQueue::new();
+    /// let q = ListQueue::default();
     /// q.push(42);
     /// q.push(43);
     /// assert_eq!(q.pop(), Some(42));
@@ -443,7 +409,7 @@ impl<T> ListQueue<T> {
     /// ```
     /// use vc_os::utils::ListQueue;
     ///
-    /// let q = ListQueue::new();
+    /// let q = ListQueue::default();
     /// assert!(q.pop().is_none());
     /// q.push(5);
     /// assert_eq!(q.pop(), Some(5));
@@ -470,9 +436,11 @@ impl<T> ListQueue<T> {
         // SAFETY: valid index and pointer
         let value = unsafe { ptr::read(block.slots.as_ptr().add(index) as *mut T) };
 
-        block.head_cache.0 = index + 1;
+        let new_index = index + 1;
 
-        if index + 1 == BLOCK_SIZE {
+        block.head_cache.0 = new_index;
+
+        if new_index == BLOCK_SIZE {
             let old_ptr = block as *mut Block<T>;
             let next_ptr = block.next;
             // index + 1 == BLOCK_SIZE, so tail_index == BLOCK_SIZE.
@@ -501,7 +469,7 @@ impl<T> ListQueue<T> {
     /// ```
     /// use vc_os::utils::ListQueue;
     ///
-    /// let q = ListQueue::new();
+    /// let q = ListQueue::default();
     /// assert!(q.is_empty());
     ///
     /// q.push(10);
@@ -511,7 +479,7 @@ impl<T> ListQueue<T> {
     /// assert!(q.is_empty());
     /// ```
     pub fn is_empty(&self) -> bool {
-        let mut guard = self.tail_id.lock();
+        let mut guard = self.head_id.lock();
         let block = unsafe { &mut *guard.0 };
 
         let index = block.head_cache.0;
@@ -539,7 +507,7 @@ impl<T> ListQueue<T> {
     /// ```
     /// use vc_os::utils::ListQueue;
     ///
-    /// let q = ListQueue::new();
+    /// let q = ListQueue::default();
     /// assert_eq!(q.len(), 0);
     ///
     /// q.push(10);
@@ -563,6 +531,143 @@ impl<T> ListQueue<T> {
 
         tail_id.wrapping_sub(head_id) * BLOCK_SIZE + tail_index - head_index
     }
+
+    /// Acquires an exclusive lock for pop operations.
+    ///
+    /// This method returns a `PopLockGuard` that must be held while
+    /// performing pop operations. The lock ensures exclusive access to
+    /// the queue's head, preventing race conditions with other pop operations.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use vc_os::utils::ListQueue;
+    /// let queue = ListQueue::<i32>::default();
+    ///
+    /// let mut lock = queue.lock_pop();
+    /// if let Some(value) = queue.pop_with_lock(&mut lock) {
+    ///     // process value
+    /// }
+    /// ```
+    #[inline]
+    pub fn lock_pop(&self) -> PopLockGuard<'_, T> {
+        PopLockGuard(self.head_id.lock())
+    }
+
+    /// Acquires an exclusive lock for push operations.
+    ///
+    /// This method returns a `PushLockGuard` that must be held while
+    /// performing push operations. The lock ensures exclusive access to
+    /// the queue's tail, preventing race conditions with other push operations.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use vc_os::utils::ListQueue;
+    /// let queue = ListQueue::default();
+    ///
+    /// let mut lock = queue.lock_push();
+    /// queue.push_with_lock(&mut lock, 42);
+    /// ```
+    #[inline]
+    pub fn lock_push(&self) -> PushLockGuard<'_, T> {
+        PushLockGuard(self.tail_id.lock())
+    }
+
+    /// Pushes a value into the queue while holding a push lock.
+    ///
+    /// This is the low-level push operation that requires an already acquired
+    /// push lock. The lock must be obtained via [`ListQueue::lock_push`].
+    ///
+    /// It's undefined behavior push self using other queue's lock.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use vc_os::utils::ListQueue;
+    /// let queue = ListQueue::default();
+    ///
+    /// let mut lock = queue.lock_push();
+    /// queue.push_with_lock(&mut lock, 42);
+    /// ```
+    pub fn push_with_lock(&self, lock_guard: &mut PushLockGuard<'_, T>, value: T) {
+        // SAFETY: `guard.0.0` point to valid data.
+        let block = unsafe { &mut *lock_guard.0.0 };
+
+        let index = block.tail_state.0;
+        debug_assert!(index < BLOCK_SIZE);
+
+        // SAFETY: valid index and pointer
+        unsafe {
+            ptr::write(block.slots.as_mut_ptr().add(index) as *mut T, value);
+        }
+
+        if index + 1 == BLOCK_SIZE {
+            let new_block = self.idle.get();
+            block.next = new_block;
+            lock_guard.0.0 = new_block;
+            lock_guard.0.1 = lock_guard.0.1.wrapping_add(1);
+        }
+
+        // Setting bit flag after setting `next` block.
+        // Ensure that `next` ptr can be visited in `pop` function.
+        block.tail_state.0 = index + 1;
+        block.tail_state.1.fetch_or(1 << index, Release);
+    }
+
+    /// Pops a value from the queue while holding a pop lock.
+    ///
+    /// This is the low-level pop operation that requires an already acquired
+    /// pop lock. The lock must be obtained via [`ListQueue::lock_pop`].
+    ///
+    /// It's undefined behavior pop self using other queue's lock.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use vc_os::utils::ListQueue;
+    /// let queue = ListQueue::<i32>::default();
+    ///
+    /// let mut lock = queue.lock_pop();
+    /// if let Some(value) = queue.pop_with_lock(&mut lock) {
+    ///     // process value
+    /// }
+    /// ```
+    pub fn pop_with_lock(&self, lock_guard: &mut PopLockGuard<'_, T>) -> Option<T> {
+        // SAFETY: `guard.0` point to valid data.
+        let block = unsafe { &mut *lock_guard.0.0 };
+
+        let index = block.head_cache.0;
+        debug_assert!(index < BLOCK_SIZE);
+
+        let bit_flag = 1_u64 << index;
+        if block.head_cache.1 & bit_flag == 0 {
+            // slow path, update cache
+            block.head_cache.1 = block.tail_state.1.load(Acquire);
+            if block.head_cache.1 & bit_flag == 0 {
+                return None;
+            }
+        }
+
+        // SAFETY: valid index and pointer
+        let value = unsafe { ptr::read(block.slots.as_ptr().add(index) as *mut T) };
+
+        block.head_cache.0 = index + 1;
+
+        if index + 1 == BLOCK_SIZE {
+            let old_ptr = block as *mut Block<T>;
+            let next_ptr = block.next;
+            // index + 1 == BLOCK_SIZE, so tail_index == BLOCK_SIZE.
+            // next_ptr must be set by `push` function.
+            debug_assert!(!next_ptr.is_null());
+            lock_guard.0.0 = next_ptr;
+            lock_guard.0.1 = lock_guard.0.1.wrapping_add(1);
+
+            self.idle.push(old_ptr);
+        }
+
+        Some(value)
+    }
 }
 
 impl<T> fmt::Debug for ListQueue<T> {
@@ -570,6 +675,17 @@ impl<T> fmt::Debug for ListQueue<T> {
         f.pad("ListQueue { .. }")
     }
 }
+
+// -----------------------------------------------------------------------------
+// Pop Guard
+
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct PopLockGuard<'a, T>(SpinLockGuard<'a, (*mut Block<T>, usize)>);
+
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct PushLockGuard<'a, T>(SpinLockGuard<'a, (*mut Block<T>, usize)>);
 
 // -----------------------------------------------------------------------------
 // Tests
@@ -584,7 +700,7 @@ mod tests {
 
     #[test]
     fn smoke() {
-        let q = ListQueue::new();
+        let q = ListQueue::default();
         q.push(7);
         assert_eq!(q.pop(), Some(7));
 
@@ -595,7 +711,7 @@ mod tests {
 
     #[test]
     fn len_empty_full() {
-        let q = ListQueue::new();
+        let q = ListQueue::default();
 
         assert_eq!(q.len(), 0);
         assert!(q.is_empty());
@@ -613,7 +729,7 @@ mod tests {
 
     #[test]
     fn len() {
-        let q = ListQueue::new();
+        let q = ListQueue::default();
 
         assert_eq!(q.len(), 0);
 
@@ -637,7 +753,7 @@ mod tests {
         #[cfg(not(miri))]
         const COUNT: usize = 100_000;
 
-        let q = ListQueue::new();
+        let q = ListQueue::default();
 
         scope(|scope| {
             scope.spawn(|| {
@@ -667,7 +783,7 @@ mod tests {
         const COUNT: usize = 25_000;
         const THREADS: usize = 4;
 
-        let q = ListQueue::<usize>::new();
+        let q = ListQueue::<usize>::default();
         let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
 
         scope(|scope| {

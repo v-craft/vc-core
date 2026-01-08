@@ -62,10 +62,12 @@ mod variant_ops;
 // Exports
 
 pub use apply_error::ApplyError;
-pub use array_ops::{Array, ArrayItemIter, DynamicArray};
 pub use clone_error::ReflectCloneError;
-pub use enum_ops::{DynamicEnum, Enum};
+
 pub use kind::{ReflectMut, ReflectOwned, ReflectRef};
+
+pub use array_ops::{Array, ArrayItemIter, DynamicArray};
+pub use enum_ops::{DynamicEnum, Enum};
 pub use list_ops::{DynamicList, List, ListItemIter};
 pub use map_ops::{DynamicMap, Map};
 pub use set_ops::{DynamicSet, Set};

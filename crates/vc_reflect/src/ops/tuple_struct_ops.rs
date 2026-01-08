@@ -526,8 +526,8 @@ impl<'a> Iterator for TupleStructFieldIter<'a> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = self.tuple_struct.field_len();
-        (size - self.index, Some(size))
+        let hint = self.tuple_struct.field_len() - self.index;
+        (hint, Some(hint))
     }
 }
 

@@ -626,8 +626,8 @@ impl<'a> Iterator for ArrayItemIter<'a> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = self.array.len() - self.index;
-        (size, Some(size))
+        let hint = self.array.len() - self.index;
+        (hint, Some(hint))
     }
 }
 
