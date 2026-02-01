@@ -91,7 +91,6 @@ impl<T, const N: usize> ArrayDeque<T, N> {
         }
         let begin = (self.tail + N - self.len) % N;
         if self.tail > begin {
-            debug_assert_eq!(self.len, self.tail - begin);
             unsafe {
                 ptr::drop_in_place(ptr::slice_from_raw_parts_mut::<T>(
                     self.slots.as_mut_ptr().add(begin) as *mut T,

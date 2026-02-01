@@ -2,7 +2,7 @@
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use vc_utils::hash::NoOpHashMap;
+use vc_utils::hash::SparseHashMap;
 
 use super::ArchetypeId;
 
@@ -51,17 +51,17 @@ impl ArchetypeInsertedBundle {
 // Edges
 
 pub struct Edges {
-    insert_bundle: NoOpHashMap<BundleId, ArchetypeInsertedBundle>,
-    remove_bundle: NoOpHashMap<BundleId, Option<ArchetypeId>>,
-    take_bundle: NoOpHashMap<BundleId, Option<ArchetypeId>>,
+    insert_bundle: SparseHashMap<BundleId, ArchetypeInsertedBundle>,
+    remove_bundle: SparseHashMap<BundleId, Option<ArchetypeId>>,
+    take_bundle: SparseHashMap<BundleId, Option<ArchetypeId>>,
 }
 
 impl Edges {
     pub const fn empty() -> Self {
         Self {
-            insert_bundle: NoOpHashMap::new(),
-            remove_bundle: NoOpHashMap::new(),
-            take_bundle: NoOpHashMap::new(),
+            insert_bundle: SparseHashMap::new(),
+            remove_bundle: SparseHashMap::new(),
+            take_bundle: SparseHashMap::new(),
         }
     }
 
@@ -84,8 +84,8 @@ impl Edges {
         &mut self,
         bundle_id: BundleId,
         archetype_id: ArchetypeId,
-        bundle_status: impl Into<Box<[ComponentStatus]>>,
-        required_components: impl Into<Box<[RequiredComponent]>>,
+        bundle_status: Box<[ComponentStatus]>,
+        required_components: Box<[RequiredComponent]>,
         mut added: Vec<ComponentId>,
         existing: Vec<ComponentId>,
     ) {
@@ -97,10 +97,10 @@ impl Edges {
             bundle_id,
             ArchetypeInsertedBundle {
                 archetype_id,
-                bundle_status: bundle_status.into(),
-                required_components: required_components.into(),
+                bundle_status: bundle_status,
+                required_components: required_components,
                 added_len,
-                inserted: added.into(),
+                inserted: added.into_boxed_slice(),
             },
         );
     }

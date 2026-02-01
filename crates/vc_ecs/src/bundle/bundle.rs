@@ -27,3 +27,29 @@
 //     /// Return a iterator over this [`Bundle`]'s component ids. This will be [`None`] if the component has not been registered.
 //     fn get_component_ids(components: &Components) -> impl Iterator<Item = Option<ComponentId>>;
 // }
+
+use vc_ptr::{OwningPtr, MovingPtr};
+
+use crate::storage::StorageType;
+use crate::component::{ComponentId, Components, ComponentsRegistrator};
+
+pub trait DynamicBundle: Sized {
+    type Effect;
+
+    unsafe fn get_components(
+        ptr: MovingPtr<'_, Self>,
+        func: &mut impl FnMut(StorageType, OwningPtr<'_>),
+    );
+
+
+}
+
+
+pub unsafe trait Bundle: DynamicBundle + Send + Sync + 'static {
+    fn component_ids(
+        components: &mut ComponentsRegistrator,
+    ) -> impl Iterator<Item = ComponentId> + use<Self>;
+
+    
+    fn get_component_ids(components: &Components) -> impl Iterator<Item = Option<ComponentId>>;
+}

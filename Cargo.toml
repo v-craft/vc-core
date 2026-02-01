@@ -74,6 +74,8 @@ new_without_default = "allow"
 module_inception = "allow"
 len_without_is_empty = "allow"
 
+type_id_on_box = "deny"
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 unsafe_op_in_unsafe_fn = "warn"

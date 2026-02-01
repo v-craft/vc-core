@@ -14,6 +14,7 @@ mod status;
 pub use id::BundleId;
 pub use info::{BundleInfo, InsertMode};
 pub use status::{BundleComponentStatus, ComponentStatus, SpawnBundleStatus};
+pub use bundle::{Bundle, DynamicBundle};
 
 // -----------------------------------------------------------------------------
 // Bundle
