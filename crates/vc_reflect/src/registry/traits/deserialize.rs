@@ -17,8 +17,9 @@ use crate::registry::FromType;
 /// # Examples
 ///
 /// ```
-/// # use core::any::TypeId;
-/// # use vc_reflect::{registry::{TypeTraitDeserialize, TypeRegistry}, derive::Reflect, Reflect};
+/// use core::any::TypeId;
+/// use vc_reflect::registry::{TypeTraitDeserialize, TypeRegistry};
+/// use vc_reflect::{Reflect, derive::Reflect};
 /// use serde::Deserialize;
 ///
 /// #[derive(Reflect, Deserialize, PartialEq, Debug)]

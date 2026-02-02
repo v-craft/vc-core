@@ -514,7 +514,7 @@ macro_rules! impl_type_fn {
 
         /// Returns the `TypeId`.
         #[inline]
-        pub const fn ty_id(&self) -> ::core::any::TypeId {
+        pub const fn type_id(&self) -> ::core::any::TypeId {
             self.ty().id()
         }
 

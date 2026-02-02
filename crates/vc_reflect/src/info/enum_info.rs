@@ -1,4 +1,5 @@
-use alloc::{boxed::Box, string::String};
+use alloc::boxed::Box;
+use alloc::string::String;
 
 use vc_os::sync::Arc;
 use vc_utils::hash::HashMap;
@@ -99,7 +100,7 @@ impl EnumInfo {
 
     /// Returns the number of variants.
     #[inline]
-    pub fn variant_len(&self) -> usize {
+    pub fn variant_count(&self) -> usize {
         self.variants.len()
     }
 }

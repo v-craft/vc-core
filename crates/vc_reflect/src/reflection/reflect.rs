@@ -38,17 +38,23 @@ use crate::ops::{ReflectMut, ReflectOwned, ReflectRef};
 ///
 /// ## Type Identification
 ///
-/// While `Reflect` supports [`Any`], note that [`Any::type_id`] on `Box<dyn Reflect>`
-/// returns the container's type ID, not the inner value's. Use [`Reflect::ty_id`] instead:
+/// `Reflect` implements [`Any`], allowing calls to [`Any::type_id`].
+///
+/// Note that if [`Any`] is imported in scope, calling `type_id` on containers
+/// like [`Box<dyn Reflect>`] will return the container's type ID rather than
+/// the contained reflective object's type ID.
+///
+/// The VoidCraft framework prohibits `Box<T>::type_id` via `clippy` lints,
+/// preventing such misuse internally. However, framework users must remain
+/// vigilant to avoid this error in their own code.
 ///
 /// ```rust
-/// # use vc_reflect::Reflect;
-/// # use core::any::{Any, TypeId};
+/// use core::any::TypeId;
+/// use vc_reflect::Reflect;
+///
 /// let x: Box<dyn Reflect> = Box::new(32_i32).into_reflect();
 ///
-/// assert!(x.type_id() != TypeId::of::<i32>());    // Container type ID
-/// assert!((*x).type_id() == TypeId::of::<i32>()); // Dereferenced works
-/// assert!(x.ty_id() == TypeId::of::<i32>());      // Preferred method
+/// assert!((*x).type_id() == TypeId::of::<i32>());      // Preferred method
 /// ```
 ///
 /// ## Dynamic Type Representation
@@ -242,30 +248,6 @@ pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
         Self: Sized,
     {
         Box::new(self)
-    }
-
-    /// Return the [`TypeId`] of underlying type.
-    ///
-    /// When you call `Box<dyn Reflect>::type_id`, it will return
-    /// the [`TypeId`] of the entire container, instead of `dyn Reflect`.
-    ///
-    /// This is prone to errors, so we provide this method.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use vc_reflect::Reflect;
-    /// use core::any::{Any, TypeId};
-    ///
-    /// let mut x: Box<dyn Reflect> = Box::new(32_i32).into_reflect();
-    ///
-    /// assert!(x.type_id() != TypeId::of::<i32>()); // !!!
-    /// assert!((*x).type_id() == TypeId::of::<i32>());
-    /// assert!(x.ty_id() == TypeId::of::<i32>());   // good
-    /// ```
-    #[inline]
-    fn ty_id(&self) -> TypeId {
-        TypeId::of::<Self>()
     }
 
     /// Indicates whether or not this type is a _dynamic_ data type.
@@ -676,7 +658,7 @@ impl dyn Reflect {
     #[inline(always)]
     pub fn is<T: Any>(&self) -> bool {
         // Any::Type_id(self)
-        self.ty_id() == TypeId::of::<T>()
+        self.type_id() == TypeId::of::<T>()
     }
 
     /// Returns `true` if the value represents type `T`,  or `false` otherwise.
@@ -699,7 +681,7 @@ impl dyn Reflect {
     #[inline]
     pub fn represents<T: Reflect>(&self) -> bool {
         match self.represented_type_info() {
-            Some(t) => t.ty_id() == TypeId::of::<T>(),
+            Some(t) => t.type_id() == TypeId::of::<T>(),
             None => false,
         }
     }

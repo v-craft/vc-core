@@ -173,7 +173,7 @@ impl<'a, P: SerializeProcessor> Serialize for SerializeDriver<'a, P> {
         // Try to get the Serializ impl of the type itself
         if let Some(p) = self
             .registry
-            .get_type_trait::<TypeTraitSerialize>(self.value.ty_id())
+            .get_type_trait::<TypeTraitSerialize>(self.value.type_id())
         {
             return p.serialize(self.value, serializer);
         }

@@ -28,10 +28,10 @@
 //     fn get_component_ids(components: &Components) -> impl Iterator<Item = Option<ComponentId>>;
 // }
 
-use vc_ptr::{OwningPtr, MovingPtr};
+use vc_ptr::{MovingPtr, OwningPtr};
 
-use crate::storage::StorageType;
 use crate::component::{ComponentId, Components, ComponentsRegistrator};
+use crate::storage::StorageType;
 
 pub trait DynamicBundle: Sized {
     type Effect;
@@ -40,16 +40,12 @@ pub trait DynamicBundle: Sized {
         ptr: MovingPtr<'_, Self>,
         func: &mut impl FnMut(StorageType, OwningPtr<'_>),
     );
-
-
 }
-
 
 pub unsafe trait Bundle: DynamicBundle + Send + Sync + 'static {
     fn component_ids(
         components: &mut ComponentsRegistrator,
     ) -> impl Iterator<Item = ComponentId> + use<Self>;
 
-    
     fn get_component_ids(components: &Components) -> impl Iterator<Item = Option<ComponentId>>;
 }

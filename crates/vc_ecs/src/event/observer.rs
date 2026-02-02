@@ -1,14 +1,13 @@
 use vc_ptr::PtrMut;
 use vc_utils::hash::SparseHashMap;
 
-use super::{TriggerContext, EventKey};
-use crate::world::DeferredWorld;
+use super::{EventKey, TriggerContext};
 use crate::component::ComponentId;
-use crate::entity::{EntityHashMap, Entity};
+use crate::entity::{Entity, EntityHashMap};
+use crate::world::DeferredWorld;
 
 pub type ObserverRunner =
     unsafe fn(DeferredWorld, observer: Entity, &TriggerContext, event: PtrMut, trigger: PtrMut);
-
 
 pub type ObserverMap = EntityHashMap<ObserverRunner>;
 

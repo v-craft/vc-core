@@ -1,3 +1,5 @@
+#![allow(clippy::len_without_is_empty, reason = "`len` is fixed for array.")]
+
 use core::any::{Any, TypeId};
 
 use crate::Reflect;
@@ -5,7 +7,7 @@ use crate::info::{Generics, Type, TypeInfo, TypePath, Typed};
 use crate::info::{impl_docs_fn, impl_generic_fn, impl_type_fn};
 use crate::ops::Array;
 
-/// A container for compile-time array info, size = 96 (exclude `docs`).
+/// A container for compile-time array infomation.
 ///
 /// At present, `ArrayInfo` does not have `CustomAttributes`, which can save memory.
 ///
@@ -23,7 +25,6 @@ use crate::ops::Array;
 /// let item_info = info.item_info();
 /// assert!(item_info.type_is::<i32>());
 /// ```
-#[expect(clippy::len_without_is_empty, reason = "`len` is fixed for array.")]
 #[derive(Clone, Debug)]
 pub struct ArrayInfo {
     ty: Type,
@@ -46,7 +47,7 @@ impl ArrayInfo {
     ///
     /// # Arguments
     ///
-    /// - `capacity`: The maximum capacity of the underlying array.
+    /// - `len`: The length of the underlying array.
     ///
     /// # Examples
     ///

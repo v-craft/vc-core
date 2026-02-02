@@ -519,7 +519,7 @@ pub fn impl_auto_register(_input: TokenStream) -> TokenStream {
 ///
 /// let x: Box<dyn Reflect> = Box::new(String::from("123"));
 ///
-/// let reflect_my_debug = reg.get_type_trait::<ReflectMyDebug>::(x.ty_id()).unwrap();
+/// let reflect_my_debug = reg.get_type_trait::<ReflectMyDebug>::((*x).type_id()).unwrap();
 /// let x: Box<dyn MyDebug> = reflect_my_debug.get_boxed(x);
 /// x.debug();
 /// ```

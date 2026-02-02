@@ -169,7 +169,7 @@ pub fn array_hash(x: &dyn Array) -> Option<u64> {
         hasher.write_u64(value.reflect_hash()?);
     }
 
-    x.ty_id().hash(&mut hasher);
+    x.type_id().hash(&mut hasher);
     x.len().hash(&mut hasher);
 
     Some(hasher.finish())
@@ -361,7 +361,7 @@ pub fn tuple_hash(x: &dyn Tuple) -> Option<u64> {
     for field in x.iter_fields() {
         field.reflect_hash()?.hash(&mut hasher);
     }
-    x.ty_id().hash(&mut hasher);
+    x.type_id().hash(&mut hasher);
     x.field_len().hash(&mut hasher);
 
     Some(hasher.finish())
@@ -555,7 +555,7 @@ pub fn struct_hash(x: &dyn Struct) -> Option<u64> {
         hasher.write_u64(item.reflect_hash()?);
     }
 
-    x.ty_id().hash(&mut hasher);
+    x.type_id().hash(&mut hasher);
     x.field_len().hash(&mut hasher);
 
     Some(hasher.finish())
@@ -825,7 +825,7 @@ pub fn enum_hash(x: &dyn Enum) -> Option<u64> {
         hasher.write_u64(field.value().reflect_hash()?);
     }
 
-    x.ty_id().hash(&mut hasher);
+    x.type_id().hash(&mut hasher);
     x.variant_name().hash(&mut hasher);
     x.variant_kind().hash(&mut hasher);
 
@@ -1046,7 +1046,7 @@ pub fn list_hash(x: &dyn List) -> Option<u64> {
         hasher.write_u64(val.reflect_hash()?);
     }
 
-    x.ty_id().hash(&mut hasher);
+    x.type_id().hash(&mut hasher);
     x.len().hash(&mut hasher);
 
     Some(hasher.finish())
@@ -1270,7 +1270,7 @@ pub fn map_hash(x: &dyn Map) -> Option<u64> {
         hasher.write_u64(val.reflect_hash()?);
     }
 
-    x.ty_id().hash(&mut hasher);
+    x.type_id().hash(&mut hasher);
     x.len().hash(&mut hasher);
 
     Some(hasher.finish())
@@ -1465,7 +1465,7 @@ pub fn set_hash(x: &dyn Set) -> Option<u64> {
         hasher.write_u64(item.reflect_hash()?);
     }
 
-    x.ty_id().hash(&mut hasher);
+    x.type_id().hash(&mut hasher);
     x.len().hash(&mut hasher);
 
     Some(hasher.finish())
@@ -1655,7 +1655,7 @@ pub fn tuple_struct_hash(x: &dyn TupleStruct) -> Option<u64> {
         hasher.write_u64(item.reflect_hash()?);
     }
 
-    x.ty_id().hash(&mut hasher);
+    x.type_id().hash(&mut hasher);
     x.field_len().hash(&mut hasher);
 
     Some(hasher.finish())

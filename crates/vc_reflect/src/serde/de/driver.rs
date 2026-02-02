@@ -136,7 +136,7 @@ crate::cfg::debug! {
 /// assert_eq!(value, MyStruct { value: 123 });
 ///
 /// // We can also do this dynamically with `TypeTraitFromReflect`.
-/// let type_id = output.represented_type_info().unwrap().ty_id();
+/// let type_id = output.represented_type_info().unwrap().type_id();
 /// let from_reflect = registry.get_type_trait::<TypeTraitFromReflect>(type_id).unwrap();
 /// let value: Box<dyn Reflect> = from_reflect.from_reflect(&*output).unwrap();
 /// assert!(value.is::<MyStruct>());
@@ -523,7 +523,7 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for ReflectDeserializeDr
                     return Err(Error::invalid_length(2, &"a single entry"));
                 }
 
-                if value.ty_id() != type_meta.ty_id()
+                if (*value).type_id() != type_meta.type_id()
                     && let Some(from_reflect) = type_meta.get_trait::<TypeTraitFromReflect>()
                     && let Some(target_value) = from_reflect.from_reflect(&*value)
                 {

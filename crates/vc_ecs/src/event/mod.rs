@@ -3,17 +3,18 @@
 // -----------------------------------------------------------------------------
 // Modules
 
-mod trigger;
-mod observer;
 mod event;
+mod observer;
+mod trigger;
 
 // -----------------------------------------------------------------------------
 // Exports
 
 pub use event::{EntityEvent, Event, SetEntityEventTarget};
+pub use observer::{
+    CachedComponentObservers, CachedObservers, ObserverMap, ObserverRunner, Observers,
+};
 pub use trigger::{Trigger, TriggerContext};
-pub use observer::{ObserverMap, Observers, ObserverRunner, CachedComponentObservers, CachedObservers};
-
 
 // -----------------------------------------------------------------------------
 // Inline - Exports
@@ -22,9 +23,7 @@ use crate::component::ComponentId;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd)]
 #[repr(transparent)]
-pub struct EventKey(
-    pub(crate) ComponentId,
-);
+pub struct EventKey(pub(crate) ComponentId);
 
 impl core::hash::Hash for EventKey {
     #[inline(always)]

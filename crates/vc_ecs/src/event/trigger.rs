@@ -1,12 +1,12 @@
 use core::marker::PhantomData;
 
-use super::{EventKey, Event, CachedObservers};
+use super::{CachedObservers, Event, EventKey};
+use crate::bundle::Bundle;
 use crate::component::ComponentId;
+use crate::entity::Entity;
 use crate::event::EntityEvent;
 use crate::utils::DebugLocation;
 use crate::world::DeferredWorld;
-use crate::bundle::Bundle;
-use crate::entity::Entity;
 
 pub struct TriggerContext {
     /// The [`EventKey`] the trigger targeted.
@@ -49,5 +49,3 @@ pub struct EntityComponentsTrigger<'a> {
     /// contain the [`ComponentId`] for both `A` and `B`.
     pub components: &'a [ComponentId],
 }
-
-

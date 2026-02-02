@@ -51,7 +51,7 @@ impl CustomAttributes {
     /// allocations when there are no attributes.
     ///
     /// To avoid returning `None`, we provide this const empty instance.
-    pub(crate) const EMPTY: &'static Self = &Self::new();
+    pub(super) const EMPTY: &'static Self = &Self::new();
 
     /// Creates an empty [`CustomAttributes`].
     ///

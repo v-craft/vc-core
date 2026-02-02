@@ -97,13 +97,13 @@ where
 
         // skip serde fields
         if let Some(skip_serde) = field_info.get_attribute::<SkipSerde>() {
-            if let Some(val) = skip_serde.get(field_info.ty_id(), registry)? {
+            if let Some(val) = skip_serde.get(field_info.type_id(), registry)? {
                 dynamic_tuple.extend_boxed(val);
             }
             continue;
         }
 
-        let Some(type_meta) = registry.get(field_info.ty_id()) else {
+        let Some(type_meta) = registry.get(field_info.type_id()) else {
             return Err(make_custom_error(format!(
                 "no TypeMeta found for type `{}`",
                 field_info.type_info().type_path(),

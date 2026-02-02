@@ -1,5 +1,5 @@
 use alloc::boxed::Box;
-use core::{any::Any, ops::Deref};
+use core::ops::Deref;
 
 use crate::info::{ConstParamData, Type, TypePath, impl_type_fn};
 
@@ -118,7 +118,7 @@ impl ConstParamInfo {
 
     /// Returns the const value for this parameter, if the type is correct.
     #[inline]
-    pub fn value<T: Any + TryFrom<ConstParamData>>(&self) -> Option<T> {
+    pub fn value<T: TryFrom<ConstParamData>>(&self) -> Option<T> {
         (*self.value).try_into().ok()
     }
 }

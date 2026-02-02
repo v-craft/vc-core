@@ -14,7 +14,7 @@
 /// ```
 ///
 /// See: <https://doc.rust-lang.org/reference/items/generics.html>
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConstParamData {
     U8(u8),
     U16(u16),

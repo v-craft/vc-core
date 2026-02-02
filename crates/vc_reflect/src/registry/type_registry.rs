@@ -146,7 +146,7 @@ impl TypeRegistry {
 
     /// Try add or do nothing.
     ///
-    /// The function will will check if `TypeMeta.ty_id()` exists.  
+    /// The function will will check if `TypeMeta.type_id()` exists.  
     /// - If key [`TypeId`] has already exist, the function will do nothing and return `false`.
     /// - If the key [`TypeId`] does not exist, the function will insert value and return `true`.
     ///
@@ -154,7 +154,7 @@ impl TypeRegistry {
     /// Use [`register`](Self::register) to register a type with its dependencies.
     #[inline(always)]
     pub fn try_insert_type_meta(&mut self, type_meta: TypeMeta) -> bool {
-        self.type_meta_table.try_insert(type_meta.ty_id(), || {
+        self.type_meta_table.try_insert(type_meta.type_id(), || {
             Self::add_new_type_indices(
                 &type_meta,
                 &mut self.type_path_to_id,
@@ -167,7 +167,7 @@ impl TypeRegistry {
 
     /// Insert or **Overwrite** inner TypeTraits.
     ///
-    /// The function will will check if `TypeMeta.ty_id()` exists.  
+    /// The function will will check if `TypeMeta.type_id()` exists.  
     /// - If key [`TypeId`] has already exist, the value will be overwritten.
     ///   But full_path and type_name table will not be modified.  
     /// - If the key [`TypeId`] does not exist, the value will be inserted.
@@ -176,7 +176,7 @@ impl TypeRegistry {
     /// This method will _not_ register type dependencies.
     /// Use [`register`](Self::register) to register a type with its dependencies.
     pub fn insert_type_meta(&mut self, type_meta: TypeMeta) {
-        if !self.type_meta_table.contains(&type_meta.ty_id()) {
+        if !self.type_meta_table.contains(&type_meta.type_id()) {
             Self::add_new_type_indices(
                 &type_meta,
                 &mut self.type_path_to_id,
@@ -184,7 +184,7 @@ impl TypeRegistry {
                 &mut self.ambiguous_names,
             );
         }
-        self.type_meta_table.insert(type_meta.ty_id(), type_meta);
+        self.type_meta_table.insert(type_meta.type_id(), type_meta);
     }
 
     /// Attempts to register the type `T` if it has not yet been registered already.

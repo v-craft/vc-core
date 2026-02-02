@@ -16,7 +16,7 @@ pub struct TypeTraitFromPtr {
 
 impl TypeTraitFromPtr {
     /// Returns the [`TypeId`] that the [`TypeTraitFromPtr`] was constructed for.
-    pub fn ty_id(&self) -> TypeId {
+    pub fn type_id(&self) -> TypeId {
         self.ty_id
     }
 

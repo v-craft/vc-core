@@ -19,7 +19,9 @@ use crate::registry::FromType;
 /// # Examples
 ///
 /// ```
-/// # use vc_reflect::{registry::{TypeTraitSerialize, TypeRegistry}, derive::Reflect, Reflect};
+/// use core::any::TypeId;
+/// use vc_reflect::registry::{TypeTraitSerialize, TypeRegistry};
+/// use vc_reflect::{Reflect, derive::Reflect};
 /// use serde::Serialize;
 ///
 /// #[derive(Reflect, Serialize, PartialEq, Debug)]
@@ -33,7 +35,7 @@ use crate::registry::FromType;
 ///
 /// let input = MyStruct { value: 123 };
 ///
-/// let processor = registry.get_type_trait::<TypeTraitSerialize>(input.ty_id()).unwrap();
+/// let processor = registry.get_type_trait::<TypeTraitSerialize>(TypeId::of::<MyStruct>()).unwrap();
 ///
 /// let mut output = String::new();
 /// let mut serializer = ron::Serializer::new(&mut output, None).unwrap();

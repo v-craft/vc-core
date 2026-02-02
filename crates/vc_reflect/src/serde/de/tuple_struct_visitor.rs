@@ -50,7 +50,7 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for TupleStructVisitor<'_, P> {
             .field_at(0)
             .ok_or(make_custom_error("Field at index 0 not found"))?;
 
-        let Some(type_meta) = self.registry.get(field_info.ty_id()) else {
+        let Some(type_meta) = self.registry.get(field_info.type_id()) else {
             return Err(make_custom_error(format!(
                 "no TypeMeta found for type `{}`",
                 field_info.type_info().type_path(),

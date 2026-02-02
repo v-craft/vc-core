@@ -99,7 +99,7 @@ impl SkipSerde {
         crate::cfg::debug! {
             match x.reflect_clone() {
                 Ok(v) => assert_eq!(
-                    v.ty_id(),
+                    (*v).type_id(),
                     TypeId::of::<T>(),
                     "`SkipSerde::Clone` type mismatched: {}",
                     x.reflect_type_path(),
@@ -130,7 +130,7 @@ impl SkipSerde {
             SkipSerde::Clone(reflect) => {
                 crate::cfg::debug! {
                     if {
-                        if reflect.ty_id() != id {
+                        if (**reflect).type_id() != id {
                             return Err(E::custom(
                                 "`SkipSerde::Clone` but type mismatched.",
                             ));

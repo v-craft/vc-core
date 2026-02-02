@@ -144,7 +144,7 @@ where
 
         // cannot skip here, we need to call `next_value_seed`.
 
-        let Some(type_meta) = registry.get(field.ty_id()) else {
+        let Some(type_meta) = registry.get(field.type_id()) else {
             return Err(make_custom_error(format!(
                 "no TypeMeta found for type `{}`",
                 field.type_info().type_path(),
@@ -161,7 +161,7 @@ where
 
     for field in info.iter_fields() {
         if let Some(skip_serde) = field.get_attribute::<SkipSerde>()
-            && let Some(val) = skip_serde.get(field.ty_id(), registry)?
+            && let Some(val) = skip_serde.get(field.type_id(), registry)?
         {
             dynamic_struct.extend_boxed(field.name(), val);
         }
@@ -191,13 +191,13 @@ where
         let field = info.field_at::<V::Error>(index)?;
 
         if let Some(skip_serde) = field.get_attribute::<SkipSerde>() {
-            if let Some(value) = skip_serde.get(field.ty_id(), registry)? {
+            if let Some(value) = skip_serde.get(field.type_id(), registry)? {
                 dynamic_struct.extend_boxed(field.name(), value);
             }
             continue;
         }
 
-        let Some(type_meta) = registry.get(field.ty_id()) else {
+        let Some(type_meta) = registry.get(field.type_id()) else {
             return Err(make_custom_error(format!(
                 "no TypeMeta found for type `{}`",
                 field.type_info().type_path(),

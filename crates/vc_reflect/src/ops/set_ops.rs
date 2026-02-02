@@ -508,8 +508,8 @@ pub trait Set: Reflect {
         for value in self.iter() {
             if let Ok(v) = value.reflect_clone() {
                 debug_assert_eq!(
-                    v.ty_id(),
-                    value.ty_id(),
+                    (*v).type_id(),
+                    value.type_id(),
                     "`Reflect::reflect_clone` should return the same type: {}",
                     value.reflect_type_path(),
                 );

@@ -63,7 +63,7 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for EnumVisitor<'_, P> {
                     );
                 }
 
-                let Some(type_meta) = self.registry.get(field.ty_id()) else {
+                let Some(type_meta) = self.registry.get(field.type_id()) else {
                     return Err(make_custom_error(format!(
                         "no TypeMeta found for type `{}`",
                         field.type_info().type_path(),

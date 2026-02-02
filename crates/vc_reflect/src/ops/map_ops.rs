@@ -527,8 +527,8 @@ pub trait Map: Reflect {
         for (key, value) in self.iter() {
             if let Ok(k) = key.reflect_clone() {
                 debug_assert_eq!(
-                    k.ty_id(),
-                    key.ty_id(),
+                    (*k).type_id(),
+                    key.type_id(),
                     "`Reflect::reflect_clone` should return the same type: {}",
                     value.reflect_type_path(),
                 );

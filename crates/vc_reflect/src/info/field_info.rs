@@ -28,7 +28,7 @@ use crate::info::{impl_custom_attributes_fn, impl_with_custom_attributes};
 /// ```
 #[derive(Clone, Debug)]
 pub struct NamedField {
-    ty_id: TypeId,
+    type_id: TypeId,
     name: &'static str,
     // `TypeInfo` is created on first access; using a function pointer delays it.
     type_info: fn() -> &'static TypeInfo,
@@ -49,7 +49,7 @@ impl NamedField {
         Self {
             name,
             type_info: T::type_info,
-            ty_id: TypeId::of::<T>(),
+            type_id: TypeId::of::<T>(),
             custom_attributes: None,
             #[cfg(feature = "reflect_docs")]
             docs: None,
@@ -58,14 +58,14 @@ impl NamedField {
 
     /// Returns the `TypeId`.
     #[inline]
-    pub const fn ty_id(&self) -> TypeId {
-        self.ty_id
+    pub const fn type_id(&self) -> TypeId {
+        self.type_id
     }
 
     /// Check if the given type matches this one.
     #[inline]
     pub fn type_is<T: Any>(&self) -> bool {
-        self.ty_id == TypeId::of::<T>()
+        self.type_id == TypeId::of::<T>()
     }
 
     /// Returns the field name.
@@ -102,7 +102,7 @@ impl NamedField {
 /// ```
 #[derive(Clone, Debug)]
 pub struct UnnamedField {
-    ty_id: TypeId,
+    type_id: TypeId,
     index: usize,
     // `TypeInfo` is created on first access; using a function pointer delays it.
     type_info: fn() -> &'static TypeInfo,
@@ -123,7 +123,7 @@ impl UnnamedField {
         Self {
             index,
             type_info: T::type_info,
-            ty_id: TypeId::of::<T>(),
+            type_id: TypeId::of::<T>(),
             custom_attributes: None,
             #[cfg(feature = "reflect_docs")]
             docs: None,
@@ -132,14 +132,14 @@ impl UnnamedField {
 
     /// Returns the `TypeId`.
     #[inline]
-    pub const fn ty_id(&self) -> TypeId {
-        self.ty_id
+    pub const fn type_id(&self) -> TypeId {
+        self.type_id
     }
 
     /// Check if the given type matches this one.
     #[inline]
     pub fn type_is<T: Any>(&self) -> bool {
-        self.ty_id == TypeId::of::<T>()
+        self.type_id == TypeId::of::<T>()
     }
 
     /// Returns the field index (position in the tuple struct).
