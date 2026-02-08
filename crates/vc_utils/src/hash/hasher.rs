@@ -222,7 +222,7 @@ impl Hasher for SparseHasher {
 
     fn write(&mut self, bytes: &[u8]) {
         for byte in bytes {
-            self.hash <<= 1;
+            self.hash <<= 2;
             self.hash |= UPPER_PHI.wrapping_mul(*byte as u64);
         }
     }

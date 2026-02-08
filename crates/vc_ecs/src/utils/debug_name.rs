@@ -40,6 +40,20 @@ impl DebugName {
         }
     }
 
+    #[inline(always)]
+    pub const fn anonymous() -> Self {
+        cfg::debug! {
+            if {
+                Self {
+                    name: Cow::Borrowed("_unknown_")
+                }
+            }
+            else {
+                Self {}
+            }
+        }
+    }
+
     #[inline]
     pub fn parse(&self) -> String {
         ToString::to_string(&self)
@@ -52,14 +66,7 @@ impl From<Option<DebugName>> for DebugName {
         if let Some(name) = value {
             name
         } else {
-            cfg::debug! {
-                if {
-                    Self { name: Cow::Borrowed("_unknown_") }
-                }
-                else {
-                    Self {}
-                }
-            }
+            DebugName::anonymous()
         }
     }
 }

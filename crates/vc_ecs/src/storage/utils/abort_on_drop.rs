@@ -1,6 +1,8 @@
-pub(crate) struct AbortOnDrop;
+/// A guard used to terminate a process
+/// when memory allocation failure.
+pub(crate) struct AbortOnPanic;
 
-impl Drop for AbortOnDrop {
+impl Drop for AbortOnPanic {
     #[cold]
     #[inline(never)]
     fn drop(&mut self) {

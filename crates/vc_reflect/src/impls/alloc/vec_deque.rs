@@ -24,8 +24,8 @@ impl<T: Typed + FromReflect> Typed for VecDeque<T> {
 impl<T: Typed + FromReflect> Reflect for VecDeque<T> {
     crate::reflection::impl_reflect_cast_fn!(List);
     #[inline]
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), crate::ops::ApplyError> {
-        impls::list_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), crate::ops::ApplyError> {
+        impls::list_apply(self, value)
     }
 
     fn reflect_clone(&self) -> Result<Box<dyn Reflect>, crate::ops::ReflectCloneError> {
@@ -44,12 +44,12 @@ impl<T: Typed + FromReflect> Reflect for VecDeque<T> {
         Box::new(<Self as List>::to_dynamic_list(self))
     }
     #[inline]
-    fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-        impls::list_partial_eq(self, other)
+    fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+        impls::list_eq(self, other)
     }
     #[inline]
-    fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<core::cmp::Ordering> {
-        impls::list_partial_cmp(self, other)
+    fn reflect_cmp(&self, other: &dyn Reflect) -> Option<core::cmp::Ordering> {
+        impls::list_cmp(self, other)
     }
     #[inline]
     fn reflect_hash(&self) -> Option<u64> {

@@ -53,23 +53,6 @@ impl Tables {
         self.tables.len()
     }
 
-    #[inline(always)]
-    pub unsafe fn get(&self, id: TableId) -> &Table {
-        unsafe { self.tables.get_unchecked(id.index()) }
-    }
-
-    #[inline(always)]
-    pub unsafe fn get_mut(&mut self, id: TableId) -> &mut Table {
-        unsafe { self.tables.get_unchecked_mut(id.index()) }
-    }
-
-    #[inline(always)]
-    pub unsafe fn get_mut_2(&mut self, a: TableId, b: TableId) -> (&mut Table, &mut Table) {
-        // A manually implementation of `get_disjoint_unchecked_mut`.
-        let base_ptr = self.tables.as_mut_ptr();
-        unsafe { (&mut *base_ptr.add(a.index()), &mut *base_ptr.add(b.index())) }
-    }
-
     #[inline]
     pub fn iter(&self) -> impl ExactSizeIterator<Item = (TableId, &Table)> {
         self.tables
@@ -98,6 +81,27 @@ impl Tables {
         for table in &mut self.tables {
             table.check_ticks(check);
         }
+    }
+
+    #[inline(always)]
+    pub unsafe fn get_unchecked(&self, id: TableId) -> &Table {
+        unsafe { self.tables.get_unchecked(id.index()) }
+    }
+
+    #[inline(always)]
+    pub unsafe fn get_unchecked_mut(&mut self, id: TableId) -> &mut Table {
+        unsafe { self.tables.get_unchecked_mut(id.index()) }
+    }
+
+    #[inline(always)]
+    pub unsafe fn get_unchecked_mut_2(
+        &mut self,
+        a: TableId,
+        b: TableId,
+    ) -> (&mut Table, &mut Table) {
+        // A manually implementation of `get_disjoint_unchecked_mut`.
+        let base_ptr = self.tables.as_mut_ptr();
+        unsafe { (&mut *base_ptr.add(a.index()), &mut *base_ptr.add(b.index())) }
     }
 }
 
@@ -142,7 +146,8 @@ impl Tables {
 
                 for &id in ids {
                     let info = unsafe { components.get_info_unchecked(id) };
-                    raw_indecies.push(table.insert(id, info.layout(), info.drop_fn()));
+                    let raw_index = unsafe { table.insert(id, info.layout(), info.drop_fn()) };
+                    raw_indecies.push(raw_index);
                 }
 
                 tables.push(table.build());

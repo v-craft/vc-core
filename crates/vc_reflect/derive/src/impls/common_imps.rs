@@ -3,8 +3,8 @@ use quote::quote;
 
 use crate::derive_data::ReflectMeta;
 
-/// Try `clone` or `reflect_clone` for `Reflect::try_apply`
-pub(crate) fn get_common_try_apply_tokens(meta: &ReflectMeta, input: &syn::Ident) -> TokenStream {
+/// Try `clone` or `reflect_clone` for `Reflect::apply`
+pub(crate) fn get_common_apply_tokens(meta: &ReflectMeta, input: &syn::Ident) -> TokenStream {
     use crate::path::fp::{CloneFP, OptionFP, ResultFP};
 
     let vc_reflect_path = meta.vc_reflect_path();

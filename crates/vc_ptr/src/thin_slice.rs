@@ -1,5 +1,7 @@
+use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use core::ptr::NonNull;
+use core::slice;
 
 /// A slice like `&'a [T]`, without length information for better performance.
 ///
@@ -50,16 +52,42 @@ impl<'a, T> ThinSlicePtr<'a, T> {
     ///
     /// assert_eq!(unsafe{ *ptr.get(2) }, 3);
     /// ```
-    #[cfg_attr(debug_assertions, track_caller)]
     #[cfg_attr(not(debug_assertions), inline(always))]
-    pub const unsafe fn get(self, index: usize) -> &'a T {
-        // debug_assert! Use if branch to determine whether to execute.
-        // Therefore, #[cfg] is needed.
+    pub const unsafe fn get(&self, index: usize) -> &'a T {
+        // debug_assert! Use if branch to determine whether
+        // to execute. Therefore, #[cfg] is needed.
         #[cfg(debug_assertions)]
         assert!(index < self.len, "tried to index out-of-bounds of a slice");
 
-        // SAFETY: `index` is in-bounds so the resulting pointer is valid to deref.
         unsafe { &*self.ptr.as_ptr().add(index) }
+    }
+
+    /// Returns a slice without performing bounds checks.
+    ///
+    /// # Safety
+    /// - `len` must be less than or equal to the length of the slice.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use vc_ptr::ThinSlicePtr;
+    ///
+    /// let x = [1, 2, 3, 4];
+    /// let ptr = ThinSlicePtr::from_ref(&x);
+    ///
+    /// assert_eq!(
+    ///     unsafe { ptr.as_slice(3) },
+    ///     &[1, 2, 3],
+    /// );
+    /// ```
+    #[cfg_attr(not(debug_assertions), inline(always))]
+    pub const unsafe fn as_slice(&self, len: usize) -> &'a [T] {
+        // debug_assert! Use if branch to determine whether
+        // to execute. Therefore, #[cfg] is needed.
+        #[cfg(debug_assertions)]
+        assert!(len <= self.len, "tried to create an out-of-bounds slice");
+
+        unsafe { slice::from_raw_parts(self.ptr.as_ptr(), len) }
     }
 
     /// Converts a reference to a `ThinSlicePtr` pointer.
@@ -72,6 +100,49 @@ impl<'a, T> ThinSlicePtr<'a, T> {
             ptr: NonNull::from_ref(r).cast(),
             #[cfg(debug_assertions)]
             len: r.len(),
+        }
+    }
+}
+
+impl<'a, T> ThinSlicePtr<'a, UnsafeCell<T>> {
+    /// Indexes the slice without doing bounds checks.
+    ///
+    /// # Safety
+    /// - `index` must be less than the length of the slice.
+    /// - There must not be any aliases for the lifetime `'a` to the item.
+    #[cfg_attr(not(debug_assertions), inline(always))]
+    pub const unsafe fn get_mut(&mut self, index: usize) -> &'a mut T {
+        // debug_assert! Use if branch to determine whether
+        // to execute. Therefore, #[cfg] is needed.
+        #[cfg(debug_assertions)]
+        assert!(index < self.len, "tried to index out-of-bounds of a slice");
+
+        unsafe { &mut *self.ptr.as_ptr().cast::<T>().add(index) }
+    }
+
+    /// Returns a mutable reference of the slice
+    ///
+    /// # Safety
+    /// - `len` must be less than or equal to the length of the slice.
+    /// - There must not be any aliases for the lifetime `'a` to the slice.
+    #[cfg_attr(not(debug_assertions), inline(always))]
+    pub const unsafe fn as_mut_slice(&self, len: usize) -> &'a mut [T] {
+        // debug_assert! Use if branch to determine whether
+        // to execute. Therefore, #[cfg] is needed.
+        #[cfg(debug_assertions)]
+        assert!(len <= self.len, "tried to create an out-of-bounds slice");
+
+        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr().cast::<T>(), len) }
+    }
+
+    /// Returns a slice pointer to the underlying type `T`.
+    #[inline(always)]
+    pub const fn cast(&self) -> ThinSlicePtr<'a, T> {
+        ThinSlicePtr {
+            _marker: PhantomData,
+            ptr: self.ptr.cast(),
+            #[cfg(debug_assertions)]
+            len: self.len,
         }
     }
 }

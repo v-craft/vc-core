@@ -24,11 +24,11 @@ impl<T: Any + Eq> DynEq for T {
 // -----------------------------------------------------------------------------
 // DynHash
 
-pub trait DynHash: DynEq {
+pub trait DynHash {
     fn dyn_hash(&self, state: &mut dyn Hasher);
 }
 
-impl<T: Eq + Hash + Any> DynHash for T {
+impl<T: Hash + Any> DynHash for T {
     fn dyn_hash(&self, mut state: &mut dyn Hasher) {
         T::hash(self, &mut state);
     }

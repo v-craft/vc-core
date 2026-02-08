@@ -7,6 +7,7 @@ use alloc::vec::Vec;
 use super::error::{InvalidEntityError, ValidEntityButNotSpawnedError};
 use super::error::{NotSpawnedError, SpawnError};
 use super::{Entity, EntityGeneration, EntityId, EntityLocation};
+use crate::cfg;
 use crate::tick::{CheckTicks, Tick};
 use crate::utils::DebugLocation;
 
@@ -237,10 +238,16 @@ impl Entities {
         &self,
         entity: Entity,
     ) -> DebugLocation<Option<&'static Location<'static>>> {
-        DebugLocation::untranspose(|| {
-            self.get_spawned_or_despawned(entity)
-                .map(|spawned_or_despawned| spawned_or_despawned.by)
-        })
+        cfg::debug! {
+            if {
+                DebugLocation::untranspose({
+                    self.get_spawned_or_despawned(entity)
+                    .map(|spawned_or_despawned| spawned_or_despawned.by)
+                })
+            } else {
+                DebugLocation::new(None)
+            }
+        }
     }
 
     pub fn get_spawn_or_despawn_tick(&self, entity: Entity) -> Option<Tick> {

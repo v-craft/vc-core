@@ -14,7 +14,7 @@ use super::{EntityGeneration, EntityId};
 // Entity
 
 #[derive(Reflect, Clone, Copy)]
-#[reflect(Opaque, mini, serde, hash, partial_eq, debug)]
+#[reflect(Opaque, serde, clone, hash, eq, debug)]
 #[repr(C, align(8))]
 pub struct Entity {
     #[cfg(target_endian = "little")]

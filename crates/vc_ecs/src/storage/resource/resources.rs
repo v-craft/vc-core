@@ -9,7 +9,7 @@ use crate::tick::CheckTicks;
 // Resources
 
 pub struct Resources {
-    resources: SparseSet<ComponentId, ResourceData>,
+    resources: SparseSet<ResourceData>,
 }
 
 impl Resources {
@@ -55,7 +55,7 @@ impl Resources {
 // NoSendResources
 
 pub struct NoSendResources {
-    resources: SparseSet<ComponentId, NoSendResourceData>,
+    resources: SparseSet<NoSendResourceData>,
 }
 
 impl NoSendResources {

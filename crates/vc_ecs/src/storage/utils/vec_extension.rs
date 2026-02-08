@@ -1,16 +1,23 @@
-#![expect(unsafe_code, reason = "unchecked is unsafe")]
-
+use alloc::vec::Vec;
 use core::ptr;
 
 // -----------------------------------------------------------------------------
 // VecSwapRemove
 
 pub(crate) trait VecSwapRemove<T> {
+    /// # Safety
+    /// - `vec.len() > 0`
+    /// - `index < last_index`
+    /// - `last_index == vec.len() - 1`
     unsafe fn swap_remove_nonoverlapping(&mut self, index: usize, last_index: usize) -> T;
+
+    /// # Safety
+    /// - `vec.len() > 0`
+    /// - `last_index == vec.len() - 1`
     unsafe fn remove_last(&mut self, last_index: usize) -> T;
 }
 
-impl<T> VecSwapRemove<T> for alloc::vec::Vec<T> {
+impl<T> VecSwapRemove<T> for Vec<T> {
     #[inline(always)]
     unsafe fn swap_remove_nonoverlapping(&mut self, index: usize, last_index: usize) -> T {
         let base_ptr = self.as_mut_ptr();
@@ -42,11 +49,21 @@ impl<T> VecSwapRemove<T> for alloc::vec::Vec<T> {
 // -----------------------------------------------------------------------------
 // VecCopyRemove
 
-pub(crate) trait VecCopyRemove<T> {
+pub(crate) trait VecCopyRemove<T: Copy> {
+    /// Copy the last element to the specified position and return it,
+    /// then reduce the length.
+    ///
+    /// Note that the returned element is the copied last element,
+    /// not the element that was overwritten.
+    ///
+    /// # Safety
+    /// - `vec.len() > 0`
+    /// - `index < last_index`
+    /// - `last_index == vec.len() - 1`
     unsafe fn copy_last_and_return_nonoverlapping(&mut self, index: usize, last_index: usize) -> T;
 }
 
-impl<T: Copy> VecCopyRemove<T> for alloc::vec::Vec<T> {
+impl<T: Copy> VecCopyRemove<T> for Vec<T> {
     #[inline(always)]
     unsafe fn copy_last_and_return_nonoverlapping(&mut self, index: usize, last_index: usize) -> T {
         let base_ptr = self.as_mut_ptr();

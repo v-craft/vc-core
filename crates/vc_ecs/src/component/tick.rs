@@ -65,7 +65,7 @@ pub(crate) struct ComponentTicksRef<'w> {
 }
 
 impl<'w> ComponentTicksRef<'w> {
-    #[allow(unused)]
+    #[allow(unused, reason = "todo")]
     #[inline]
     pub unsafe fn from_tick_cells(
         cells: ComponentTickCells<'w>,

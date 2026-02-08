@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use vc_os::sync::PoisonError;
 
+use vc_os::sync::PoisonError;
 use vc_utils::extra::TypeIdMap;
 
 use crate::cfg;
@@ -9,7 +9,7 @@ use crate::component::{ComponentInfo, RequiredComponents};
 use crate::resource::Resource;
 use crate::utils::DebugCheckedUnwrap;
 
-use super::{ComponentDescriptor, ComponentId, ComponentIdGenerator, Components};
+use super::{ComponentDescriptor, ComponentId, ComponentIdAllocator, Components};
 
 // -----------------------------------------------------------------------------
 // ComponentsRegistrator
@@ -17,7 +17,7 @@ use super::{ComponentDescriptor, ComponentId, ComponentIdGenerator, Components};
 #[derive(Debug)]
 pub struct ComponentsRegistrator<'w> {
     pub components: &'w mut Components,
-    pub generator: &'w mut ComponentIdGenerator,
+    pub allocator: &'w mut ComponentIdAllocator,
     pub check_stack: Vec<ComponentId>,
 }
 
@@ -27,7 +27,7 @@ pub struct ComponentsRegistrator<'w> {
 #[derive(Debug, Clone, Copy)]
 pub struct QueuedRegistrator<'w> {
     components: &'w Components,
-    generator: &'w ComponentIdGenerator,
+    allocator: &'w ComponentIdAllocator,
 }
 
 // -----------------------------------------------------------------------------
@@ -81,14 +81,14 @@ impl<'w> ComponentsRegistrator<'w> {
     ///
     /// # Safety
     ///
-    /// The [`Components`] and [`ComponentIdGenerator`] must match.
+    /// The [`Components`] and [`ComponentIdAllocator`] must match.
     pub unsafe fn new(
         components: &'w mut Components,
-        generator: &'w mut ComponentIdGenerator,
+        allocator: &'w mut ComponentIdAllocator,
     ) -> Self {
         Self {
             components,
-            generator,
+            allocator,
             check_stack: Vec::new(),
         }
     }
@@ -97,7 +97,7 @@ impl<'w> ComponentsRegistrator<'w> {
     pub fn as_queued(&self) -> QueuedRegistrator<'_> {
         QueuedRegistrator {
             components: self.components,
-            generator: self.generator,
+            allocator: self.allocator,
         }
     }
 
@@ -136,7 +136,7 @@ impl<'w> ComponentsRegistrator<'w> {
     /// will be created for each one.
     #[inline]
     pub fn register_dynamic(&mut self, descriptor: ComponentDescriptor) -> ComponentId {
-        let id = self.generator.next_mut();
+        let id = self.allocator.next_mut();
         // SAFETY: The id is fresh.
         unsafe {
             self.components.register_dynamic(id, descriptor);
@@ -151,7 +151,7 @@ impl<'w> ComponentsRegistrator<'w> {
             return id;
         }
 
-        let component_id = self.generator.next_mut();
+        let component_id = self.allocator.next_mut();
 
         unsafe {
             self.register_component_unchecked::<T>(component_id);
@@ -197,7 +197,8 @@ impl<'w> ComponentsRegistrator<'w> {
 
                 // A hack, because `u32::contains` has SIMD optimization provided
                 // by the standard library. See in `core::cmp::SliceContains`.
-                let stack_slice: &[u32] = mem::transmute(self.check_stack.as_slice());
+                let stack_slice =
+                    mem::transmute::<&[ComponentId], &[u32]>(self.check_stack.as_slice());
 
                 if stack_slice.contains(mem::transmute::<&ComponentId, &u32>(&required)) {
                     handle_recursion_error(self.components, &self.check_stack, required);
@@ -294,7 +295,7 @@ impl<'w> ComponentsRegistrator<'w> {
             return id;
         }
 
-        let id = self.generator.next_mut();
+        let id = self.allocator.next_mut();
 
         // SAFETY: The resource is not currently registered, the id is fresh,
         // and the `ComponentDescriptor` matches the `TypeId`
@@ -318,7 +319,7 @@ impl<'w> ComponentsRegistrator<'w> {
             return id;
         }
 
-        let id = self.generator.next_mut();
+        let id = self.allocator.next_mut();
 
         // SAFETY: The resource is not currently registered, the id is fresh,
         // and the `ComponentDescriptor` matches the `TypeId`
@@ -363,22 +364,17 @@ impl<'w> ComponentsRegistrator<'w> {
 
 impl<'w> QueuedRegistrator<'w> {
     /// Constructs a new [`QueuedRegistrator`].
-    ///
-    /// # Safety
-    ///
-    /// The [`Components`] and [`ComponentIdGenerator`] must match.
-    /// For example, they must be from the same world.
     #[inline(always)]
-    pub unsafe fn new(components: &'w Components, generator: &'w ComponentIdGenerator) -> Self {
+    pub fn new(components: &'w Components, allocator: &'w ComponentIdAllocator) -> Self {
         Self {
             components,
-            generator,
+            allocator,
         }
     }
 
     /// Separate to speed up compilation. Little performance loss of registration is acceptable.
     #[inline(never)]
-    unsafe fn register_arbitrary_component(
+    fn register_arbitrary_component(
         &self,
         type_id: TypeId,
         descriptor: ComponentDescriptor,
@@ -391,7 +387,7 @@ impl<'w> QueuedRegistrator<'w> {
             .components
             .get_or_insert(type_id, move || QueuedRegistration {
                 registrator: func,
-                component_id: self.generator.next(),
+                component_id: self.allocator.next(),
                 descriptor,
             })
             .component_id
@@ -399,7 +395,7 @@ impl<'w> QueuedRegistrator<'w> {
 
     /// Separate to speed up compilation. Little performance loss of registration is acceptable.
     #[inline(never)]
-    unsafe fn register_arbitrary_resource(
+    fn register_arbitrary_resource(
         &self,
         type_id: TypeId,
         descriptor: ComponentDescriptor,
@@ -412,7 +408,7 @@ impl<'w> QueuedRegistrator<'w> {
             .resources
             .get_or_insert(type_id, move || QueuedRegistration {
                 registrator: func,
-                component_id: self.generator.next(),
+                component_id: self.allocator.next(),
                 descriptor,
             })
             .component_id
@@ -425,7 +421,7 @@ impl<'w> QueuedRegistrator<'w> {
         descriptor: ComponentDescriptor,
         func: Box<dyn FnOnce(&mut ComponentsRegistrator, ComponentId, ComponentDescriptor)>,
     ) -> ComponentId {
-        let component_id = self.generator.next();
+        let component_id = self.allocator.next();
 
         self.components
             .queued
@@ -445,16 +441,13 @@ impl<'w> QueuedRegistrator<'w> {
         self.components
             .get_component_id(TypeId::of::<T>())
             .unwrap_or_else(|| {
-                // SAFETY: We just checked that this type was not already registered.
-                unsafe {
-                    self.register_arbitrary_component(
-                        TypeId::of::<T>(),
-                        ComponentDescriptor::new_component::<T>(),
-                        Box::new(|registrator, id, _| {
-                            registrator.register_component_unchecked::<T>(id)
-                        }),
-                    )
-                }
+                self.register_arbitrary_component(
+                    TypeId::of::<T>(),
+                    ComponentDescriptor::new_component::<T>(),
+                    Box::new(|registrator, id, _| unsafe {
+                        registrator.register_component_unchecked::<T>(id)
+                    }),
+                )
             })
     }
 
@@ -475,14 +468,11 @@ impl<'w> QueuedRegistrator<'w> {
         self.components
             .get_resource_id(TypeId::of::<T>())
             .unwrap_or_else(|| {
-                // SAFETY: We just checked that this type was not already registered.
-                unsafe {
-                    self.register_arbitrary_resource(
-                        TypeId::of::<T>(),
-                        ComponentDescriptor::new_resource::<T>(),
-                        Self::register_resource_closure(TypeId::of::<T>()),
-                    )
-                }
+                self.register_arbitrary_resource(
+                    TypeId::of::<T>(),
+                    ComponentDescriptor::new_resource::<T>(),
+                    Self::register_resource_closure(TypeId::of::<T>()),
+                )
             })
     }
 
@@ -491,14 +481,11 @@ impl<'w> QueuedRegistrator<'w> {
         self.components
             .get_resource_id(TypeId::of::<T>())
             .unwrap_or_else(|| {
-                // SAFETY: We just checked that this type was not already registered.
-                unsafe {
-                    self.register_arbitrary_resource(
-                        TypeId::of::<T>(),
-                        ComponentDescriptor::new_non_send::<T>(),
-                        Self::register_resource_closure(TypeId::of::<T>()),
-                    )
-                }
+                self.register_arbitrary_resource(
+                    TypeId::of::<T>(),
+                    ComponentDescriptor::new_non_send::<T>(),
+                    Self::register_resource_closure(TypeId::of::<T>()),
+                )
             })
     }
 

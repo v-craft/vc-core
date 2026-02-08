@@ -1,16 +1,20 @@
 // -----------------------------------------------------------------------------
 // Modules
 
-mod deferred;
-mod entity_access;
 mod id;
 mod world;
+
+mod deferred;
+mod error;
 mod world_cell;
+
+mod entity_access;
 
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use deferred::DeferredWorld;
 pub use id::WorldId;
 pub use world::World;
-pub use world_cell::UnsafeWorldCell;
+
+pub use deferred::DeferredWorld;
+pub use world_cell::{UnsafeEntityCell, UnsafeWorldCell};

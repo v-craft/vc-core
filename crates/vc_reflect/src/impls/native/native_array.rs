@@ -61,8 +61,8 @@ impl<T: Reflect + Typed, const N: usize> Reflect for [T; N] {
     crate::reflection::impl_reflect_cast_fn!(Array);
 
     #[inline]
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), crate::ops::ApplyError> {
-        crate::impls::array_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), crate::ops::ApplyError> {
+        crate::impls::array_apply(self, value)
     }
 
     #[inline]
@@ -95,13 +95,13 @@ impl<T: Reflect + Typed, const N: usize> Reflect for [T; N] {
     }
 
     #[inline]
-    fn reflect_partial_eq(&self, value: &dyn Reflect) -> Option<bool> {
-        crate::impls::array_partial_eq(self, value)
+    fn reflect_eq(&self, value: &dyn Reflect) -> Option<bool> {
+        crate::impls::array_eq(self, value)
     }
 
     #[inline]
-    fn reflect_partial_cmp(&self, value: &dyn Reflect) -> Option<core::cmp::Ordering> {
-        crate::impls::array_partial_cmp(self, value)
+    fn reflect_cmp(&self, value: &dyn Reflect) -> Option<core::cmp::Ordering> {
+        crate::impls::array_cmp(self, value)
     }
 
     #[inline]

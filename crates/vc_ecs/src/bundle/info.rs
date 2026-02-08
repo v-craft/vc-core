@@ -1,5 +1,3 @@
-#![expect(unsafe_code, reason = "get unchecked is unsafe")]
-
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use vc_utils::hash::SparseHashSet;
@@ -10,18 +8,10 @@ use crate::component::RequiredComponent;
 use crate::component::{ComponentId, Components};
 use crate::storage::Storages;
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub enum InsertMode {
-    /// Any existing components of a matching type will be overwritten.
-    Replace,
-    /// Any existing components of a matching type will be left unchanged.
-    Keep,
-}
-
 pub struct BundleInfo {
     pub(super) id: BundleId,
-    pub(super) contributed_component_ids: Box<[ComponentId]>,
-    pub(super) required_component_constructors: Box<[RequiredComponent]>,
+    pub(super) contributed_components: Box<[ComponentId]>,
+    pub(super) required_components: Box<[RequiredComponent]>,
 }
 
 impl BundleInfo {
@@ -91,8 +81,8 @@ impl BundleInfo {
 
         BundleInfo {
             id,
-            contributed_component_ids: component_ids.into_boxed_slice(),
-            required_component_constructors: required_components,
+            contributed_components: component_ids.into_boxed_slice(),
+            required_components,
         }
     }
 
@@ -103,22 +93,22 @@ impl BundleInfo {
 
     #[inline]
     pub fn explicit_components_len(&self) -> usize {
-        self.contributed_component_ids.len() - self.required_component_constructors.len()
+        self.contributed_components.len() - self.required_components.len()
     }
 
     #[inline]
     pub fn contributed_components(&self) -> &[ComponentId] {
-        &self.contributed_component_ids
+        &self.contributed_components
     }
 
     #[inline]
     pub fn explicit_components(&self) -> &[ComponentId] {
-        &self.contributed_component_ids[0..self.explicit_components_len()]
+        &self.contributed_components[0..self.explicit_components_len()]
     }
 
     #[inline]
     pub fn required_components(&self) -> &[ComponentId] {
-        &self.contributed_component_ids[self.explicit_components_len()..]
+        &self.contributed_components[self.explicit_components_len()..]
     }
 
     #[inline]

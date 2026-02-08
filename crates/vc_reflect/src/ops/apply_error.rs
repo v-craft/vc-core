@@ -4,7 +4,7 @@ use core::{error, fmt};
 use crate::info::{ReflectKind, ReflectKindError};
 
 /// A enumeration of all error outcomes
-/// that might happen when running [`try_apply`](crate::Reflect::try_apply).
+/// that might happen when running [`apply`](crate::Reflect::apply).
 #[derive(Debug)]
 pub enum ApplyError {
     /// Special reflection type, not allowed to apply.

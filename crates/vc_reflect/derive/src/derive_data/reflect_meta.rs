@@ -299,7 +299,7 @@ impl<'a> ReflectMeta<'a> {
     ///
     /// ## Special enumeration implementation.
     ///
-    /// Due to the implementation of enumeration `Reflect::try_apply` relying on its own `FromReflect`,
+    /// Due to the implementation of enumeration `Reflect::apply` relying on its own `FromReflect`,
     /// All implementations except for `TypePath` require `FromReflect` constraint for field type.
     ///
     /// But if the automatic implementation of `FromReflect` is turned off, there is no need for it at this time.

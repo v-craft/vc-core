@@ -14,5 +14,5 @@ impl_reflect_opaque!(i32(full));
 impl_reflect_opaque!(i64(full));
 impl_reflect_opaque!(i128(full));
 impl_reflect_opaque!(isize(full));
-impl_reflect_opaque!(f32(serde, default, mini, debug, partial_eq, partial_cmp));
-impl_reflect_opaque!(f64(serde, default, mini, debug, partial_eq, partial_cmp));
+impl_reflect_opaque!(f32(serde, default, clone, debug, eq, cmp));
+impl_reflect_opaque!(f64(serde, default, clone, debug, eq, cmp));

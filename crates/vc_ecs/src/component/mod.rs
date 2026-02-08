@@ -24,7 +24,7 @@ pub(crate) use tick::{ComponentTicksMut, ComponentTicksRef};
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use id::{ComponentId, ComponentIdGenerator};
+pub use id::{ComponentId, ComponentIdAllocator, ComponentIndices};
 
 pub use borrow::{Mut, MutUntyped, Ref};
 pub use borrow::{NonSend, NonSendMut, Res, ResMut};
@@ -33,10 +33,17 @@ pub use components::Components;
 pub use info::{ComponentDescriptor, ComponentInfo};
 pub use mutable::{ComponentMutability, Immutable, Mutable};
 pub use register::{ComponentsRegistrator, QueuedComponents, QueuedRegistration};
-pub use required::{
-    RequiredComponent, RequiredComponents, RequiredComponentsError, RequiredComponentsRegistrator,
-};
+pub use required::{RequiredComponent, RequiredComponents};
+pub use required::{RequiredComponentsError, RequiredComponentsRegistrator};
 pub use tick::{ComponentTickCells, ComponentTicks};
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum InsertMode {
+    /// Any existing components of a matching type will be overwritten.
+    Replace,
+    /// Any existing components of a matching type will be left unchanged.
+    Keep,
+}
 
 // -----------------------------------------------------------------------------
 // TODO

@@ -10,7 +10,7 @@ pub const MAX_TICK_AGE: u32 = (u32::MAX / CHECK_CYCLE - 2) * CHECK_CYCLE - 1;
 use vc_reflect::derive::Reflect;
 
 #[derive(Reflect, Debug, Copy, Clone, Default, Eq, PartialEq)]
-#[reflect(mini, default, debug, hash, partial_eq)]
+#[reflect(clone, default, debug, hash, eq, auto_register)]
 #[repr(transparent)]
 pub struct Tick {
     tick: u32,

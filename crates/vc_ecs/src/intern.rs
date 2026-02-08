@@ -40,7 +40,7 @@ impl Internable for str {
 
 /// An interned value. Will stay valid until the end of the program and will not drop.
 #[derive(Reflect)]
-#[reflect(clone, hash, partial_eq)]
+#[reflect(clone, hash, eq)]
 pub struct Interned<T: ?Sized + Internable + 'static>(pub &'static T);
 
 impl<T: ?Sized + Internable> Deref for Interned<T> {

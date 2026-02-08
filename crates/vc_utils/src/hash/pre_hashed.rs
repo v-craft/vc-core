@@ -20,6 +20,24 @@ pub struct Hashed<V> {
     value: V,
 }
 
+impl<V: Hash> Hashed<V> {
+    /// Use the built-in fixed hash function to
+    /// calculate the hash value.
+    ///
+    /// # Examples
+    /// ```
+    /// use vc_utils::hash::Hashed;
+    ///
+    /// let hashed = Hashed::with_hash(1, Hashed::hash_one(&1));
+    /// // as same as
+    /// let hashed = Hashed::new(1);
+    /// ```
+    #[inline]
+    pub fn hash_one(value: &V) -> u64 {
+        FixedHashState.hash_one(value)
+    }
+}
+
 impl<V: Hash + Eq + Clone> Hashed<V> {
     /// Pre-hashes the given value using the [`FixedHashState`].
     ///
@@ -34,26 +52,6 @@ impl<V: Hash + Eq + Clone> Hashed<V> {
     pub fn new(value: V) -> Self {
         Self {
             hash: FixedHashState.hash_one(&value),
-            value,
-        }
-    }
-
-    /// Pre-hashes the given value using given [`BuildHasher`].
-    ///
-    /// If there is already a hash value, use [`Hashed::with_hash`] instead.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use vc_utils::hash::Hashed;
-    /// use std::hash::RandomState;
-    ///
-    /// let hashed = Hashed::with_builder(1, RandomState::new());
-    /// ```
-    #[inline]
-    pub fn with_builder(value: V, builder: impl BuildHasher) -> Self {
-        Self {
-            hash: builder.hash_one(&value),
             value,
         }
     }
@@ -90,6 +88,23 @@ impl<V: Eq + Clone> Hashed<V> {
     }
 }
 
+impl<V> Hashed<V> {
+    /// Extract internal value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vc_utils::hash::Hashed;
+    ///
+    /// let hashed = Hashed::new(1);
+    /// assert_eq!(hashed.into_inner(), 1);
+    /// ```
+    #[inline(always)]
+    pub fn into_inner(self) -> V {
+        self.value
+    }
+}
+
 impl<V> Hash for Hashed<V> {
     #[inline]
     fn hash<R: Hasher>(&self, state: &mut R) {
@@ -105,13 +120,6 @@ impl<V> Deref for Hashed<V> {
         &self.value
     }
 }
-
-// impl<X: PartialEq<Y>, Y> PartialEq<Hashed<Y>> for Hashed<X>{
-//     #[inline]
-//     fn eq(&self, other: &Hashed<Y>) -> bool {
-//         self.hash == other.hash && self.value.eq(&other.value)
-//     }
-// }
 
 impl<V: PartialEq> PartialEq for Hashed<V> {
     #[inline]

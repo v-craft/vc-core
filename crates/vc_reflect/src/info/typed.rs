@@ -115,7 +115,7 @@ pub trait DynamicTyped {
     /// #[derive(Reflect)]
     /// struct A(u64);
     ///
-    /// let a = Box::new(A(1)).into_reflect();
+    /// let a = Box::new(A(1)) as Box<dyn Reflect>;
     /// let info = a.reflect_type_info();
     /// ```
     fn reflect_type_info(&self) -> &'static TypeInfo;

@@ -4,7 +4,7 @@ use core::hash;
 // -----------------------------------------------------------------------------
 // TableId
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct TableId(u32);
 
@@ -27,15 +27,6 @@ impl TableId {
     }
 }
 
-impl PartialEq for TableId {
-    #[inline(always)]
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Eq for TableId {}
-
 impl fmt::Display for TableId {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -55,7 +46,7 @@ impl hash::Hash for TableId {
 
 use nonmax::NonMaxU32;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct TableRow(NonMaxU32);
 
@@ -75,15 +66,6 @@ impl TableRow {
         self.0.get() as usize
     }
 }
-
-impl PartialEq for TableRow {
-    #[inline(always)]
-    fn eq(&self, other: &Self) -> bool {
-        self.0.get() == other.0.get()
-    }
-}
-
-impl Eq for TableRow {}
 
 impl fmt::Display for TableRow {
     #[inline(always)]

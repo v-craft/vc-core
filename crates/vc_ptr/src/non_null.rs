@@ -1,3 +1,4 @@
+use core::fmt;
 use core::ptr::NonNull;
 
 /// A read-only `NonNull<T>`.
@@ -84,12 +85,6 @@ impl<T: ?Sized> ConstNonNull<T> {
         self.0.as_ptr()
     }
 
-    /// Converts a `NonNull` pointer to `ConstNonNull`.
-    #[inline(always)]
-    pub const fn from_non_null(ptr: NonNull<T>) -> Self {
-        Self(ptr)
-    }
-
     /// Converts a reference to a `ConstNonNull` pointer.
     #[inline(always)]
     pub const fn from_ref(r: &T) -> Self {
@@ -119,6 +114,18 @@ impl<T: ?Sized> Clone for ConstNonNull<T> {
 
 impl<T: ?Sized> Copy for ConstNonNull<T> {}
 
+impl<T: ?Sized> fmt::Pointer for ConstNonNull<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Pointer::fmt(&self.as_ptr(), f)
+    }
+}
+
+impl<T: ?Sized> fmt::Debug for ConstNonNull<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Pointer::fmt(&self.as_ptr(), f)
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Optional
 
@@ -136,18 +143,6 @@ impl<'a, T: ?Sized> From<&'a mut T> for ConstNonNull<T> {
     #[inline]
     fn from(value: &'a mut T) -> Self {
         Self(NonNull::from_mut(value))
-    }
-}
-
-impl<T: ?Sized> fmt::Pointer for ConstNonNull<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Pointer::fmt(&self.as_ptr(), f)
-    }
-}
-
-impl<T: ?Sized> fmt::Debug for ConstNonNull<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Pointer::fmt(&self.as_ptr(), f)
     }
 }
 

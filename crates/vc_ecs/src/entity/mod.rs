@@ -8,6 +8,7 @@ mod clone;
 mod entities;
 mod entity;
 mod location;
+mod remote_allocator;
 mod utils;
 
 pub mod error;

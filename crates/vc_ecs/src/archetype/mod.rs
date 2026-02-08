@@ -13,7 +13,7 @@ mod id;
 
 pub use archetype::{Archetype, ArchetypeSwapRemoveResult};
 pub use archetypes::Archetypes;
-pub use bundle::{ArchetypeInsertedBundle, Edges};
+pub use bundle::{ArchetypeInsertedBundle, ArchetypeMoveType, Edges};
 pub use entity::ArchetypeEntity;
 pub use flags::ArchetypeFlags;
 pub use id::{ArchetypeId, ArchetypeRow};

@@ -5,6 +5,7 @@ use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use core::any::TypeId;
 use core::ops::Range;
+use core::ptr;
 
 use vc_ptr::Ptr;
 use vc_ptr::PtrMut;
@@ -13,12 +14,10 @@ use vc_utils::extra::PagePool;
 use vc_utils::hash::SparseHashMap;
 use vc_utils::hash::SparseHashSet;
 
-use crate::bundle::InsertMode;
-use crate::component::Component;
-use crate::component::ComponentCloneBehavior;
-use crate::component::ComponentCloneFn;
-use crate::component::ComponentId;
-use crate::component::ComponentInfo;
+use crate::component::{Component, ComponentId, ComponentInfo};
+use crate::component::{ComponentCloneBehavior, ComponentCloneFn};
+use crate::component::{InsertMode, SourceComponent};
+
 use crate::entity::Entity;
 use crate::entity::EntityAllocator;
 use crate::entity::EntityMapper;
@@ -26,24 +25,27 @@ use crate::reflect::AppTypeRegistry;
 use crate::utils::DebugName;
 use crate::world::World;
 
+// -----------------------------------------------------------------------------
+// Types
+
 pub struct ComponentCloneCtx<'a, 'b> {
     component_id: ComponentId,
-    target_component_written: bool,
-    target_component_moved: bool,
-    scratch_buffer: &'a mut ScratchBuffer<'b>,
-    scratch_pool: &'b PagePool,
+    component_info: &'a ComponentInfo,
     source: Entity,
     target: Entity,
+    scratch_pool: &'b PagePool,
+    scratch_buffer: &'a mut ScratchBuffer<'b>,
     allocator: &'a EntityAllocator,
-    component_info: &'a ComponentInfo,
     state: &'a mut EntityClonerState,
     mapper: &'a mut dyn EntityMapper,
+    target_component_written: bool,
+    target_component_moved: bool,
     type_registry: Option<&'a AppTypeRegistry>,
 }
 
 struct ScratchBuffer<'a> {
-    component_ids: Vec<ComponentId>,
-    component_ptrs: Vec<PtrMut<'a>>,
+    ids: Vec<ComponentId>,
+    ptrs: Vec<PtrMut<'a>>,
 }
 
 struct EntityClonerState {
@@ -60,10 +62,18 @@ pub struct EntityCloner {
     state: EntityClonerState,
 }
 
+pub struct EntityClonerBuilder<'w, Filter> {
+    world: &'w mut World,
+    filter: Filter,
+    state: EntityClonerState,
+}
+
 pub enum EntityClonerFilter {
     OptOut(OptOut),
     OptIn(OptIn),
 }
+
+pub trait CloneByFilter: Into<EntityClonerFilter> {}
 
 pub struct OptOut {
     deny: SparseHashSet<ComponentId>,
@@ -88,93 +98,83 @@ struct Required {
     required_by_reduced: u32,
 }
 
+// -----------------------------------------------------------------------------
+// ComponentCloneCtx Implementation
+
 impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
-    unsafe fn new(
-        component_id: ComponentId,
-        scratch_buffer: &'a mut ScratchBuffer<'b>,
-        scratch_pool: &'b PagePool,
-        source: Entity,
-        target: Entity,
-        allocator: &'a EntityAllocator,
-        component_info: &'a ComponentInfo,
-        state: &'a mut EntityClonerState,
-        mapper: &'a mut dyn EntityMapper,
-        type_registry: Option<&'a AppTypeRegistry>,
-    ) -> Self {
-        Self {
-            component_id,
-            target_component_written: false,
-            target_component_moved: false,
-            scratch_buffer,
-            scratch_pool,
-            source,
-            target,
-            allocator,
-            component_info,
-            state,
-            mapper,
-            type_registry,
-        }
-    }
-
-    /// Returns the current source entity.
-    pub fn source(&self) -> Entity {
-        self.source
-    }
-
-    /// Returns the current target entity.
-    pub fn target(&self) -> Entity {
-        self.target
-    }
-
     /// Returns the [`ComponentId`] of the component being cloned.
+    #[inline(always)]
     pub fn component_id(&self) -> ComponentId {
         self.component_id
     }
 
     /// Returns the [`ComponentInfo`] of the component being cloned.
+    #[inline(always)]
     pub fn component_info(&self) -> &ComponentInfo {
         self.component_info
     }
 
+    /// Returns the current source entity.
+    #[inline(always)]
+    pub fn source(&self) -> Entity {
+        self.source
+    }
+
+    /// Returns the current target entity.
+    #[inline(always)]
+    pub fn target(&self) -> Entity {
+        self.target
+    }
+
     /// Returns `true` if used in moving context
+    #[inline(always)]
     pub fn moving(&self) -> bool {
         self.state.move_components
     }
 
-    /// Returns true if `write_target_component` was called before.
+    #[inline(always)]
     pub fn target_component_written(&self) -> bool {
         self.target_component_written
     }
 
+    #[inline(always)]
     pub fn target_component_moved(&self) -> bool {
         self.target_component_moved
     }
 
+    /// Returns true if the [`EntityCloner`] is configured to recursively clone entities.
+    #[inline(always)]
     pub fn linked_cloning(&self) -> bool {
         self.state.linked_cloning
     }
 
     /// Returns this context's [`EntityMapper`].
+    #[inline(always)]
     pub fn entity_mapper(&mut self) -> &mut dyn EntityMapper {
         self.mapper
     }
 
+    /// Returns this context's [`AppTypeRegistry`].
+    #[inline(always)]
     pub fn type_registry(&self) -> Option<&AppTypeRegistry> {
         self.type_registry
     }
 
+    /// Marks component as moved and it's `drop` won't run.
+    #[inline(always)]
     fn move_component(&mut self) {
         self.target_component_moved = true;
         self.target_component_written = true;
     }
 
+    #[inline]
     pub fn queue_entity_clone(&mut self, entity: Entity) {
         let target = self.allocator.alloc();
         self.mapper.set_mapped(entity, target);
         self.state.clone_queue.push_back(entity);
     }
 
+    #[inline]
     pub fn queue_deferred(
         &mut self,
         deferred: impl FnOnce(&mut World, &mut dyn EntityMapper) + 'static,
@@ -182,95 +182,100 @@ impl<'a, 'b> ComponentCloneCtx<'a, 'b> {
         self.state.deferred_commands.push_back(Box::new(deferred));
     }
 
+    #[cold]
+    #[inline(never)]
+    fn handle_multiple_write(debug_name: &DebugName) -> ! {
+        panic!("Trying to write component '{debug_name}' multiple times");
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn handle_mismatched_type(debug_name: &DebugName) -> ! {
+        panic!("TypeId of component '{debug_name}' does not match source component")
+    }
+
     pub fn write_target_component<C: Component>(&mut self, mut component: C) {
         C::map_entities(&mut component, &mut self.mapper);
-        let debug_name = DebugName::type_name::<C>();
 
         if self.target_component_written {
-            panic!("Trying to write component '{debug_name}' multiple times");
+            Self::handle_multiple_write(&DebugName::type_name::<C>());
         }
 
         if self.component_info.type_id() != Some(TypeId::of::<C>()) {
-            panic!("TypeId of component '{debug_name}' does not match source component TypeId")
+            Self::handle_mismatched_type(&DebugName::type_name::<C>());
         };
 
         unsafe {
+            let component_mut = self.scratch_pool.alloc_unchecked(component);
+            self.scratch_buffer.ids.push(self.component_id);
             self.scratch_buffer
-                .push(self.scratch_pool, self.component_id, component);
-        };
+                .ptrs
+                .push(PtrMut::from_mut(component_mut));
+        }
+
         self.target_component_written = true;
     }
 
+    /// # Safety
+    /// Caller must ensure that the passed in `ptr` references data
+    /// that corresponds to the type of the source / target [`ComponentId`].
     pub unsafe fn write_target_component_ptr(&mut self, ptr: Ptr) {
         if self.target_component_written {
-            panic!("Trying to write component multiple times")
+            Self::handle_multiple_write(&DebugName::anonymous());
         }
 
         let layout = self.component_info.layout();
         let target_ptr = self.scratch_pool.alloc_layout(layout);
+
         unsafe {
-            core::ptr::copy_nonoverlapping(ptr.as_ptr(), target_ptr.as_ptr(), layout.size());
-            self.scratch_buffer
-                .push_ptr(self.component_id, PtrMut::new(target_ptr));
+            ptr::copy_nonoverlapping(ptr.as_ptr(), target_ptr.as_ptr(), layout.size());
+            self.scratch_buffer.ids.push(self.component_id);
+            self.scratch_buffer.ptrs.push(PtrMut::new(target_ptr));
         }
+
         self.target_component_written = true;
     }
 
     pub fn write_target_component_reflect(&mut self, component: Box<dyn Reflect>) {
         if self.target_component_written {
-            panic!("Trying to write component multiple times")
+            Self::handle_multiple_write(&DebugName::anonymous());
         }
+
         let source_type_id = self
             .component_info
             .type_id()
             .expect("Source component must have TypeId");
-        let component_type_id = (*component).type_id();
-        if source_type_id != component_type_id {
-            panic!("Passed component TypeId does not match source component TypeId")
+
+        if source_type_id != (*component).type_id() {
+            Self::handle_mismatched_type(&DebugName::anonymous());
         }
 
-        let component_layout = self.component_info.layout();
-        let source_data_ptr = Box::into_raw(component).cast::<u8>();
-        let target_data_ptr = self.scratch_pool.alloc_layout(component_layout);
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                source_data_ptr,
-                target_data_ptr.as_ptr(),
-                component_layout.size(),
-            );
-            self.scratch_buffer
-                .push_ptr(self.component_id, PtrMut::new(target_data_ptr));
+        let layout = self.component_info.layout();
+        let target_ptr = self.scratch_pool.alloc_layout(layout);
 
-            if component_layout.size() > 0 {
+        unsafe {
+            let source_ptr = Box::into_raw(component).cast::<u8>();
+            ptr::copy_nonoverlapping(source_ptr, target_ptr.as_ptr(), layout.size());
+            if layout.size() > 0 {
                 // Ensure we don't attempt to deallocate zero-sized components
-                alloc::alloc::dealloc(source_data_ptr, component_layout);
+                alloc::alloc::dealloc(source_ptr, layout);
             }
+
+            self.scratch_buffer.ids.push(self.component_id);
+            self.scratch_buffer.ptrs.push(PtrMut::new(target_ptr));
         }
     }
 }
 
+// -----------------------------------------------------------------------------
+// ScratchBuffer Implementation
+
 impl<'a> ScratchBuffer<'a> {
-    pub(crate) fn with_capacity(capacity: usize) -> Self {
+    fn with_capacity(capacity: usize) -> Self {
         Self {
-            component_ids: Vec::with_capacity(capacity),
-            component_ptrs: Vec::with_capacity(capacity),
+            ids: Vec::with_capacity(capacity),
+            ptrs: Vec::with_capacity(capacity),
         }
-    }
-
-    pub(crate) unsafe fn push_ptr(&mut self, id: ComponentId, ptr: PtrMut<'a>) {
-        self.component_ids.push(id);
-        self.component_ptrs.push(ptr);
-    }
-
-    pub(crate) unsafe fn push<C: Component>(
-        &mut self,
-        pool: &'a PagePool,
-        id: ComponentId,
-        component: C,
-    ) {
-        let component_mut = unsafe { pool.alloc_unchecked(component) };
-        self.component_ids.push(id);
-        self.component_ptrs.push(PtrMut::from_mut(component_mut));
     }
 
     // #[track_caller]

@@ -1,18 +1,20 @@
 use core::fmt;
 use core::hash::Hash;
 use core::ops::{Deref, DerefMut};
+use core::panic::Location;
 
 use crate::cfg;
 
 cfg::debug! {
-    if { use core::panic::Location; }
     else { use core::marker::PhantomData; }
 }
 
 // -----------------------------------------------------------------------------
 // DebugLocation
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+/// A value that contains a `T` if the `debug` feature is enabled,
+/// and is a ZST if it is not.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct DebugLocation<T: ?Sized = &'static Location<'static>>(
     #[cfg(any(debug_assertions, feature = "debug"))] T,
     #[cfg(not(any(debug_assertions, feature = "debug")))] PhantomData<T>,
@@ -20,12 +22,6 @@ pub struct DebugLocation<T: ?Sized = &'static Location<'static>>(
 
 // -----------------------------------------------------------------------------
 // Traits
-
-vc_reflect::derive::impl_reflect_opaque! {
-    (in vc_ecs::utils as DebugLocation)
-    DebugLocation<T: Clone + PartialEq + PartialOrd  + Hash + fmt::Debug>
-    (clone, hash, debug, partial_eq, partial_cmp)
-}
 
 impl<T: fmt::Display> fmt::Display for DebugLocation<T> {
     #[inline(always)]
@@ -54,6 +50,19 @@ impl DebugLocation {
 }
 
 impl<T> DebugLocation<T> {
+    /// Constructs a new `DebugLocation` that wraps the given value.
+    #[inline(always)]
+    pub const fn new(_value: T) -> Self
+    where
+        T: Copy,
+    {
+        cfg::debug! {
+            if { DebugLocation(_value) }
+            else { DebugLocation(PhantomData) }
+        }
+    }
+
+    /// Constructs a new `DebugLocation` that wraps the result of the given closure.
     #[inline(always)]
     pub fn new_with(_f: impl FnOnce() -> T) -> Self {
         cfg::debug! {
@@ -61,6 +70,7 @@ impl<T> DebugLocation<T> {
         }
     }
 
+    /// Maps an `DebugLocation<T> `to `DebugLocation<U>` by applying a function to a contained value.
     #[inline(always)]
     pub fn map<U>(self, _f: impl FnOnce(T) -> U) -> DebugLocation<U> {
         cfg::debug! {
@@ -69,6 +79,7 @@ impl<T> DebugLocation<T> {
         }
     }
 
+    /// Converts a pair `DebugLocation` to a tuple.
     #[inline(always)]
     pub fn zip<U>(self, _other: DebugLocation<U>) -> DebugLocation<(T, U)> {
         cfg::debug! {
@@ -77,6 +88,10 @@ impl<T> DebugLocation<T> {
         }
     }
 
+    /// Returns the contained value or a default.
+    ///
+    /// - If the `debug` feature is enabled, this always returns the contained value.
+    /// - If it is disabled, this always returns `T::Default()`.
     #[inline]
     pub fn unwrap_or_default(self) -> T
     where
@@ -85,6 +100,10 @@ impl<T> DebugLocation<T> {
         self.into_option().unwrap_or_default()
     }
 
+    /// Converts an `MaybeLocation` to an [`Option`] to allow run-time branching.
+    ///
+    /// - If the `debug` feature is enabled, this always returns `Some`.
+    /// - If it is disabled, this always returns `None`.
     #[inline(always)]
     pub fn into_option(self) -> Option<T> {
         cfg::debug! {
@@ -94,14 +113,16 @@ impl<T> DebugLocation<T> {
 }
 
 impl<T> DebugLocation<Option<T>> {
+    /// Transposes an [`Option`] of `MaybeLocation` into a `DebugLocation` of [`Option`].
     #[cfg_attr(not(any(debug_assertions, feature = "debug")), inline(always))]
-    pub fn untranspose(_f: impl FnOnce() -> Option<DebugLocation<T>>) -> Self {
+    pub fn untranspose(_value: Option<DebugLocation<T>>) -> Self {
         cfg::debug! {
-            if { Self(_f().map(|value| value.0)) }
+            if { Self(_value.map(|value| value.0)) }
             else { Self(PhantomData) }
         }
     }
 
+    /// Transposes a `DebugLocation` of an [`Option`] into an [`Option`] of a `MaybeLocation`.
     #[cfg_attr(not(any(debug_assertions, feature = "debug")), inline(always))]
     pub fn transpose(self) -> Option<DebugLocation<T>> {
         cfg::debug! {

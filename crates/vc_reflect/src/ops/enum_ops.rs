@@ -1,6 +1,7 @@
 use alloc::borrow::{Cow, ToOwned};
 use alloc::boxed::Box;
 use alloc::string::String;
+use core::cmp::Ordering;
 use core::fmt;
 
 use crate::Reflect;
@@ -363,8 +364,8 @@ impl Reflect for DynamicEnum {
         Ok(Box::new(<Self as Enum>::to_dynamic_enum(self)))
     }
 
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        if let Some(y) = crate::impls::enum_try_apply(self, value)? {
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        if let Some(y) = crate::impls::enum_apply(self, value)? {
             let dyn_variant = match y.variant_kind() {
                 VariantKind::Unit => DynamicVariant::Unit,
                 VariantKind::Tuple => {
@@ -391,8 +392,13 @@ impl Reflect for DynamicEnum {
     }
 
     #[inline]
-    fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-        crate::impls::enum_partial_eq(self, other)
+    fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+        crate::impls::enum_eq(self, other)
+    }
+
+    #[inline]
+    fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+        crate::impls::enum_cmp(self, other)
     }
 
     #[inline]

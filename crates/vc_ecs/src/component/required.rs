@@ -103,15 +103,14 @@ impl fmt::Debug for RequiredComponent {
 fn table_required(
     table: &mut Table,
     data: OwningPtr<'_>,
-    component_id: ComponentId,
+    id: ComponentId,
     table_row: TableRow,
-    change_tick: Tick,
+    tick: Tick,
     caller: DebugLocation,
 ) {
     unsafe {
-        let raw_index = table.get_raw_index(component_id).debug_checked_unwrap();
-        let column = table.get_column_mut(raw_index);
-        column.init_item(table_row.index(), data, change_tick, caller);
+        let raw_index = table.get_raw_index(id).debug_checked_unwrap();
+        table.init_component(raw_index, table_row, data, tick, caller);
     }
 }
 
@@ -120,17 +119,14 @@ fn table_required(
 fn sparse_sets_required(
     sparse_sets: &mut SparseSets,
     data: OwningPtr<'_>,
-    component_id: ComponentId,
+    id: ComponentId,
     entity_id: EntityId,
-    change_tick: Tick,
+    tick: Tick,
     caller: DebugLocation,
 ) {
     unsafe {
-        let raw_index = sparse_sets
-            .get_raw_index(component_id)
-            .debug_checked_unwrap();
-        let sparse_component = sparse_sets.get_mut(raw_index);
-        sparse_component.insert(entity_id, data, change_tick, caller);
+        let raw_index = sparse_sets.get_raw_index(id).debug_checked_unwrap();
+        sparse_sets.init_component(raw_index, entity_id, data, tick, caller);
     }
 }
 

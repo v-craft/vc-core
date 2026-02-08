@@ -4,6 +4,9 @@ use core::hash;
 // -----------------------------------------------------------------------------
 // ArchetypeId
 
+/// An opaque unique ID for a single `Archetype` within a `World`.
+///
+/// Archetype IDs are only valid for a given World, and are not globally unique.
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
 pub struct ArchetypeId(u32);

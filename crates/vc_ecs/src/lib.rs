@@ -3,6 +3,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg, rustdoc_internals))]
 #![expect(unsafe_code, reason = "ECS need many unsafe operation")]
 #![allow(clippy::missing_safety_doc)]
+#![allow(unused, reason = "todo")]
 #![no_std]
 
 // -----------------------------------------------------------------------------
@@ -45,11 +46,15 @@ pub mod change_detection;
 pub mod archetype;
 pub mod batching;
 pub mod bundle;
+pub mod error;
 pub mod intern;
 pub mod label;
+pub mod message;
 pub mod name;
+pub mod query;
 pub mod reflect;
 pub mod resource;
+pub mod schedule;
 pub mod system;
 
 pub mod component;

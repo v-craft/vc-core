@@ -29,17 +29,17 @@ impl Default for Name {
 }
 
 impl Name {
+    #[inline(always)]
+    fn update_hash(&mut self) {
+        self.hash = FixedHashState.hash_one(&self.name);
+    }
+
     #[inline]
     pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
         let name = name.into();
         let mut name = Name { name, hash: 0 };
         name.update_hash();
         name
-    }
-
-    #[inline(always)]
-    fn update_hash(&mut self) {
-        self.hash = FixedHashState.hash_one(&self.name);
     }
 
     #[inline(always)]

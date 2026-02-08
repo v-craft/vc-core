@@ -14,10 +14,7 @@ mod vec_extension;
 
 use thin_array::ThinArray;
 
-pub(crate) use blob_array::BlobArray;
-
-pub use column::Column;
-
-pub(crate) use abort_on_drop::AbortOnDrop;
-
-pub(crate) use vec_extension::{VecCopyRemove, VecSwapRemove};
+pub(super) use abort_on_drop::AbortOnPanic;
+pub(super) use blob_array::BlobArray;
+pub(super) use column::Column;
+pub(super) use vec_extension::{VecCopyRemove, VecSwapRemove};

@@ -1,5 +1,4 @@
 #![expect(unsafe_code, reason = "read ptr is unsafe")]
-#![allow(unused, reason = "todo")]
 
 use core::any::TypeId;
 
@@ -12,26 +11,29 @@ use crate::component::Component;
 // -----------------------------------------------------------------------------
 // SourceComponent
 
-/// Provides read access to the source component (the component being cloned) in a [`ComponentCloneFn`].
+/// Provides read access to the source component
+/// (the component being cloned) in a [`ComponentCloneFn`].
 pub struct SourceComponent<'a> {
     ptr: Ptr<'a>,
     type_id: TypeId,
 }
 
 impl<'a> SourceComponent<'a> {
-    pub fn new(ptr: Ptr<'a>, type_id: Option<TypeId>) -> Self {
+    pub(crate) fn new(ptr: Ptr<'a>, type_id: Option<TypeId>) -> Self {
         // This is a hack. The `SourceComponent` itself is an internal type and will not
         // be used as a component. Therefore, its `TypeId` can represent "non-clonable"
         // instead of using `Option<TypeId>`. This reduces the struct size by 8 bytes.
-        let type_id = type_id.unwrap_or(const { TypeId::of::<SourceComponent<'static>>() });
+        let type_id = type_id.unwrap_or(TypeId::of::<SourceComponent<'static>>());
 
         Self { ptr, type_id }
     }
 
+    /// Returns the "raw" pointer to the source component.
     pub fn ptr(&self) -> Ptr<'a> {
         self.ptr
     }
 
+    /// Returns a reference to the component on the source entity.
     pub fn read<C>(&self) -> Option<&C>
     where
         C: Component,
@@ -44,6 +46,8 @@ impl<'a> SourceComponent<'a> {
         }
     }
 
+    /// Returns a reference to the component on the source entity
+    /// as [`&dyn Reflect`](vc_reflect::Reflect).
     pub fn read_reflect(&self, registry: &TypeRegistry) -> Option<&dyn Reflect> {
         // The `TypeTraitFromPtr` retrieved from the registry by `TypeId` should be type‑correct,
         // unless the user has inserted an incorrect `TypeTraitFromPtr` themselves.

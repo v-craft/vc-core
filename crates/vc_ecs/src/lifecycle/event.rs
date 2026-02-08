@@ -17,7 +17,7 @@ pub const DESPAWN: EventKey = EventKey(ComponentId::from_u32(5));
 // Event - Add
 
 #[derive(Reflect, Debug, Clone)]
-#[reflect(mini, debug)]
+#[reflect(clone, debug, auto_register)]
 pub struct Add {
     pub entity: Entity,
 }
@@ -26,7 +26,7 @@ pub struct Add {
 // Event - Insert
 
 #[derive(Reflect, Debug, Clone)]
-#[reflect(mini, debug)]
+#[reflect(clone, debug, auto_register)]
 pub struct Insert {
     pub entity: Entity,
 }
@@ -35,7 +35,7 @@ pub struct Insert {
 // Event - Insert
 
 #[derive(Reflect, Debug, Clone)]
-#[reflect(mini, debug)]
+#[reflect(clone, debug, auto_register)]
 pub struct Replace {
     pub entity: Entity,
 }
@@ -44,7 +44,7 @@ pub struct Replace {
 // Event - Remove
 
 #[derive(Reflect, Debug, Clone)]
-#[reflect(mini, debug)]
+#[reflect(clone, debug, auto_register)]
 pub struct Remove {
     pub entity: Entity,
 }
@@ -53,7 +53,7 @@ pub struct Remove {
 // Event - Despawn
 
 #[derive(Reflect, Debug, Clone)]
-#[reflect(mini, debug)]
+#[reflect(clone, debug, auto_register)]
 pub struct Despawn {
     pub entity: Entity,
 }

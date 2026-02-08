@@ -1,6 +1,7 @@
 use alloc::borrow::{Cow, ToOwned};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::cmp::Ordering;
 use core::fmt;
 use core::ops::{Deref, DerefMut};
 
@@ -278,8 +279,8 @@ impl Reflect for DynamicStruct {
     }
 
     #[inline]
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        crate::impls::struct_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::struct_apply(self, value)
     }
 
     #[inline]
@@ -288,8 +289,13 @@ impl Reflect for DynamicStruct {
     }
 
     #[inline]
-    fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-        crate::impls::struct_partial_eq(self, other)
+    fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+        crate::impls::struct_eq(self, other)
+    }
+
+    #[inline]
+    fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+        crate::impls::struct_cmp(self, other)
     }
 
     #[inline]

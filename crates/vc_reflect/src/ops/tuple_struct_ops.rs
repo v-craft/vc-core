@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
+use core::cmp::Ordering;
 use core::fmt;
 
 use crate::Reflect;
@@ -227,13 +228,18 @@ impl Reflect for DynamicTupleStruct {
     }
 
     #[inline]
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        crate::impls::tuple_struct_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::tuple_struct_apply(self, value)
     }
 
     #[inline]
-    fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-        crate::impls::tuple_struct_partial_eq(self, other)
+    fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+        crate::impls::tuple_struct_eq(self, other)
+    }
+
+    #[inline]
+    fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+        crate::impls::tuple_struct_cmp(self, other)
     }
 
     #[inline]

@@ -25,8 +25,8 @@ mod trait_typed;
 pub(crate) use match_reflect::match_reflect_impls;
 
 use auto_register::get_auto_register_impl;
+use common_imps::get_common_apply_tokens;
 use common_imps::get_common_from_reflect_tokens;
-use common_imps::get_common_try_apply_tokens;
 use enum_kind::impl_enum;
 use struct_clone::get_struct_clone_impl;
 use struct_from_reflect::impl_struct_from_reflect;

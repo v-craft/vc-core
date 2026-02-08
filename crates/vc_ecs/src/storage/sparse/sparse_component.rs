@@ -6,13 +6,13 @@ use core::cell::UnsafeCell;
 use core::num::NonZeroUsize;
 use core::panic::Location;
 
-use vc_ptr::{OwningPtr, Ptr};
+use vc_ptr::{OwningPtr, Ptr, PtrMut};
 use vc_utils::hash::SparseHashMap;
 
 use crate::cfg;
 use crate::component::{ComponentTickCells, ComponentTicks};
 use crate::entity::EntityId;
-use crate::storage::{AbortOnDrop, Column};
+use crate::storage::{AbortOnPanic, Column};
 use crate::tick::{CheckTicks, Tick};
 use crate::utils::{DebugCheckedUnwrap, DebugLocation};
 
@@ -28,37 +28,44 @@ pub struct SparseComponent {
 
 impl SparseComponent {
     #[inline]
-    pub fn empty(item_layout: Layout, drop_fn: Option<unsafe fn(OwningPtr<'_>)>) -> Self {
+    pub const unsafe fn empty(
+        item_layout: Layout,
+        drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
+    ) -> Self {
         Self {
-            column: Column::empty(item_layout, drop_fn),
+            column: unsafe { Column::empty(item_layout, drop_fn) },
             entities: Vec::new(),
             sparse: SparseHashMap::new(),
         }
     }
 
-    pub fn with_capacity(
+    pub unsafe fn with_capacity(
         item_layout: Layout,
         drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
         capacity: usize,
     ) -> Self {
-        let mut hash_capacity = capacity + (capacity >> 1);
-        hash_capacity = hash_capacity.next_power_of_two();
+        let hash_capacity = capacity + (capacity >> 1);
 
         Self {
-            column: Column::with_capacity(item_layout, drop_fn, capacity),
+            column: unsafe { Column::with_capacity(item_layout, drop_fn, capacity) },
             entities: Vec::with_capacity(capacity),
             sparse: SparseHashMap::with_capacity(hash_capacity),
         }
     }
 
-    #[inline(always)]
-    pub fn entity_count(&self) -> usize {
-        self.entities.len()
+    #[inline]
+    pub fn drop_fn(&self) -> Option<unsafe fn(OwningPtr<'_>)> {
+        self.column.drop_fn()
     }
 
     #[inline(always)]
     pub fn capacity(&self) -> usize {
         self.entities.capacity()
+    }
+
+    #[inline(always)]
+    pub fn entity_count(&self) -> usize {
+        self.entities.len()
     }
 
     pub fn clear_entities(&mut self) {
@@ -80,16 +87,24 @@ impl SparseComponent {
         unsafe {
             self.column.dealloc(capacity, len);
         }
+    }
 
-        cfg::debug! { assert!(self.entities.capacity() == 0); }
+    #[inline]
+    pub fn check_ticks(&mut self, check: CheckTicks) {
+        unsafe { self.column.check_ticks(self.entities.len(), check) };
+    }
+
+    #[inline]
+    pub fn contains_entity(&self, id: EntityId) -> bool {
+        self.sparse.contains_key(&id)
     }
 
     #[cold]
     #[inline(never)]
     fn reserve_one(&mut self) {
-        let _guard = AbortOnDrop;
-
         let old_capacity = self.capacity();
+
+        let abort_guard = AbortOnPanic;
 
         self.entities.reserve(1);
 
@@ -100,31 +115,25 @@ impl SparseComponent {
 
         unsafe {
             let new_capacity = NonZeroUsize::new_unchecked(new_capacity);
-            if old_capacity != 0 {
-                let current_capacity = NonZeroUsize::new_unchecked(old_capacity);
+
+            if let Some(current_capacity) = NonZeroUsize::new(old_capacity) {
                 self.column.realloc(current_capacity, new_capacity);
             } else {
                 self.column.alloc(new_capacity);
             }
         }
 
-        ::core::mem::forget(_guard);
+        ::core::mem::forget(abort_guard);
     }
 
-    pub fn insert(
-        &mut self,
-        id: EntityId,
-        data: OwningPtr<'_>,
-        change_tick: Tick,
-        caller: DebugLocation,
-    ) {
+    pub fn insert(&mut self, id: EntityId, data: OwningPtr<'_>, tick: Tick, caller: DebugLocation) {
         if let Some(index) = self.sparse.get(&id) {
             let index = *index as usize;
 
             cfg::debug! { assert_eq!(id, self.entities[index]); }
 
             unsafe {
-                self.column.replace_item(index, data, change_tick, caller);
+                self.column.replace_item(index, data, tick, caller);
             }
         } else {
             // SAFETY: `0 < EntityId < u32::MAX`, so `len < u32::MAX`.
@@ -137,15 +146,10 @@ impl SparseComponent {
             self.entities.push(id);
 
             unsafe {
-                self.column.init_item(last_index, data, change_tick, caller);
+                self.column.init_item(last_index, data, tick, caller);
                 self.sparse.insert(id, last_index as u32);
             }
         }
-    }
-
-    #[inline]
-    pub fn contains(&self, id: EntityId) -> bool {
-        self.sparse.contains_key(&id)
     }
 
     #[inline]
@@ -155,6 +159,16 @@ impl SparseComponent {
             cfg::debug! { assert_eq!(id, self.entities[index]); }
 
             unsafe { self.column.get_data(index) }
+        })
+    }
+
+    #[inline]
+    pub fn get_component_mut(&mut self, id: EntityId) -> Option<PtrMut<'_>> {
+        self.sparse.get(&id).map(|&index| {
+            let index = index as usize;
+            cfg::debug! { assert_eq!(id, self.entities[index]); }
+
+            unsafe { self.column.get_data_mut(index) }
         })
     }
 
@@ -194,20 +208,22 @@ impl SparseComponent {
     #[inline]
     pub fn get_changed_by(
         &self,
-        id: EntityId,
+        _id: EntityId,
     ) -> DebugLocation<Option<&UnsafeCell<&'static Location<'static>>>> {
         cfg::debug! {
-            if {
-                DebugLocation::untranspose(|| {
-                    let index = *self.sparse.get(&id)? as usize;
-                    cfg::debug! { assert_eq!(id, self.entities[index]); }
+            if let Some(index) = self.sparse.get(&_id) {
+                let index = *index as usize;
+                assert_eq!(_id, self.entities[index]);
 
-                    unsafe { Some(self.column.get_changed_by(index)) }
-                })
-            } else {
-                DebugLocation::new_with(|| None)
+                let changed_by = unsafe {
+                    self.column.get_changed_by(index)
+                };
+
+                return DebugLocation::untranspose(Some(changed_by));
             }
         }
+
+        DebugLocation::new(None)
     }
 
     #[inline]
@@ -215,17 +231,12 @@ impl SparseComponent {
         let index = *self.sparse.get(&id)? as usize;
         cfg::debug! { assert_eq!(id, self.entities[index]); }
 
-        unsafe { Some(self.column.get_component_ticks(index)) }
-    }
-
-    #[inline]
-    pub fn get_drop_fn(&self) -> Option<unsafe fn(OwningPtr<'_>)> {
-        self.column.get_drop_fn()
-    }
-
-    #[inline]
-    pub fn check_ticks(&mut self, check: CheckTicks) {
-        unsafe { self.column.check_ticks(self.entities.len(), check) };
+        unsafe {
+            Some(ComponentTicks {
+                added: self.column.copy_added_tick(index),
+                changed: self.column.copy_changed_tick(index),
+            })
+        }
     }
 
     #[must_use = "The returned pointer must be used to drop the removed component."]
@@ -238,12 +249,7 @@ impl SparseComponent {
 
             let last_index = self.entities.len() - 1;
 
-            if index == last_index {
-                unsafe {
-                    self.entities.set_len(last_index);
-                    self.column.get_data_mut(last_index).promote()
-                }
-            } else {
+            if index != last_index {
                 unsafe {
                     let swapped_id = self
                         .entities
@@ -251,6 +257,11 @@ impl SparseComponent {
 
                     *self.sparse.get_mut(&swapped_id).debug_checked_unwrap() = index_u32;
                     self.column.swap_remove_nonoverlapping(index, last_index)
+                }
+            } else {
+                unsafe {
+                    self.entities.set_len(last_index);
+                    self.column.get_data_mut(last_index).promote()
                 }
             }
         })
@@ -267,12 +278,7 @@ impl SparseComponent {
 
                 let last_index = self.entities.len() - 1;
 
-                if index == last_index {
-                    unsafe {
-                        self.entities.set_len(last_index);
-                        self.column.drop_last(last_index);
-                    }
-                } else {
+                if index != last_index {
                     unsafe {
                         let swapped_id = self
                             .entities
@@ -281,6 +287,11 @@ impl SparseComponent {
                         *self.sparse.get_mut(&swapped_id).debug_checked_unwrap() = index_u32;
                         self.column
                             .swap_remove_and_drop_nonoverlapping(index, last_index);
+                    }
+                } else {
+                    unsafe {
+                        self.entities.set_len(last_index);
+                        self.column.drop_last(last_index);
                     }
                 }
             })

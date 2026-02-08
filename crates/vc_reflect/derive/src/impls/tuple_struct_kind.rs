@@ -3,7 +3,7 @@ use quote::{ToTokens, quote};
 use syn::Ident;
 
 use super::{get_auto_register_impl, get_struct_clone_impl};
-use super::{get_common_try_apply_tokens, impl_trait_typed};
+use super::{get_common_apply_tokens, impl_trait_typed};
 use super::{impl_struct_from_reflect, impl_trait_type_path};
 use super::{impl_trait_get_type_meta, impl_trait_reflect};
 
@@ -36,22 +36,22 @@ pub(crate) fn impl_tuple_struct(info: &ReflectStruct) -> TokenStream {
 
     // trait: Reflect
     let reflect_trait_tokens = if meta.attrs().impl_switchs.impl_reflect {
-        let try_apply_tokens = get_tuple_struct_try_apply_impl(meta);
+        let apply_tokens = get_tuple_struct_apply_impl(meta);
         let to_dynamic_tokens = get_tuple_struct_to_dynamic_impl(meta);
         let reflect_clone_tokens = get_struct_clone_impl(info);
-        let reflect_partial_eq_tokens = get_tuple_struct_partial_eq_impl(meta);
-        let reflect_partial_cmp_tokens = get_tuple_struct_partial_cmp_impl(meta);
+        let reflect_eq_tokens = get_tuple_struct_eq_impl(meta);
+        let reflect_cmp_tokens = get_tuple_struct_cmp_impl(meta);
         let reflect_hash_tokens = get_tuple_struct_hash_impl(meta);
         let reflect_debug_tokens = get_tuple_struct_debug_impl(meta);
 
         impl_trait_reflect(
             meta,
             quote!(TupleStruct),
-            try_apply_tokens,
+            apply_tokens,
             to_dynamic_tokens,
             reflect_clone_tokens,
-            reflect_partial_eq_tokens,
-            reflect_partial_cmp_tokens,
+            reflect_eq_tokens,
+            reflect_cmp_tokens,
             reflect_hash_tokens,
             reflect_debug_tokens,
             false,
@@ -78,6 +78,8 @@ pub(crate) fn impl_tuple_struct(info: &ReflectStruct) -> TokenStream {
     let auto_register_tokens = get_auto_register_impl(meta);
 
     quote! {
+        #auto_register_tokens
+
         #type_path_trait_tokens
 
         #typed_trait_tokens
@@ -89,8 +91,6 @@ pub(crate) fn impl_tuple_struct(info: &ReflectStruct) -> TokenStream {
         #get_type_meta_tokens
 
         #get_from_reflect_tokens
-
-        #auto_register_tokens
     }
 }
 
@@ -150,24 +150,24 @@ fn impl_trait_tuple_struct(info: &ReflectStruct) -> TokenStream {
     }
 }
 
-/// Generate `Reflect::try_apply` implementation tokens.
-fn get_tuple_struct_try_apply_impl(meta: &ReflectMeta) -> TokenStream {
+/// Generate `Reflect::apply` implementation tokens.
+fn get_tuple_struct_apply_impl(meta: &ReflectMeta) -> TokenStream {
     use crate::path::fp::ResultFP;
 
     let vc_reflect_path = meta.vc_reflect_path();
     let reflect_ = crate::path::reflect_(vc_reflect_path);
     let apply_error_ = crate::path::apply_error_(vc_reflect_path);
-    let tuple_struct_try_apply_ = crate::path::tuple_struct_try_apply_(vc_reflect_path);
+    let tuple_struct_apply_ = crate::path::tuple_struct_apply_(vc_reflect_path);
 
     let input_ = Ident::new("__input__", Span::call_site());
 
-    let clone_tokens = get_common_try_apply_tokens(meta, &input_);
+    let clone_tokens = get_common_apply_tokens(meta, &input_);
 
     quote! {
-        fn try_apply(&mut self, #input_: &dyn #reflect_) -> #ResultFP<(), #apply_error_> {
+        fn apply(&mut self, #input_: &dyn #reflect_) -> #ResultFP<(), #apply_error_> {
             #clone_tokens
 
-            #tuple_struct_try_apply_(self, #input_)
+            #tuple_struct_apply_(self, #input_)
         }
     }
 }
@@ -187,18 +187,18 @@ fn get_tuple_struct_to_dynamic_impl(meta: &ReflectMeta) -> TokenStream {
     }
 }
 
-/// Generate `Reflect::reflect_partial_eq` implementation tokens.
-fn get_tuple_struct_partial_eq_impl(meta: &ReflectMeta) -> TokenStream {
+/// Generate `Reflect::reflect_eq` implementation tokens.
+fn get_tuple_struct_eq_impl(meta: &ReflectMeta) -> TokenStream {
     use crate::path::fp::{OptionFP, PartialEqFP};
     let vc_reflect_path = meta.vc_reflect_path();
     let reflect_ = crate::path::reflect_(vc_reflect_path);
 
-    if let Some(span) = meta.attrs().avail_traits.partial_eq {
-        let reflect_partial_eq = Ident::new("reflect_partial_eq", span);
+    if let Some(span) = meta.attrs().avail_traits.eq {
+        let reflect_eq = Ident::new("reflect_eq", span);
 
         quote! {
             #[inline]
-            fn #reflect_partial_eq(&self, __other__: &dyn #reflect_) -> #OptionFP<bool> {
+            fn #reflect_eq(&self, __other__: &dyn #reflect_) -> #OptionFP<bool> {
                 if let #OptionFP::Some(__value__) = <dyn #reflect_>::downcast_ref::<Self>(__other__) {
                     return #OptionFP::Some( #PartialEqFP::eq(self, __value__) );
                 }
@@ -206,29 +206,29 @@ fn get_tuple_struct_partial_eq_impl(meta: &ReflectMeta) -> TokenStream {
             }
         }
     } else {
-        let tuple_struct_partial_eq_ = crate::path::tuple_struct_partial_eq_(vc_reflect_path);
+        let tuple_struct_eq_ = crate::path::tuple_struct_eq_(vc_reflect_path);
 
         quote! {
             #[inline]
-            fn reflect_partial_eq(&self, __other__: &dyn #reflect_) -> #OptionFP<bool> {
-                #tuple_struct_partial_eq_(self, __other__)
+            fn reflect_eq(&self, __other__: &dyn #reflect_) -> #OptionFP<bool> {
+                #tuple_struct_eq_(self, __other__)
             }
         }
     }
 }
 
-/// Generate `Reflect::reflect_partial_cmp` implementation tokens.
-fn get_tuple_struct_partial_cmp_impl(meta: &ReflectMeta) -> TokenStream {
+/// Generate `Reflect::reflect_cmp` implementation tokens.
+fn get_tuple_struct_cmp_impl(meta: &ReflectMeta) -> TokenStream {
     use crate::path::fp::{OptionFP, PartialOrdFP};
     let vc_reflect_path = meta.vc_reflect_path();
     let reflect_ = crate::path::reflect_(vc_reflect_path);
 
-    if let Some(span) = meta.attrs().avail_traits.partial_cmp {
-        let reflect_partial_cmp = Ident::new("reflect_partial_cmp", span);
+    if let Some(span) = meta.attrs().avail_traits.cmp {
+        let reflect_cmp = Ident::new("reflect_cmp", span);
 
         quote! {
             #[inline]
-            fn #reflect_partial_cmp(&self, __other__: &dyn #reflect_) -> #OptionFP<::core::cmp::Ordering> {
+            fn #reflect_cmp(&self, __other__: &dyn #reflect_) -> #OptionFP<::core::cmp::Ordering> {
                 if let #OptionFP::Some(__value__) = <dyn #reflect_>::downcast_ref::<Self>(__other__) {
                     return #PartialOrdFP::partial_cmp(self, __value__);
                 }
@@ -236,12 +236,12 @@ fn get_tuple_struct_partial_cmp_impl(meta: &ReflectMeta) -> TokenStream {
             }
         }
     } else {
-        let tuple_struct_partial_cmp_ = crate::path::tuple_struct_partial_cmp_(vc_reflect_path);
+        let tuple_struct_cmp_ = crate::path::tuple_struct_cmp_(vc_reflect_path);
 
         quote! {
             #[inline]
-            fn reflect_partial_cmp(&self, __other__: &dyn #reflect_) -> #OptionFP<::core::cmp::Ordering> {
-                #tuple_struct_partial_cmp_(self, __other__)
+            fn reflect_cmp(&self, __other__: &dyn #reflect_) -> #OptionFP<::core::cmp::Ordering> {
+                #tuple_struct_cmp_(self, __other__)
             }
         }
     }

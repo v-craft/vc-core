@@ -64,7 +64,7 @@ impl ResourceData {
     #[inline]
     pub fn get_data(&self) -> Option<Ptr<'_>> {
         if self.is_present {
-            unsafe { Some(self.data.get_item(Self::INDEX)) }
+            unsafe { Some(self.data.get_first()) }
         } else {
             None
         }
@@ -86,7 +86,7 @@ impl ResourceData {
     pub fn get_data_with_ticks(&self) -> Option<(Ptr<'_>, ComponentTickCells<'_>)> {
         if self.is_present {
             Some((
-                unsafe { self.data.get_item(Self::INDEX) },
+                unsafe { self.data.get_first() },
                 ComponentTickCells {
                     added: &self.added_tick,
                     changed: &self.changed_tick,
@@ -101,7 +101,7 @@ impl ResourceData {
     #[inline]
     pub fn get_mut(&mut self, last_run: Tick, this_run: Tick) -> Option<MutUntyped<'_>> {
         if self.is_present {
-            let value = unsafe { self.data.get_item_mut(Self::INDEX) };
+            let value = unsafe { self.data.get_first_mut() };
             let cells = ComponentTickCells {
                 added: &self.added_tick,
                 changed: &self.changed_tick,
@@ -299,7 +299,7 @@ impl NoSendResourceData {
     pub fn get_data(&self) -> Option<Ptr<'_>> {
         if self.is_present {
             self.validate_access();
-            unsafe { Some(self.data.get_item(Self::INDEX)) }
+            unsafe { Some(self.data.get_first()) }
         } else {
             None
         }
@@ -323,7 +323,7 @@ impl NoSendResourceData {
         if self.is_present {
             self.validate_access();
             Some((
-                unsafe { self.data.get_item(Self::INDEX) },
+                unsafe { self.data.get_first() },
                 ComponentTickCells {
                     added: &self.added_tick,
                     changed: &self.changed_tick,
@@ -339,7 +339,7 @@ impl NoSendResourceData {
     pub fn get_mut(&mut self, last_run: Tick, this_run: Tick) -> Option<MutUntyped<'_>> {
         if self.is_present {
             self.validate_access();
-            let value = unsafe { self.data.get_item_mut(Self::INDEX) };
+            let value = unsafe { self.data.get_first_mut() };
             let cells = ComponentTickCells {
                 added: &self.added_tick,
                 changed: &self.changed_tick,

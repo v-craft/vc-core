@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
+use core::cmp::Ordering;
 use core::fmt;
 
 use vc_utils::hash::{HashTable, hash_table};
@@ -30,7 +31,7 @@ use crate::ops::{ApplyError, ReflectCloneError};
 ///
 /// Keys in a `DynamicMap` must support:
 /// - Hashing via [`Reflect::reflect_hash`]
-/// - Equality comparison via [`Reflect::reflect_partial_eq`]
+/// - Equality comparison via [`Reflect::reflect_eq`]
 /// - Self-equality (a key must be equal to itself)
 ///
 /// # Examples
@@ -161,7 +162,7 @@ impl DynamicMap {
     ///
     /// Panics if:
     /// - The key does not support [`Reflect::reflect_hash`]
-    /// - The key does not support [`Reflect::reflect_partial_eq`]
+    /// - The key does not support [`Reflect::reflect_eq`]
     /// - The key is not equal to itself (violates reflexivity)
     ///
     /// # Examples
@@ -183,9 +184,9 @@ impl DynamicMap {
         value: Box<dyn Reflect>,
     ) -> Option<Box<dyn Reflect>> {
         debug_assert_eq!(
-            key.reflect_partial_eq(&*key),
+            key.reflect_eq(&*key),
             Some(true),
-            "The key is not `reflect_partial_eq` to itself: `{}`.",
+            "The key is not `reflect_eq` to itself: `{}`.",
             key.reflect_type_path(),
         );
 
@@ -218,7 +219,7 @@ impl DynamicMap {
     ///
     /// Panics if:
     /// - The key does not support [`Reflect::reflect_hash`]
-    /// - The key does not support [`Reflect::reflect_partial_eq`]
+    /// - The key does not support [`Reflect::reflect_eq`]
     /// - The key is not equal to itself (violates reflexivity)
     ///
     /// # Examples
@@ -258,7 +259,7 @@ impl DynamicMap {
         key: &dyn Reflect,
     ) -> impl FnMut(&(Box<dyn Reflect>, Box<dyn Reflect>)) -> bool + '_ {
         |(other, _)| {
-            key.reflect_partial_eq(&**other).unwrap_or_else(|| {
+            key.reflect_eq(&**other).unwrap_or_else(|| {
                 panic!(
                     "the given value of type `{}` does not support reflect hashing",
                     other.reflect_type_path(),
@@ -292,13 +293,18 @@ impl Reflect for DynamicMap {
     }
 
     #[inline]
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        crate::impls::map_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::map_apply(self, value)
     }
 
     #[inline]
-    fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-        crate::impls::map_partial_eq(self, other)
+    fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+        crate::impls::map_eq(self, other)
+    }
+
+    #[inline]
+    fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+        crate::impls::map_cmp(self, other)
     }
 
     #[inline]
@@ -380,7 +386,7 @@ impl<'a> IntoIterator for &'a DynamicMap {
 ///
 /// Implementors must ensure that keys:
 /// 1. Support hashing via [`Reflect::reflect_hash`]
-/// 2. Support equality comparison via [`Reflect::reflect_partial_eq`]
+/// 2. Support equality comparison via [`Reflect::reflect_eq`]
 /// 3. Are equal to themselves (reflexivity)
 /// 4. Have consistent hashing (equal keys have equal hashes)
 ///

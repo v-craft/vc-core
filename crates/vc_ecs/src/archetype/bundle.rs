@@ -2,14 +2,31 @@
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::ptr::NonNull;
+
 use vc_utils::hash::SparseHashMap;
 
-use super::ArchetypeId;
+use super::{Archetype, ArchetypeId};
 
 use crate::bundle::{BundleComponentStatus, BundleId, ComponentStatus};
 use crate::cfg;
 use crate::component::ComponentId;
 use crate::component::RequiredComponent;
+use crate::storage::Table;
+
+// -----------------------------------------------------------------------------
+// ArchetypeMoveType
+
+pub enum ArchetypeMoveType {
+    SameArchetype,
+    NewArchetypeSameTable {
+        new_archetype: NonNull<Archetype>,
+    },
+    NewArchetypeNewTable {
+        new_archetype: NonNull<Archetype>,
+        new_table: NonNull<Table>,
+    },
+}
 
 // -----------------------------------------------------------------------------
 // ArchetypeWithBundle
@@ -97,8 +114,8 @@ impl Edges {
             bundle_id,
             ArchetypeInsertedBundle {
                 archetype_id,
-                bundle_status: bundle_status,
-                required_components: required_components,
+                bundle_status,
+                required_components,
                 added_len,
                 inserted: added.into_boxed_slice(),
             },
