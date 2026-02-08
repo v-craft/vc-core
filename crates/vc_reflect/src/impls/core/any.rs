@@ -1,9 +1,10 @@
 crate::derive::impl_reflect_opaque!(::core::any::TypeId(
-    mini,
+    clone,
     debug,
     hash,
-    partial_eq,
-    partial_cmp
+    eq,
+    cmp,
+    auto_register,
 ));
 
 #[cfg(test)]

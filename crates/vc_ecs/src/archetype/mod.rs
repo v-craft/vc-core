@@ -1,19 +1,7 @@
-// -----------------------------------------------------------------------------
-// Modules
+mod arches;
+mod ident;
+mod info;
 
-mod archetype;
-mod archetypes;
-mod bundle;
-mod entity;
-mod flags;
-mod id;
-
-// -----------------------------------------------------------------------------
-// Exports
-
-pub use archetype::{Archetype, ArchetypeSwapRemoveResult};
-pub use archetypes::Archetypes;
-pub use bundle::{ArchetypeInsertedBundle, Edges};
-pub use entity::ArchetypeEntity;
-pub use flags::ArchetypeFlags;
-pub use id::{ArchetypeId, ArchetypeRow};
+pub use arches::Archetypes;
+pub use ident::{ArcheId, ArcheRow};
+pub use info::Archetype;

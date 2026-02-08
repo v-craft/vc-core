@@ -9,7 +9,7 @@ use crate::info::VariantKind;
 use crate::ops::{ApplyError, ReflectRef};
 use crate::ops::{Array, Enum, List, Map, Set, Struct, Tuple, TupleStruct};
 
-/// A function use for implementing [`Reflect::try_apply`]
+/// A function use for implementing [`Reflect::`]
 ///
 /// # Rules
 ///
@@ -26,14 +26,14 @@ use crate::ops::{Array, Enum, List, Map, Set, Struct, Tuple, TupleStruct};
 /// impl Array for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn try_apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
-///         array_try_apply(self, other)
+///     fn apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
+///         array_apply(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn array_try_apply(x: &mut dyn Array, y: &dyn Reflect) -> Result<(), ApplyError> {
+pub fn array_apply(x: &mut dyn Array, y: &dyn Reflect) -> Result<(), ApplyError> {
     let y = y.reflect_ref().as_array()?;
 
     if x.len() != y.len() {
@@ -45,18 +45,18 @@ pub fn array_try_apply(x: &mut dyn Array, y: &dyn Reflect) -> Result<(), ApplyEr
 
     for (idx, y_item) in y.iter().enumerate() {
         let item = x.get_mut(idx).expect("valid index");
-        item.try_apply(y_item)?;
+        item.apply(y_item)?;
     }
     Ok(())
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_eq`].
+/// A function use for implementing [`Reflect::reflect_eq`].
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `Array`, return `Some(false)`.
 /// 2. If `self.len` != `other.len`, return `Some(false)`.
-/// 3. Call `reflect_partial_eq` for each items,
+/// 3. Call `reflect_eq` for each items,
 ///    return `None` or `Some(false)` if items return `None` or `Some(false)`.
 /// 4. return Ok.
 ///
@@ -68,14 +68,14 @@ pub fn array_try_apply(x: &mut dyn Array, y: &dyn Reflect) -> Result<(), ApplyEr
 /// impl Array for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-///         array_partial_eq(self, other)
+///     fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+///         array_eq(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn array_partial_eq(x: &dyn Array, y: &dyn Reflect) -> Option<bool> {
+pub fn array_eq(x: &dyn Array, y: &dyn Reflect) -> Option<bool> {
     let ReflectRef::Array(y) = y.reflect_ref() else {
         return Some(false);
     };
@@ -85,7 +85,7 @@ pub fn array_partial_eq(x: &dyn Array, y: &dyn Reflect) -> Option<bool> {
     }
 
     for (item, y_item) in x.iter().zip(y.iter()) {
-        let result = item.reflect_partial_eq(y_item);
+        let result = item.reflect_eq(y_item);
         if result != Some(true) {
             return Some(false);
         }
@@ -94,13 +94,13 @@ pub fn array_partial_eq(x: &dyn Array, y: &dyn Reflect) -> Option<bool> {
     Some(true)
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_cmp`].
+/// A function use for implementing [`Reflect::reflect_cmp`].
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `Array`, return `None`.
 /// 2. If `self.len` != `other.len`, return `None`.
-/// 3. Call `reflect_partial_cmp` for each items,
+/// 3. Call `reflect_cmp` for each items,
 ///    return `None` or `Some(_)` if items is not `Ordering::Equal` or return `None`.
 /// 4. Return `Some(Ordering::Equal)`.
 ///
@@ -112,14 +112,14 @@ pub fn array_partial_eq(x: &dyn Array, y: &dyn Reflect) -> Option<bool> {
 /// impl Array for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
-///         array_partial_cmp(self, other)
+///     fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+///         array_cmp(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn array_partial_cmp(x: &dyn Array, y: &dyn Reflect) -> Option<Ordering> {
+pub fn array_cmp(x: &dyn Array, y: &dyn Reflect) -> Option<Ordering> {
     let ReflectRef::Array(y) = y.reflect_ref() else {
         return None;
     };
@@ -129,7 +129,7 @@ pub fn array_partial_cmp(x: &dyn Array, y: &dyn Reflect) -> Option<Ordering> {
     }
 
     for (a, b) in x.iter().zip(y.iter()) {
-        match a.reflect_partial_cmp(b) {
+        match a.reflect_cmp(b) {
             None => return None,
             Some(Ordering::Equal) => continue,
             Some(ord) => return Some(ord),
@@ -202,7 +202,7 @@ pub fn array_debug(dyn_array: &dyn Array, f: &mut fmt::Formatter<'_>) -> fmt::Re
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::try_apply`]
+/// A function use for implementing [`Reflect::`]
 ///
 /// # Rules
 ///
@@ -219,14 +219,14 @@ pub fn array_debug(dyn_array: &dyn Array, f: &mut fmt::Formatter<'_>) -> fmt::Re
 /// impl Tuple for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn try_apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
-///         tuple_try_apply(self, other)
+///     fn apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
+///         tuple_apply(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn tuple_try_apply(x: &mut dyn Tuple, y: &dyn Reflect) -> Result<(), ApplyError> {
+pub fn tuple_apply(x: &mut dyn Tuple, y: &dyn Reflect) -> Result<(), ApplyError> {
     let y = y.reflect_ref().as_tuple()?;
 
     if x.field_len() != y.field_len() {
@@ -238,19 +238,19 @@ pub fn tuple_try_apply(x: &mut dyn Tuple, y: &dyn Reflect) -> Result<(), ApplyEr
 
     for (idx, y_field) in y.iter_fields().enumerate() {
         let field = x.field_mut(idx).expect("valid index");
-        field.try_apply(y_field)?;
+        field.apply(y_field)?;
     }
 
     Ok(())
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_eq`].
+/// A function use for implementing [`Reflect::reflect_eq`].
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `Tuple`, return `Some(false)`.
 /// 2. If `self.len` != `other.len`, return `Some(false)`.
-/// 3. Call `reflect_partial_eq` for each items,
+/// 3. Call `reflect_eq` for each items,
 ///    return `None` or `Some(false)` if items return `None` or `Some(false)`.
 /// 4. return Ok.
 ///
@@ -262,14 +262,14 @@ pub fn tuple_try_apply(x: &mut dyn Tuple, y: &dyn Reflect) -> Result<(), ApplyEr
 /// impl Tuple for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-///         tuple_partial_eq(self, other)
+///     fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+///         tuple_eq(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn tuple_partial_eq(x: &dyn Tuple, y: &dyn Reflect) -> Option<bool> {
+pub fn tuple_eq(x: &dyn Tuple, y: &dyn Reflect) -> Option<bool> {
     let ReflectRef::Tuple(y) = y.reflect_ref() else {
         return Some(false);
     };
@@ -279,7 +279,7 @@ pub fn tuple_partial_eq(x: &dyn Tuple, y: &dyn Reflect) -> Option<bool> {
     }
 
     for (x_field, y_field) in x.iter_fields().zip(y.iter_fields()) {
-        let result = x_field.reflect_partial_eq(y_field);
+        let result = x_field.reflect_eq(y_field);
         if result != Some(true) {
             return result;
         }
@@ -287,13 +287,13 @@ pub fn tuple_partial_eq(x: &dyn Tuple, y: &dyn Reflect) -> Option<bool> {
     Some(true)
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_cmp`].
+/// A function use for implementing [`Reflect::reflect_cmp`].
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `Tuple`, return `None`.
 /// 2. If `self.field_len` != `other.field_len`, return `None`.
-/// 3. Call `reflect_partial_cmp` for each fields,
+/// 3. Call `reflect_cmp` for each fields,
 ///    return `None` or `Some(_)` if fields is not `Ordering::Equal` or return `None`.
 /// 4. Return `Some(Ordering::Equal)`.
 ///
@@ -305,14 +305,14 @@ pub fn tuple_partial_eq(x: &dyn Tuple, y: &dyn Reflect) -> Option<bool> {
 /// impl Tuple for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
-///         tuple_partial_cmp(self, other)
+///     fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+///         tuple_cmp(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn tuple_partial_cmp(x: &dyn Tuple, y: &dyn Reflect) -> Option<Ordering> {
+pub fn tuple_cmp(x: &dyn Tuple, y: &dyn Reflect) -> Option<Ordering> {
     let ReflectRef::Tuple(y) = y.reflect_ref() else {
         return None;
     };
@@ -322,7 +322,7 @@ pub fn tuple_partial_cmp(x: &dyn Tuple, y: &dyn Reflect) -> Option<Ordering> {
     }
 
     for (a, b) in x.iter_fields().zip(y.iter_fields()) {
-        match a.reflect_partial_cmp(b) {
+        match a.reflect_cmp(b) {
             None => return None,
             Some(Ordering::Equal) => continue,
             Some(ord) => return Some(ord),
@@ -392,16 +392,16 @@ pub fn tuple_debug(dyn_tuple: &dyn Tuple, f: &mut fmt::Formatter<'_>) -> fmt::Re
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::try_apply`] .
+/// A function use for implementing [`Reflect::`] .
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `Struct`, return Err.
-/// 2. Call `try_apply` for common fields between `Self` and `Other`.
-///    return `Err` if some fields `try_apply` failed.
+/// 2. Call `` for common fields between `Self` and `Other`.
+///    return `Err` if some fields `` failed.
 /// 3. return `Ok`
 ///
-/// Therefore, this function enables `try_apply` between different structs.
+/// Therefore, this function enables `` between different structs.
 /// Only this type and enum allow this.
 ///
 /// # Example
@@ -412,32 +412,32 @@ pub fn tuple_debug(dyn_tuple: &dyn Tuple, f: &mut fmt::Formatter<'_>) -> fmt::Re
 /// impl Struct for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn try_apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
-///         struct_try_apply(self, other)
+///     fn apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
+///         struct_apply(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn struct_try_apply(x: &mut dyn Struct, y: &dyn Reflect) -> Result<(), ApplyError> {
+pub fn struct_apply(x: &mut dyn Struct, y: &dyn Reflect) -> Result<(), ApplyError> {
     let y = y.reflect_ref().as_struct()?;
 
     for (idx, y_field) in y.iter_fields().enumerate() {
         let name = y.name_at(idx).unwrap();
         if let Some(field) = x.field_mut(name) {
-            field.try_apply(y_field)?;
+            field.apply(y_field)?;
         }
     }
     Ok(())
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_eq`] .
+/// A function use for implementing [`Reflect::reflect_eq`] .
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `Struct`, return `Some(false)`.
 /// 2. If `self.len` != `other.len`, return `Some(false)`.
-/// 3. Call `struct_partial_eq` for all fields.
+/// 3. Call `struct_eq` for all fields.
 ///    Return `Some(false)` if some fields name do not match.
 ///    Return `None` or `Some(false)` if some fields return `None` or `Some(false)`.
 /// 3. return `Some(true)`
@@ -450,14 +450,14 @@ pub fn struct_try_apply(x: &mut dyn Struct, y: &dyn Reflect) -> Result<(), Apply
 /// impl Struct for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-///         struct_partial_eq(self, other)
+///     fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+///         struct_eq(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn struct_partial_eq(x: &dyn Struct, y: &dyn Reflect) -> Option<bool> {
+pub fn struct_eq(x: &dyn Struct, y: &dyn Reflect) -> Option<bool> {
     let ReflectRef::Struct(y) = y.reflect_ref() else {
         return Some(false);
     };
@@ -469,7 +469,7 @@ pub fn struct_partial_eq(x: &dyn Struct, y: &dyn Reflect) -> Option<bool> {
     for (idx, y_field) in y.iter_fields().enumerate() {
         let name = y.name_at(idx).unwrap();
         if let Some(x_field) = x.field(name) {
-            let result = x_field.reflect_partial_eq(y_field);
+            let result = x_field.reflect_eq(y_field);
             if result != Some(true) {
                 return result;
             }
@@ -480,13 +480,13 @@ pub fn struct_partial_eq(x: &dyn Struct, y: &dyn Reflect) -> Option<bool> {
     Some(true)
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_cmp`].
+/// A function use for implementing [`Reflect::reflect_cmp`].
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `Struct`, return `None`.
 /// 2. If `self.field_len` != `other.field_len`, return `None`.
-/// 3. Call `reflect_partial_cmp` for each fields,
+/// 3. Call `reflect_cmp` for each fields,
 ///    return `None` or `Some(_)` if fields is not `Ordering::Equal` or return `None`.
 /// 4. Return `Some(Ordering::Equal)`.
 ///
@@ -498,14 +498,14 @@ pub fn struct_partial_eq(x: &dyn Struct, y: &dyn Reflect) -> Option<bool> {
 /// impl Struct for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
-///         struct_partial_cmp(self, other)
+///     fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+///         struct_cmp(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn struct_partial_cmp(x: &dyn Struct, y: &dyn Reflect) -> Option<Ordering> {
+pub fn struct_cmp(x: &dyn Struct, y: &dyn Reflect) -> Option<Ordering> {
     let ReflectRef::Struct(y) = y.reflect_ref() else {
         return None;
     };
@@ -515,7 +515,7 @@ pub fn struct_partial_cmp(x: &dyn Struct, y: &dyn Reflect) -> Option<Ordering> {
     }
 
     for (a, b) in x.iter_fields().zip(y.iter_fields()) {
-        match a.reflect_partial_cmp(b) {
+        match a.reflect_cmp(b) {
             None => return None,
             Some(Ordering::Equal) => continue,
             Some(ord) => return Some(ord),
@@ -590,7 +590,7 @@ pub fn struct_debug(dyn_struct: &dyn Struct, f: &mut fmt::Formatter<'_>) -> fmt:
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::try_apply`] .
+/// A function use for implementing [`Reflect::`] .
 ///
 /// # Rules
 ///
@@ -598,21 +598,21 @@ pub fn struct_debug(dyn_struct: &dyn Struct, f: &mut fmt::Formatter<'_>) -> fmt:
 /// 2. If variant_name mismatched, return Ok(Some(other)),
 ///    This means that the function cannot handle it.
 /// 3. If variant_name matched, but variant_kind mismatched, return Err.
-/// 4. try_apply all fields, similer to `struct_try_apply` and `tuple_try_apply`.
+/// 4.  all fields, similer to `struct_apply` and `tuple_apply`.
 /// 5. return `Ok(None)`
 ///
 /// # Example
 ///
 /// ```ignore
-/// fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-///     if let Some(y) = enum_try_apply(self, value)? {
+/// fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+///     if let Some(y) = enum_apply(self, value)? {
 ///         /* ... */
 ///     }
 ///     Ok(())
 /// }
 /// ```
 #[inline(never)]
-pub fn enum_try_apply<'b>(
+pub fn enum_apply<'b>(
     x: &mut dyn Enum,
     y: &'b dyn Reflect,
 ) -> Result<Option<&'b dyn Enum>, ApplyError> {
@@ -630,7 +630,7 @@ pub fn enum_try_apply<'b>(
                 for y_field in y.iter_fields() {
                     let name = y_field.name().unwrap();
                     if let Some(field) = x.field_mut(name) {
-                        field.try_apply(y_field.value())?;
+                        field.apply(y_field.value())?;
                     }
                 }
             }
@@ -643,7 +643,7 @@ pub fn enum_try_apply<'b>(
                 }
                 for (index, y_field) in y.iter_fields().enumerate() {
                     let field = x.field_at_mut(index).expect("valid index");
-                    field.try_apply(y_field.value())?;
+                    field.apply(y_field.value())?;
                 }
             }
             VariantKind::Unit => {}
@@ -654,7 +654,7 @@ pub fn enum_try_apply<'b>(
     }
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_eq`] .
+/// A function use for implementing [`Reflect::reflect_eq`] .
 ///
 /// # Rules
 ///
@@ -671,14 +671,14 @@ pub fn enum_try_apply<'b>(
 /// impl Enum for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-///         enum_partial_eq(self, other)
+///     fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+///         enum_eq(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn enum_partial_eq(x: &dyn Enum, y: &dyn Reflect) -> Option<bool> {
+pub fn enum_eq(x: &dyn Enum, y: &dyn Reflect) -> Option<bool> {
     let ReflectRef::Enum(y) = y.reflect_ref() else {
         return Some(false);
     };
@@ -699,7 +699,7 @@ pub fn enum_partial_eq(x: &dyn Enum, y: &dyn Reflect) -> Option<bool> {
         VariantKind::Unit => Some(true),
         VariantKind::Tuple => {
             for (x_value, y_value) in x.iter_fields().zip(y.iter_fields()) {
-                let result = x_value.value().reflect_partial_eq(y_value.value());
+                let result = x_value.value().reflect_eq(y_value.value());
                 if result != Some(true) {
                     return result;
                 }
@@ -709,7 +709,7 @@ pub fn enum_partial_eq(x: &dyn Enum, y: &dyn Reflect) -> Option<bool> {
         VariantKind::Struct => {
             for field in x.iter_fields() {
                 if let Some(y_field) = y.field(field.name().unwrap()) {
-                    let result = field.value().reflect_partial_eq(y_field);
+                    let result = field.value().reflect_eq(y_field);
                     if result != Some(true) {
                         return Some(false);
                     }
@@ -722,7 +722,7 @@ pub fn enum_partial_eq(x: &dyn Enum, y: &dyn Reflect) -> Option<bool> {
     }
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_cmp`].
+/// A function use for implementing [`Reflect::reflect_cmp`].
 ///
 /// # Rules
 ///
@@ -740,14 +740,14 @@ pub fn enum_partial_eq(x: &dyn Enum, y: &dyn Reflect) -> Option<bool> {
 /// impl Enum for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
-///         enum_partial_cmp(self, other)
+///     fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+///         enum_cmp(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn enum_partial_cmp(x: &dyn Enum, y: &dyn Reflect) -> Option<Ordering> {
+pub fn enum_cmp(x: &dyn Enum, y: &dyn Reflect) -> Option<Ordering> {
     let ReflectRef::Enum(y) = y.reflect_ref() else {
         return None;
     };
@@ -772,7 +772,7 @@ pub fn enum_partial_cmp(x: &dyn Enum, y: &dyn Reflect) -> Option<Ordering> {
         VariantKind::Unit => Some(Ordering::Equal),
         VariantKind::Tuple => {
             for (x_value, y_value) in x.iter_fields().zip(y.iter_fields()) {
-                let result = x_value.value().reflect_partial_cmp(y_value.value());
+                let result = x_value.value().reflect_cmp(y_value.value());
                 if result != Some(Ordering::Equal) {
                     return result;
                 }
@@ -782,7 +782,7 @@ pub fn enum_partial_cmp(x: &dyn Enum, y: &dyn Reflect) -> Option<Ordering> {
         VariantKind::Struct => {
             for field in x.iter_fields() {
                 if let Some(y_field) = y.field(field.name().unwrap()) {
-                    let result = field.value().reflect_partial_cmp(y_field);
+                    let result = field.value().reflect_cmp(y_field);
                     if result != Some(Ordering::Equal) {
                         return result;
                     }
@@ -869,12 +869,12 @@ pub fn enum_debug(dyn_enum: &dyn Enum, f: &mut fmt::Formatter<'_>) -> fmt::Resul
     }
 }
 
-/// A function use for implementing [`Reflect::try_apply`] .
+/// A function use for implementing [`Reflect::`] .
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `List`, return `Err`.
-/// 2. `try_apply` all other items to self.
+/// 2. `` all other items to self.
 /// 3. if other.len > self.len, the extra items will call `reflect_clone` or `to_dyncmic`.
 ///    Check cloned items type and try `push` to self, or return `Err`.
 /// 4. if other.len < self.len, `pop` extra items.
@@ -888,20 +888,20 @@ pub fn enum_debug(dyn_enum: &dyn Enum, f: &mut fmt::Formatter<'_>) -> fmt::Resul
 /// impl List for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn try_apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
-///         list_try_apply(self, other)
+///     fn apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
+///         list_apply(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn list_try_apply(x: &mut dyn List, y: &dyn Reflect) -> Result<(), ApplyError> {
+pub fn list_apply(x: &mut dyn List, y: &dyn Reflect) -> Result<(), ApplyError> {
     let y = y.reflect_ref().as_list()?;
 
     for (idx, y_item) in y.iter().enumerate() {
         if idx < x.len() {
             if let Some(item) = x.get_mut(idx) {
-                item.try_apply(y_item)?;
+                item.apply(y_item)?;
             } else {
                 // Get item error.
                 return Err(ApplyError::NotSupport {
@@ -931,7 +931,7 @@ pub fn list_try_apply(x: &mut dyn List, y: &dyn Reflect) -> Result<(), ApplyErro
     Ok(())
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_eq`] .
+/// A function use for implementing [`Reflect::reflect_eq`] .
 ///
 /// # Rules
 ///
@@ -948,14 +948,14 @@ pub fn list_try_apply(x: &mut dyn List, y: &dyn Reflect) -> Result<(), ApplyErro
 /// impl List for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-///         list_partial_eq(self, other)
+///     fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+///         list_eq(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn list_partial_eq(x: &dyn List, y: &dyn Reflect) -> Option<bool> {
+pub fn list_eq(x: &dyn List, y: &dyn Reflect) -> Option<bool> {
     let ReflectRef::List(y) = y.reflect_ref() else {
         return Some(false);
     };
@@ -965,7 +965,7 @@ pub fn list_partial_eq(x: &dyn List, y: &dyn Reflect) -> Option<bool> {
     }
 
     for (x_value, y_value) in x.iter().zip(y.iter()) {
-        let result = x_value.reflect_partial_eq(y_value);
+        let result = x_value.reflect_eq(y_value);
         if result != Some(true) {
             return result;
         }
@@ -974,12 +974,12 @@ pub fn list_partial_eq(x: &dyn List, y: &dyn Reflect) -> Option<bool> {
     Some(true)
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_cmp`].
+/// A function use for implementing [`Reflect::reflect_cmp`].
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `List`, return `None`.
-/// 2. Call `reflect_partial_cmp` for each items.
+/// 2. Call `reflect_cmp` for each items.
 /// 3. Compare `self.len` and `other.len`.
 /// 4. Return `Some(Ordering::Equal)`.
 ///
@@ -991,14 +991,14 @@ pub fn list_partial_eq(x: &dyn List, y: &dyn Reflect) -> Option<bool> {
 /// impl List for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
-///         list_partial_cmp(self, other)
+///     fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+///         list_cmp(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn list_partial_cmp(x: &dyn List, y: &dyn Reflect) -> Option<Ordering> {
+pub fn list_cmp(x: &dyn List, y: &dyn Reflect) -> Option<Ordering> {
     let ReflectRef::List(y) = y.reflect_ref() else {
         return None;
     };
@@ -1006,7 +1006,7 @@ pub fn list_partial_cmp(x: &dyn List, y: &dyn Reflect) -> Option<Ordering> {
     let len = core::cmp::min(x.len(), y.len());
 
     for (a, b) in x.iter().zip(y.iter()).take(len) {
-        match a.reflect_partial_cmp(b) {
+        match a.reflect_cmp(b) {
             None => return None,
             Some(Ordering::Equal) => continue,
             Some(ord) => return Some(ord),
@@ -1077,12 +1077,12 @@ pub fn list_debug(dyn_list: &dyn List, f: &mut fmt::Formatter<'_>) -> fmt::Resul
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::try_apply`] .
+/// A function use for implementing [`Reflect::`] .
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `Map`, return `Err`.
-/// 2. `try_apply` all other items to self, replace or insert.
+/// 2. `` all other items to self, replace or insert.
 /// 3. Reduce oneself and only retain the elements in others.
 /// 4. return `Ok`
 ///
@@ -1094,19 +1094,19 @@ pub fn list_debug(dyn_list: &dyn List, f: &mut fmt::Formatter<'_>) -> fmt::Resul
 /// impl Map for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn try_apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
-///         map_try_apply(self, other)
+///     fn apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
+///         map_apply(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn map_try_apply(x: &mut dyn Map, y: &dyn Reflect) -> Result<(), ApplyError> {
+pub fn map_apply(x: &mut dyn Map, y: &dyn Reflect) -> Result<(), ApplyError> {
     let y = y.reflect_ref().as_map()?;
 
     for (key, y_val) in y.iter() {
         if let Some(x_val) = x.get_mut(key) {
-            x_val.try_apply(y_val)?;
+            x_val.apply(y_val)?;
         } else {
             let k = if let Ok(k) = key.reflect_clone() {
                 k
@@ -1137,7 +1137,7 @@ pub fn map_try_apply(x: &mut dyn Map, y: &dyn Reflect) -> Result<(), ApplyError>
     Ok(())
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_eq`] .
+/// A function use for implementing [`Reflect::reflect_eq`] .
 ///
 /// # Rules
 ///
@@ -1154,14 +1154,14 @@ pub fn map_try_apply(x: &mut dyn Map, y: &dyn Reflect) -> Result<(), ApplyError>
 /// impl Map for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-///         map_partial_eq(self, other)
+///     fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+///         map_eq(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn map_partial_eq(x: &dyn Map, y: &dyn Reflect) -> Option<bool> {
+pub fn map_eq(x: &dyn Map, y: &dyn Reflect) -> Option<bool> {
     let ReflectRef::Map(y) = y.reflect_ref() else {
         return Some(false);
     };
@@ -1172,7 +1172,7 @@ pub fn map_partial_eq(x: &dyn Map, y: &dyn Reflect) -> Option<bool> {
 
     for (key, val) in x.iter() {
         if let Some(y_val) = y.get(key) {
-            let result = val.reflect_partial_eq(y_val);
+            let result = val.reflect_eq(y_val);
             if result != Some(true) {
                 return result;
             }
@@ -1184,14 +1184,14 @@ pub fn map_partial_eq(x: &dyn Map, y: &dyn Reflect) -> Option<bool> {
     Some(true)
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_cmp`].
+/// A function use for implementing [`Reflect::reflect_cmp`].
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `Map`, return `None`.
 /// 2. For each entry pair `(a_k, a_v)` and `(b_k, b_v)` in the iteration order,
-///    - Compare `a_k` to `b_k` using `reflect_partial_cmp` , returning the first non-equal ordering.
-///    - Compare `a_v` to `b_v` using `reflect_partial_cmp` , returning the first non-equal ordering.
+///    - Compare `a_k` to `b_k` using `reflect_cmp` , returning the first non-equal ordering.
+///    - Compare `a_v` to `b_v` using `reflect_cmp` , returning the first non-equal ordering.
 /// 3. If all compared entries are equal, the shorter map is `Less` and longer is `Greater`.
 ///
 /// # Example
@@ -1202,14 +1202,14 @@ pub fn map_partial_eq(x: &dyn Map, y: &dyn Reflect) -> Option<bool> {
 /// impl Map for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
-///         map_partial_cmp(self, other)
+///     fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+///         map_cmp(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn map_partial_cmp(x: &dyn Map, y: &dyn Reflect) -> Option<Ordering> {
+pub fn map_cmp(x: &dyn Map, y: &dyn Reflect) -> Option<Ordering> {
     let ReflectRef::Map(y) = y.reflect_ref() else {
         return None;
     };
@@ -1220,13 +1220,13 @@ pub fn map_partial_cmp(x: &dyn Map, y: &dyn Reflect) -> Option<Ordering> {
     loop {
         match (a_iter.next(), b_iter.next()) {
             (Some((a_k, a_v)), Some((b_k, b_v))) => {
-                match a_k.reflect_partial_cmp(b_k) {
+                match a_k.reflect_cmp(b_k) {
                     None => return None,
                     Some(Ordering::Equal) => {}
                     Some(ord) => return Some(ord),
                 }
 
-                match a_v.reflect_partial_cmp(b_v) {
+                match a_v.reflect_cmp(b_v) {
                     None => return None,
                     Some(Ordering::Equal) => {}
                     Some(ord) => return Some(ord),
@@ -1301,12 +1301,12 @@ pub fn map_debug(dyn_map: &dyn Map, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::try_apply`] .
+/// A function use for implementing [`Reflect::`] .
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `Set`, return `Err`.
-/// 2. `try_apply` all other items to self, insert or skip.
+/// 2. `` all other items to self, insert or skip.
 /// 3. Reduce oneself and only retain the elements in others.
 /// 4. return `Ok`
 ///
@@ -1318,14 +1318,14 @@ pub fn map_debug(dyn_map: &dyn Map, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// impl Set for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn try_apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
-///         set_try_apply(self, other)
+///     fn apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
+///         set_apply(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn set_try_apply(x: &mut dyn Set, y: &dyn Reflect) -> Result<(), ApplyError> {
+pub fn set_apply(x: &mut dyn Set, y: &dyn Reflect) -> Result<(), ApplyError> {
     let y = y.reflect_ref().as_set()?;
 
     for y_val in y.iter() {
@@ -1347,7 +1347,7 @@ pub fn set_try_apply(x: &mut dyn Set, y: &dyn Reflect) -> Result<(), ApplyError>
     Ok(())
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_eq`] .
+/// A function use for implementing [`Reflect::reflect_eq`] .
 ///
 /// # Rules
 ///
@@ -1362,14 +1362,14 @@ pub fn set_try_apply(x: &mut dyn Set, y: &dyn Reflect) -> Result<(), ApplyError>
 /// impl Set for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-///         set_partial_eq(self, other)
+///     fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+///         set_eq(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn set_partial_eq(x: &dyn Set, y: &dyn Reflect) -> Option<bool> {
+pub fn set_eq(x: &dyn Set, y: &dyn Reflect) -> Option<bool> {
     let ReflectRef::Set(y) = y.reflect_ref() else {
         return Some(false);
     };
@@ -1379,7 +1379,7 @@ pub fn set_partial_eq(x: &dyn Set, y: &dyn Reflect) -> Option<bool> {
 
     for val in x.iter() {
         if let Some(y_val) = y.get(val) {
-            let result = val.reflect_partial_eq(y_val);
+            let result = val.reflect_eq(y_val);
             if result != Some(true) {
                 return result;
             }
@@ -1390,12 +1390,12 @@ pub fn set_partial_eq(x: &dyn Set, y: &dyn Reflect) -> Option<bool> {
     Some(true)
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_cmp`].
+/// A function use for implementing [`Reflect::reflect_cmp`].
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `Set`, return `None`.
-/// 2. For each entry pair using `reflect_partial_cmp` , returning the first non-equal ordering.
+/// 2. For each entry pair using `reflect_cmp` , returning the first non-equal ordering.
 /// 3. If all compared entries are equal, the shorter set is `Less` and longer is `Greater`.
 ///
 /// # Example
@@ -1406,14 +1406,14 @@ pub fn set_partial_eq(x: &dyn Set, y: &dyn Reflect) -> Option<bool> {
 /// impl Set for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
-///         set_partial_cmp(self, other)
+///     fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+///         set_cmp(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn set_partial_cmp(x: &dyn Set, y: &dyn Reflect) -> Option<Ordering> {
+pub fn set_cmp(x: &dyn Set, y: &dyn Reflect) -> Option<Ordering> {
     let ReflectRef::Set(y) = y.reflect_ref() else {
         return None;
     };
@@ -1423,7 +1423,7 @@ pub fn set_partial_cmp(x: &dyn Set, y: &dyn Reflect) -> Option<Ordering> {
 
     loop {
         match (a_iter.next(), b_iter.next()) {
-            (Some(a), Some(b)) => match a.reflect_partial_cmp(b) {
+            (Some(a), Some(b)) => match a.reflect_cmp(b) {
                 None => return None,
                 Some(Ordering::Equal) => {}
                 Some(ord) => return Some(ord),
@@ -1496,7 +1496,7 @@ pub fn set_debug(dyn_set: &dyn Set, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::try_apply`] .
+/// A function use for implementing [`Reflect::`] .
 ///
 /// # Rules
 ///
@@ -1505,7 +1505,7 @@ pub fn set_debug(dyn_set: &dyn Set, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// 3. Try to apply all fields, return Err if apply fields failed.
 /// 4. return Ok.
 ///
-/// Therefore, this function enables `try_apply` between different structs.
+/// Therefore, this function enables `` between different structs.
 ///
 /// # Example
 ///
@@ -1515,14 +1515,14 @@ pub fn set_debug(dyn_set: &dyn Set, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 /// impl TupleStruct for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn try_apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
-///         tuple_struct_try_apply(self, other)
+///     fn apply(&self, other: &dyn Reflect) -> Result<(), ApplyError> {
+///         tuple_struct_apply(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn tuple_struct_try_apply(x: &mut dyn TupleStruct, y: &dyn Reflect) -> Result<(), ApplyError> {
+pub fn tuple_struct_apply(x: &mut dyn TupleStruct, y: &dyn Reflect) -> Result<(), ApplyError> {
     let y = y.reflect_ref().as_tuple_struct()?;
 
     if x.field_len() != y.field_len() {
@@ -1534,12 +1534,12 @@ pub fn tuple_struct_try_apply(x: &mut dyn TupleStruct, y: &dyn Reflect) -> Resul
 
     for (idx, y_field) in y.iter_fields().enumerate() {
         let field = x.field_mut(idx).expect("valid index");
-        field.try_apply(y_field)?;
+        field.apply(y_field)?;
     }
     Ok(())
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_eq`] .
+/// A function use for implementing [`Reflect::reflect_eq`] .
 ///
 /// # Rules
 ///
@@ -1554,14 +1554,14 @@ pub fn tuple_struct_try_apply(x: &mut dyn TupleStruct, y: &dyn Reflect) -> Resul
 /// impl TupleStruct for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-///         tuple_struct_partial_eq(self, other)
+///     fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+///         tuple_struct_eq(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn tuple_struct_partial_eq(x: &dyn TupleStruct, y: &dyn Reflect) -> Option<bool> {
+pub fn tuple_struct_eq(x: &dyn TupleStruct, y: &dyn Reflect) -> Option<bool> {
     let ReflectRef::TupleStruct(y) = y.reflect_ref() else {
         return Some(false);
     };
@@ -1571,7 +1571,7 @@ pub fn tuple_struct_partial_eq(x: &dyn TupleStruct, y: &dyn Reflect) -> Option<b
     }
 
     for (x_value, y_value) in x.iter_fields().zip(y.iter_fields()) {
-        let result = x_value.reflect_partial_eq(y_value);
+        let result = x_value.reflect_eq(y_value);
         if result != Some(true) {
             return result;
         }
@@ -1580,13 +1580,13 @@ pub fn tuple_struct_partial_eq(x: &dyn TupleStruct, y: &dyn Reflect) -> Option<b
     Some(true)
 }
 
-/// A function use for implementing [`Reflect::reflect_partial_cmp`].
+/// A function use for implementing [`Reflect::reflect_cmp`].
 ///
 /// # Rules
 ///
 /// 1. If `other` is not `TupleStruct`, return `None`.
 /// 2. If `self.field_len` != `other.field_len`, return `None`.
-/// 3. Call `reflect_partial_cmp` for each fields,
+/// 3. Call `reflect_cmp` for each fields,
 ///    return `None` or `Some(_)` if fields is not `Ordering::Equal` or return `None`.
 /// 4. Return `Some(Ordering::Equal)`.
 ///
@@ -1598,14 +1598,14 @@ pub fn tuple_struct_partial_eq(x: &dyn TupleStruct, y: &dyn Reflect) -> Option<b
 /// impl TupleStruct for Foo{ /* ... */ }
 /// impl Reflect for Foo {
 ///     // ...
-///     fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
-///         tuple_struct_partial_cmp(self, other)
+///     fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+///         tuple_struct_cmp(self, other)
 ///     }
 ///     // ...
 /// }
 /// ```
 #[inline(never)]
-pub fn tuple_struct_partial_cmp(x: &dyn TupleStruct, y: &dyn Reflect) -> Option<Ordering> {
+pub fn tuple_struct_cmp(x: &dyn TupleStruct, y: &dyn Reflect) -> Option<Ordering> {
     let ReflectRef::TupleStruct(y) = y.reflect_ref() else {
         return None;
     };
@@ -1615,7 +1615,7 @@ pub fn tuple_struct_partial_cmp(x: &dyn TupleStruct, y: &dyn Reflect) -> Option<
     }
 
     for (a, b) in x.iter_fields().zip(y.iter_fields()) {
-        match a.reflect_partial_cmp(b) {
+        match a.reflect_cmp(b) {
             None => return None,
             Some(Ordering::Equal) => continue,
             Some(ord) => return Some(ord),

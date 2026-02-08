@@ -1,138 +1,163 @@
-#![expect(unsafe_code, reason = "get unchecked is unsafe")]
+use core::any::TypeId;
+use core::fmt::Debug;
 
-use alloc::boxed::Box;
 use alloc::vec::Vec;
-use vc_utils::hash::SparseHashSet;
-use vc_utils::index::{SparseIndexMap, SparseIndexSet};
 
-use super::BundleId;
-use crate::component::RequiredComponent;
-use crate::component::{ComponentId, Components};
-use crate::storage::Storages;
+use vc_os::sync::Arc;
+use vc_utils::extra::TypeIdMap;
+use vc_utils::hash::HashMap;
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub enum InsertMode {
-    /// Any existing components of a matching type will be overwritten.
-    Replace,
-    /// Any existing components of a matching type will be left unchanged.
-    Keep,
-}
+use crate::bundle::BundleId;
+use crate::component::ComponentId;
 
+// -----------------------------------------------------------------------------
+// BundleInfo
+
+/// Metadata information about a registered component bundle.
+///
+/// A bundle is a collection of components that are typically inserted or
+/// removed together. This struct stores the component composition of a bundle,
+/// including which components are stored densely (in tables) versus sparsely
+/// (in maps).
 pub struct BundleInfo {
-    pub(super) id: BundleId,
-    pub(super) contributed_component_ids: Box<[ComponentId]>,
-    pub(super) required_component_constructors: Box<[RequiredComponent]>,
+    pub(crate) id: BundleId,
+    pub(crate) dense_len: u32,
+    pub(crate) components: Arc<[ComponentId]>,
 }
 
 impl BundleInfo {
-    pub unsafe fn new(
-        bundle_name: &'static str,
-        storages: &mut Storages,
-        components: &Components,
-        mut component_ids: Vec<ComponentId>,
-        id: BundleId,
-    ) -> BundleInfo {
-        #[cold]
-        #[inline(never)]
-        fn duplicated_component(
-            bundle_name: &'static str,
-            components: &Components,
-            component_ids: Vec<ComponentId>,
-        ) -> ! {
-            let mut seen = <SparseHashSet<ComponentId>>::new();
-            let mut dups = Vec::new();
-
-            for id in component_ids {
-                if !seen.insert(id) {
-                    dups.push(id);
-                }
-            }
-            let names = dups
-                .into_iter()
-                .map(|id| components.get_debug_name(id))
-                .collect::<Vec<_>>();
-
-            panic!("Bundle {bundle_name} has duplicate components: {names:?}")
-        }
-
-        let explicit_component_ids = component_ids
-            .iter()
-            .copied()
-            .collect::<SparseIndexSet<ComponentId>>();
-
-        if explicit_component_ids.len() != component_ids.len() {
-            duplicated_component(bundle_name, components, component_ids);
-        }
-
-        let mut depth_first_components = SparseIndexMap::<ComponentId, RequiredComponent>::new();
-        for &component_id in &component_ids {
-            // SAFETY: caller has verified that all ids are valid
-            let info = unsafe { components.get_info_unchecked(component_id) };
-
-            for (&required_id, required_component) in &info.required_components().all {
-                depth_first_components
-                    .entry(required_id)
-                    .or_insert_with(|| required_component.clone());
-            }
-
-            storages.prepare_component(info);
-        }
-
-        let required_components = depth_first_components
-            .into_iter()
-            .filter(|&(required_id, _)| !explicit_component_ids.contains(&required_id))
-            .inspect(|&(required_id, _)| {
-                // SAFETY: These ids came out of the passed `components`, so they must be valid.
-                storages.prepare_component(unsafe { components.get_info_unchecked(required_id) });
-                component_ids.push(required_id);
-            })
-            .map(|(_, required_component)| required_component)
-            .collect::<Box<[RequiredComponent]>>();
-
-        BundleInfo {
-            id,
-            contributed_component_ids: component_ids.into_boxed_slice(),
-            required_component_constructors: required_components,
-        }
-    }
-
-    #[inline]
-    pub const fn id(&self) -> BundleId {
+    /// Returns the unique identifier of this bundle.
+    pub fn id(&self) -> BundleId {
         self.id
     }
 
-    #[inline]
-    pub fn explicit_components_len(&self) -> usize {
-        self.contributed_component_ids.len() - self.required_component_constructors.len()
+    /// Returns the complete list of component types in this bundle.
+    pub fn components(&self) -> &[ComponentId] {
+        &self.components
     }
 
-    #[inline]
-    pub fn contributed_components(&self) -> &[ComponentId] {
-        &self.contributed_component_ids
+    /// Returns the list of dense component types in this bundle.
+    pub fn dense_components(&self) -> &[ComponentId] {
+        &self.components[0..self.dense_len as usize]
     }
 
-    #[inline]
-    pub fn explicit_components(&self) -> &[ComponentId] {
-        &self.contributed_component_ids[0..self.explicit_components_len()]
+    /// Returns the list of sparse component types in this bundle.
+    pub fn sparse_components(&self) -> &[ComponentId] {
+        &self.components[self.dense_len as usize..]
+    }
+}
+
+impl Debug for BundleInfo {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Bundle")
+            .field("id", &self.id)
+            .field("components", &self.components)
+            .finish()
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Bundles
+
+/// A registry for managing all component bundles in the ECS world.
+///
+/// This structure maintains mappings between bundle types and their metadata,
+/// providing efficient lookup by both type ID and component set. It ensures
+/// that identical component sets are assigned the same bundle ID, preventing
+/// duplication and enabling bundle sharing.
+pub struct Bundles {
+    pub(crate) infos: Vec<BundleInfo>,
+    pub(crate) mapper: HashMap<Arc<[ComponentId]>, BundleId>,
+    pub(crate) type_mapper: TypeIdMap<BundleId>,
+}
+
+impl Debug for Bundles {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        Debug::fmt(&self.infos, f)
+    }
+}
+
+impl Bundles {
+    /// Creates a new bundle registry, initializes with
+    /// the empty bundle (no components).
+    pub(crate) fn new() -> Self {
+        let components: Arc<[ComponentId]> = Arc::new([]);
+        let mut val = const {
+            Bundles {
+                infos: Vec::new(),
+                mapper: HashMap::new(),
+                type_mapper: TypeIdMap::new(),
+            }
+        };
+
+        val.mapper.insert(components.clone(), BundleId::EMPTY);
+        val.type_mapper.insert(TypeId::of::<()>(), BundleId::EMPTY);
+        val.infos.push(BundleInfo {
+            id: BundleId::EMPTY,
+            dense_len: 0,
+            components,
+        });
+
+        val
     }
 
-    #[inline]
-    pub fn required_components(&self) -> &[ComponentId] {
-        &self.contributed_component_ids[self.explicit_components_len()..]
+    /// Registers a new bundle type or returns an existing bundle ID.
+    ///
+    /// If a bundle with the exact same component set already exists, returns
+    /// its ID and also maps the new type ID to it. Otherwise, creates a new
+    /// bundle entry with a fresh ID.
+    ///
+    /// # Safety
+    /// - Component IDs must be valid and properly registered, not duplicated.
+    /// - The components in `0..dense_len` must be sorted and storage in dense.
+    /// - The components in `dense_len..` must be sparse, and storage in sparse.
+    pub(crate) unsafe fn register(
+        &mut self,
+        type_id: TypeId,
+        components: &[ComponentId],
+        dense_len: u32,
+    ) -> BundleId {
+        if let Some(&id) = self.mapper.get(components) {
+            self.type_mapper.insert(type_id, id);
+            id
+        } else {
+            let index = self.infos.len();
+            assert!(index < u32::MAX as usize, "too many bundles");
+            let id = BundleId::new(index as u32);
+
+            let arc: Arc<[ComponentId]> = components.into();
+
+            self.infos.push(BundleInfo {
+                id,
+                dense_len,
+                components: arc.clone(),
+            });
+            self.mapper.insert(arc, id);
+            self.type_mapper.insert(type_id, id);
+
+            id
+        }
     }
 
+    /// Returns the bundle ID associated with a type ID, if it exists.
     #[inline]
-    pub fn iter_explicit_components(&self) -> impl Iterator<Item = ComponentId> + Clone + '_ {
-        self.explicit_components().iter().copied()
+    pub fn get_id(&self, id: TypeId) -> Option<BundleId> {
+        self.type_mapper.get(&id).copied()
     }
 
+    /// Returns the bundle information for a given bundle ID, if it exists.
     #[inline]
-    pub fn iter_contributed_components(&self) -> impl Iterator<Item = ComponentId> + Clone + '_ {
-        self.contributed_components().iter().copied()
+    pub fn get(&self, id: BundleId) -> Option<&BundleInfo> {
+        self.infos.get(id.index())
     }
 
+    /// Returns the bundle information for a given bundle ID without bounds checking.
+    ///
+    /// # Safety
+    /// The caller must ensure the bundle ID is valid (within bounds).
     #[inline]
-    pub fn iter_required_components(&self) -> impl Iterator<Item = ComponentId> + '_ {
-        self.required_components().iter().copied()
+    pub unsafe fn get_unchecked(&self, id: BundleId) -> &BundleInfo {
+        debug_assert!(id.index() < self.infos.len());
+        unsafe { self.infos.get_unchecked(id.index()) }
     }
 }

@@ -17,6 +17,7 @@ mod unsafe_deref;
 pub mod extra;
 pub mod hash;
 pub mod index;
+pub mod num;
 
 // -----------------------------------------------------------------------------
 // Top-level exports

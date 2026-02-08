@@ -1,111 +1,173 @@
-use core::error::Error;
-use core::fmt;
-use core::panic::Location;
+use thiserror::Error;
 
-use crate::utils::DebugLocation;
-
-use super::{Entity, EntityGeneration};
+use crate::entity::{Entity, EntityId};
 
 // -----------------------------------------------------------------------------
-// InvalidEntityError
+// Error
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InvalidEntityError {
-    pub entity: Entity,
-    pub current_generation: EntityGeneration,
+#[derive(Debug, Error, Clone, Copy)]
+#[non_exhaustive]
+pub enum FetchError {
+    #[error("Entity with ID {0} was not found during fetch operation")]
+    NotFound(EntityId),
+
+    #[error("Entity {0} has not been spawned yet")]
+    NotSpawned(Entity),
+
+    #[error("Entity mismatch: expected {expect:?}, found {actual:?}")]
+    Mismatch { expect: Entity, actual: Entity },
 }
 
-impl fmt::Display for InvalidEntityError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "The entity with ID {} is invalid; its index now has generation {}.",
-            self.entity, self.current_generation,
-        )
-    }
+#[derive(Debug, Error, Clone, Copy)]
+#[non_exhaustive]
+pub enum MoveError {
+    #[error("Entity with ID {0} was not found during move operation")]
+    NotFound(EntityId),
+
+    #[error("Entity {0} has not been spawned yet")]
+    NotSpawned(Entity),
+
+    #[error("Entity mismatch during move: expected {expect:?}, found {actual:?}")]
+    Mismatch { expect: Entity, actual: Entity },
 }
 
-impl Error for InvalidEntityError {}
+#[derive(Debug, Error, Clone, Copy)]
+#[non_exhaustive]
+pub enum CloneError {
+    #[error("Entity with ID {0} was not found during clone operation")]
+    NotFound(EntityId),
 
-// -----------------------------------------------------------------------------
-// SpawnError
+    #[error("Entity {0} has not been spawned yet")]
+    NotSpawned(Entity),
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[error("Entity mismatch during move: expected {expect:?}, found {actual:?}")]
+    Mismatch { expect: Entity, actual: Entity },
+}
+
+#[derive(Debug, Error, Clone, Copy)]
+#[non_exhaustive]
+pub enum DespawnError {
+    #[error("Entity with ID {0} was not found during despawn operation")]
+    NotFound(EntityId),
+
+    #[error("Entity {0} has not been spawned yet")]
+    NotSpawned(Entity),
+
+    #[error("Entity mismatch during despawn: expected {expect:?}, found {actual:?}")]
+    Mismatch { expect: Entity, actual: Entity },
+}
+
+#[derive(Debug, Error, Clone, Copy)]
+#[non_exhaustive]
 pub enum SpawnError {
-    Invalid(InvalidEntityError),
-    AlreadySpawned,
+    #[error("Entity with ID {0} was not found during spawn operation")]
+    NotFound(EntityId),
+
+    #[error("Entity {0} has already been spawned")]
+    AlreadySpawned(Entity),
+
+    #[error("Entity mismatch during spawn: expected {expect:?}, found {actual:?}")]
+    Mismatch { expect: Entity, actual: Entity },
 }
 
-impl fmt::Display for SpawnError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SpawnError::Invalid(invalid_entity_error) => {
-                write!(f, "Invalid id: {}", invalid_entity_error)
-            }
-            SpawnError::AlreadySpawned => {
-                f.write_str("The entity can not be spawned as it already has a location.")
-            }
-        }
+#[derive(Debug, Error, Clone, Copy)]
+#[non_exhaustive]
+pub enum InsertError {
+    #[error("Entity with ID {0} was not found during component insertion")]
+    NotFound(EntityId),
+
+    #[error("Entity {0} has not been spawned yet")]
+    NotSpawned(Entity),
+
+    #[error("Entity mismatch during component insertion: expected {expect:?}, found {actual:?}")]
+    Mismatch { expect: Entity, actual: Entity },
+}
+
+#[derive(Debug, Error, Clone, Copy)]
+#[non_exhaustive]
+pub enum RemoveError {
+    #[error("Entity with ID {0} was not found during component removal")]
+    NotFound(EntityId),
+
+    #[error("Entity {0} has not been spawned yet")]
+    NotSpawned(Entity),
+
+    #[error("Entity mismatch during component removal: expected {expect:?}, found {actual:?}")]
+    Mismatch { expect: Entity, actual: Entity },
+}
+
+#[derive(Debug, Error, Clone, Copy)]
+#[non_exhaustive]
+pub enum EntityError {
+    #[error("Spawn operation failed: {0}")]
+    Spawn(SpawnError),
+
+    #[error("Despawn operation failed: {0}")]
+    Despawn(DespawnError),
+
+    #[error("Fetch operation failed: {0}")]
+    Fetch(FetchError),
+
+    #[error("Clone operation failed: {0}")]
+    Clone(CloneError),
+
+    #[error("Move operation failed: {0}")]
+    Move(MoveError),
+
+    #[error("Insert operation failed: {0}")]
+    Insert(InsertError),
+
+    #[error("Remove operation failed: {0}")]
+    Remove(RemoveError),
+}
+
+impl EntityError {
+    #[cold]
+    #[inline(never)]
+    pub fn handle_error(&self) -> ! {
+        panic!("{self}");
     }
 }
 
-impl Error for SpawnError {}
-
-// -----------------------------------------------------------------------------
-// ValidEntityButNotSpawnedError
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ValidEntityButNotSpawnedError {
-    pub entity: Entity,
-    pub location: DebugLocation<&'static Location<'static>>,
-}
-
-impl fmt::Display for ValidEntityButNotSpawnedError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "The entity with ID {} is not spawned; ", self.entity)?;
-
-        match self.location.into_option() {
-            Some(location) => write!(f, "its index was last despawned by {location}."),
-            None => write!(f, "enable `track_location` feature for more details."),
-        }
-    }
-}
-
-impl Error for ValidEntityButNotSpawnedError {}
-
-// -----------------------------------------------------------------------------
-// NotSpawnedError
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NotSpawnedError {
-    /// The entity was invalid.
-    Invalid(InvalidEntityError),
-    /// The entity was valid but was not spawned.
-    ValidButNotSpawned(ValidEntityButNotSpawnedError),
-}
-
-impl fmt::Display for NotSpawnedError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            NotSpawnedError::Invalid(invalid_entity) => {
-                writeln!(f, "Entity despawned: {}", invalid_entity)?;
-                f.write_str("Maybe interacting with a despawned entity (or other reason).\n")
-            }
-            NotSpawnedError::ValidButNotSpawned(not_spawned) => {
-                writeln!(f, "Entity not yet spawned: {}", not_spawned)?;
-                f.write_str("Maybe interacting with a not-yet-spawned entity (or other reason).\n")
+macro_rules! impl_from {
+    ($name:ident, $variant:ident) => {
+        impl From<EntityError> for $name {
+            #[inline]
+            fn from(value: EntityError) -> Self {
+                if let EntityError::$variant(ret) = value {
+                    ret
+                } else {
+                    value.handle_error();
+                }
             }
         }
-    }
-}
 
-impl Error for NotSpawnedError {}
-
-impl NotSpawnedError {
-    pub fn entity(&self) -> Entity {
-        match self {
-            NotSpawnedError::Invalid(err) => err.entity,
-            NotSpawnedError::ValidButNotSpawned(err) => err.entity,
+        impl From<$name> for EntityError {
+            #[inline]
+            fn from(value: $name) -> Self {
+                EntityError::$variant(value)
+            }
         }
-    }
+
+        impl $name {
+            #[cold]
+            #[inline(never)]
+            pub fn handle_error(&self) -> ! {
+                panic!("{self}");
+            }
+
+            #[inline]
+            pub fn promote(self) -> EntityError {
+                EntityError::$variant(self)
+            }
+        }
+    };
 }
+
+impl_from!(CloneError, Clone);
+impl_from!(FetchError, Fetch);
+impl_from!(MoveError, Move);
+impl_from!(SpawnError, Spawn);
+impl_from!(DespawnError, Despawn);
+impl_from!(InsertError, Insert);
+impl_from!(RemoveError, Remove);

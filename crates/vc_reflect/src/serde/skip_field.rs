@@ -161,7 +161,7 @@ impl Reflect for SkipSerde {
     crate::reflection::impl_reflect_cast_fn!(Opaque);
 
     /// # Should not be used.
-    fn try_apply(&mut self, _value: &dyn Reflect) -> Result<(), ApplyError> {
+    fn apply(&mut self, _value: &dyn Reflect) -> Result<(), ApplyError> {
         Err(ApplyError::NotSupport {
             type_path: Cow::Borrowed(Self::type_path()),
         })

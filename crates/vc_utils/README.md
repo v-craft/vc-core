@@ -37,6 +37,7 @@
 - `ArrayDeque`: A fixed-capacity circular array stored on the stack.
 - `BlockList`: A block-based singly linked list that optimizes cache locality through data blocking,
   with limited free block reuse.
+- `BloomFilter`: A simple [Bloom-filter](https://en.wikipedia.org/wiki/Bloom_filter).
 - `PagePool`: A simple memory pool supporting insertion but not deletion (except for bulk clearing).
   Manages only memory allocation, not `Drop` semantics for contained elements. Typically used for
   simple data that does not require `Drop`.

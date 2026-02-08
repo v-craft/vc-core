@@ -1,20 +1,7 @@
-#![expect(unsafe_code)]
-
-// -----------------------------------------------------------------------------
-// Modes
-
-mod bundle;
-mod id;
+mod ident;
+mod impls;
 mod info;
-mod status;
 
-// -----------------------------------------------------------------------------
-// Exports
-
-pub use bundle::{Bundle, DynamicBundle};
-pub use id::BundleId;
-pub use info::{BundleInfo, InsertMode};
-pub use status::{BundleComponentStatus, ComponentStatus, SpawnBundleStatus};
-
-// -----------------------------------------------------------------------------
-// Bundle
+pub use ident::BundleId;
+pub use impls::Bundle;
+pub use info::{BundleInfo, Bundles};

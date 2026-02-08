@@ -30,10 +30,10 @@ use crate::ops::ReflectRef;
 ///     - Array: If lengths matched, try to construct all items through [`from_reflect`].
 ///     - Tuple: If field lengths matched, try to construct all fields through [`from_reflect`].
 ///     - TupleStruct: If field lengths matched:
-///         1. If Self support default (`reflect(default)` flag), create a default value call [`try_apply`].
+///         1. If Self support default (`reflect(default)` flag), create a default value call [`apply`].
 ///         2. Otherwise try to construct all fields through [`from_reflect`].
 ///     - Struct:
-///         1. If Self support default (`reflect(default)` flag), create a default value, call [`try_apply`].
+///         1. If Self support default (`reflect(default)` flag), create a default value, call [`apply`].
 ///         2. Try to construct all fields through [`from_reflect`].
 ///
 /// `Struct` is the most special and may allow successful conversion between types
@@ -61,7 +61,7 @@ use crate::ops::ReflectRef;
 /// assert_eq!(a.field_b, true);
 /// ```
 ///
-/// [`try_apply`]: Reflect::try_apply
+/// [`apply`]: Reflect::apply
 /// [`reflect_clone`]: Reflect::reflect_clone
 /// [`from_reflect`]: FromReflect::from_reflect
 /// [`take_from_reflect`]: FromReflect::take_from_reflect

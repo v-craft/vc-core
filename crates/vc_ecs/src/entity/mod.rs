@@ -1,25 +1,15 @@
 // -----------------------------------------------------------------------------
 // Modules
 
-mod id;
-
 mod allocator;
-mod clone;
-mod entities;
-mod entity;
-mod location;
-mod utils;
-
-pub mod error;
+mod error;
+mod ident;
+mod info;
 
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use utils::*;
-
-pub use allocator::EntityAllocator;
-pub use clone::ComponentCloneCtx;
-pub use entities::Entities;
-pub use entity::Entity;
-pub use id::{EntityGeneration, EntityId};
-pub use location::EntityLocation;
+pub use allocator::{AllocEntitiesIter, EntityAllocator, RemoteAllocator};
+pub use error::*;
+pub use ident::{Entity, EntityGeneration, EntityId};
+pub use info::{Entities, EntityLocation, MovedEntity};

@@ -137,12 +137,12 @@ macro_rules! impl_reflect_tuple {
             crate::reflection::impl_reflect_cast_fn!(Tuple);
 
             #[inline]
-            fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-                crate::impls::tuple_try_apply(self, value)
+            fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+                crate::impls::tuple_apply(self, value)
             }
 
             #[inline]
-            fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
+            fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
                 if other.is::<Self>() {
                     Some(true)
                 } else {
@@ -151,7 +151,7 @@ macro_rules! impl_reflect_tuple {
             }
 
             #[inline]
-            fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+            fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
                 if other.is::<Self>() {
                     Some(Ordering::Equal)
                 } else {
@@ -259,18 +259,18 @@ macro_rules! impl_reflect_tuple {
         impl<$name: Reflect + Typed> Reflect for ($name,) {
             crate::reflection::impl_reflect_cast_fn!(Tuple);
             #[inline]
-            fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-                crate::impls::tuple_try_apply(self, value)
+            fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+                crate::impls::tuple_apply(self, value)
             }
 
             #[inline]
-            fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-                crate::impls::tuple_partial_eq(self, other)
+            fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+                crate::impls::tuple_eq(self, other)
             }
 
             #[inline]
-            fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
-                crate::impls::tuple_partial_cmp(self, other)
+            fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+                crate::impls::tuple_cmp(self, other)
             }
 
             fn reflect_clone(&self) -> Result<Box<dyn Reflect>, ReflectCloneError> {
@@ -374,18 +374,18 @@ macro_rules! impl_reflect_tuple {
             crate::reflection::impl_reflect_cast_fn!(Tuple);
 
             #[inline]
-            fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-                crate::impls::tuple_try_apply(self, value)
+            fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+                crate::impls::tuple_apply(self, value)
             }
 
             #[inline]
-            fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-                crate::impls::tuple_partial_eq(self, other)
+            fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+                crate::impls::tuple_eq(self, other)
             }
 
             #[inline]
-            fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
-                crate::impls::tuple_partial_cmp(self, other)
+            fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+                crate::impls::tuple_cmp(self, other)
             }
 
             fn reflect_clone(&self) -> Result<Box<dyn Reflect>, ReflectCloneError> {

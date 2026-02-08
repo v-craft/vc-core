@@ -128,7 +128,7 @@ impl PathAccessor {
     /// [`parse_static`]: crate::access::PathAccessor::parse_static
     pub fn parse<'a>(path: impl AccessPath<'a>) -> Result<Self, ParseError<'a>> {
         let mut vec: FastVec<OffsetAccessor, 8> = FastVec::new();
-        let data = vec.get();
+        let data = vec.data();
 
         for res in path.parse_to_accessor() {
             data.push(res?.into_owned());
@@ -153,7 +153,7 @@ impl PathAccessor {
     /// [`String`]: alloc::string::String
     pub fn parse_static(path: impl AccessPath<'static>) -> Result<Self, ParseError<'static>> {
         let mut vec: FastVec<OffsetAccessor, 8> = FastVec::new();
-        let data = vec.get();
+        let data = vec.data();
 
         for res in path.parse_to_accessor() {
             data.push(res?);
@@ -279,7 +279,7 @@ impl PathAccessor {
     /// ```
     pub fn concat(self, other: PathAccessor) -> Self {
         let mut vec: FastVec<OffsetAccessor, 12> = FastVec::new();
-        let data = vec.get();
+        let data = vec.data();
         data.extend(self.0);
         data.extend(other.0);
         Self(vec.into_boxed_slice())

@@ -8,7 +8,7 @@ use crate::derive::{impl_auto_register, impl_reflect, impl_type_path};
 
 impl_reflect! {
     #[reflect(type_path = "core::sync::atomic::Ordering")]
-    #[reflect(mini, debug, hash, partial_eq)]
+    #[reflect(clone, debug, hash, eq, auto_register)]
     pub enum Ordering {
         Relaxed,
         Release,
@@ -49,7 +49,7 @@ macro_rules! impl_reflect_for_atomic {
                 Ok(Box::new(<$ty>::new(self.load($ordering))))
             }
 
-            fn try_apply(
+            fn apply(
                 &mut self,
                 value: &dyn $crate::Reflect,
             ) -> Result<(), $crate::ops::ApplyError> {

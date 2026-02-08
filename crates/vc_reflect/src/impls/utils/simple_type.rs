@@ -14,10 +14,7 @@ macro_rules! impl_simple_type_reflect {
             Ok(::alloc::boxed::Box::new(Clone::clone(self)))
         }
 
-        fn try_apply(
-            &mut self,
-            value: &dyn $crate::Reflect,
-        ) -> Result<(), $crate::ops::ApplyError> {
+        fn apply(&mut self, value: &dyn $crate::Reflect) -> Result<(), $crate::ops::ApplyError> {
             if let Some(value) = <dyn $crate::Reflect>::downcast_ref::<Self>(value) {
                 Clone::clone_from(self, value);
                 Ok(())
@@ -33,7 +30,7 @@ macro_rules! impl_simple_type_reflect {
             }
         }
 
-        fn reflect_partial_eq(&self, value: &dyn $crate::Reflect) -> Option<bool> {
+        fn reflect_eq(&self, value: &dyn $crate::Reflect) -> Option<bool> {
             if let Some(value) = <dyn $crate::Reflect>::downcast_ref::<Self>(value) {
                 Some(PartialEq::eq(self, value))
             } else {
@@ -41,10 +38,7 @@ macro_rules! impl_simple_type_reflect {
             }
         }
 
-        fn reflect_partial_cmp(
-            &self,
-            value: &dyn $crate::Reflect,
-        ) -> Option<::core::cmp::Ordering> {
+        fn reflect_cmp(&self, value: &dyn $crate::Reflect) -> Option<::core::cmp::Ordering> {
             if let Some(value) = <dyn $crate::Reflect>::downcast_ref::<Self>(value) {
                 Some(Ord::cmp(self, value))
             } else {

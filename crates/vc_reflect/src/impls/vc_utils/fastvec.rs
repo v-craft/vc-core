@@ -90,8 +90,8 @@ impl<T: FromReflect + Typed, const N: usize> Reflect for StackVec<T, N> {
         Box::new(<Self as List>::to_dynamic_list(self))
     }
 
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        crate::impls::list_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::list_apply(self, value)
     }
 
     fn reflect_clone(&self) -> Result<Box<dyn Reflect>, ReflectCloneError> {
@@ -107,12 +107,12 @@ impl<T: FromReflect + Typed, const N: usize> Reflect for StackVec<T, N> {
         Ok(Box::new(vec))
     }
 
-    fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-        crate::impls::list_partial_eq(self, other)
+    fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+        crate::impls::list_eq(self, other)
     }
 
-    fn reflect_partial_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
-        crate::impls::list_partial_cmp(self, value)
+    fn reflect_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
+        crate::impls::list_cmp(self, value)
     }
 
     fn reflect_hash(&self) -> Option<u64> {
@@ -214,8 +214,8 @@ impl<T: FromReflect + Typed, const N: usize> Reflect for AutoVec<T, N> {
         Box::new(<Self as List>::to_dynamic_list(self))
     }
 
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        crate::impls::list_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::list_apply(self, value)
     }
 
     fn reflect_clone(&self) -> Result<Box<dyn Reflect>, ReflectCloneError> {
@@ -231,12 +231,12 @@ impl<T: FromReflect + Typed, const N: usize> Reflect for AutoVec<T, N> {
         Ok(Box::new(vec))
     }
 
-    fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-        crate::impls::list_partial_eq(self, other)
+    fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+        crate::impls::list_eq(self, other)
     }
 
-    fn reflect_partial_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
-        crate::impls::list_partial_cmp(self, value)
+    fn reflect_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
+        crate::impls::list_cmp(self, value)
     }
 
     fn reflect_hash(&self) -> Option<u64> {

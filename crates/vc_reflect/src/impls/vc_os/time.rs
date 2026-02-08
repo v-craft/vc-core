@@ -1,7 +1,8 @@
 crate::derive::impl_reflect_opaque!(::vc_os::time::Instant(
-    mini,
+    clone,
     debug,
     hash,
-    partial_eq,
-    partial_cmp
+    eq,
+    cmp,
+    auto_register,
 ));

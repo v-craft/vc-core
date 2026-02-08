@@ -56,8 +56,8 @@ pub(crate) struct TraitAvailableFlags {
     pub clone: Option<Span>,
     pub debug: Option<Span>,
     pub hash: Option<Span>,
-    pub partial_eq: Option<Span>,
-    pub partial_cmp: Option<Span>,
+    pub eq: Option<Span>,
+    pub cmp: Option<Span>,
     pub serialize: Option<Span>,
     pub deserialize: Option<Span>,
 }

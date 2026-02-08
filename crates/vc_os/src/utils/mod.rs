@@ -28,16 +28,12 @@ mod parallel;
 mod spin_lock;
 
 // -----------------------------------------------------------------------------
-// Internal API
-
-pub(crate) use backoff::Backoff;
-
-// -----------------------------------------------------------------------------
 // Exports
 
 pub use array_queue::ArrayQueue;
+pub use backoff::Backoff;
 pub use cache_paded::CachePadded;
-pub use futex::{Futex, FutexGuard};
+pub use futex::Futex;
 pub use list_queue::ListQueue;
 pub use once_flag::OnceFlag;
 pub use parallel::Parallel;

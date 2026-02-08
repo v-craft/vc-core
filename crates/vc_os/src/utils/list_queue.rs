@@ -249,7 +249,7 @@ impl<T> RefUnwindSafe for ListQueue<T> {}
 
 impl<T> Drop for ListQueue<T> {
     fn drop(&mut self) {
-        let mut ptr = self.head_id.lock().0;
+        let mut ptr = self.head_id.get_mut().0;
         while !ptr.is_null() {
             unsafe {
                 let boxed = Box::from_raw(ptr);

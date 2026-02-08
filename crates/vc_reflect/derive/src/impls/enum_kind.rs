@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::Ident;
 
-use super::{get_auto_register_impl, get_common_try_apply_tokens};
+use super::{get_auto_register_impl, get_common_apply_tokens};
 use super::{get_common_from_reflect_tokens, impl_trait_get_type_meta};
 use super::{impl_trait_reflect, impl_trait_type_path, impl_trait_typed};
 
@@ -35,22 +35,22 @@ pub(crate) fn impl_enum(info: &ReflectEnum) -> TokenStream {
 
     // trait: Reflect
     let reflect_trait_tokens = if meta.attrs().impl_switchs.impl_reflect {
-        let try_apply_tokens = get_enum_try_apply_impl(info);
+        let apply_tokens = get_enum_apply_impl(info);
         let to_dynamic_tokens = get_enum_to_dynamic_impl(meta);
         let reflect_clone_tokens = get_enum_clone_impl(info);
-        let reflect_partial_eq_tokens = get_enum_partial_eq_impl(meta);
-        let reflect_partial_cmp_tokens = get_enum_partial_cmp_impl(meta);
+        let reflect_eq_tokens = get_enum_eq_impl(meta);
+        let reflect_cmp_tokens = get_enum_cmp_impl(meta);
         let reflect_hash_tokens = get_enum_hash_impl(meta);
         let reflect_debug_tokens = get_enum_debug_impl(meta);
 
         impl_trait_reflect(
             meta,
             quote!(Enum),
-            try_apply_tokens,
+            apply_tokens,
             to_dynamic_tokens,
             reflect_clone_tokens,
-            reflect_partial_eq_tokens,
-            reflect_partial_cmp_tokens,
+            reflect_eq_tokens,
+            reflect_cmp_tokens,
             reflect_hash_tokens,
             reflect_debug_tokens,
             true,
@@ -77,6 +77,8 @@ pub(crate) fn impl_enum(info: &ReflectEnum) -> TokenStream {
     let auto_register_tokens = get_auto_register_impl(meta);
 
     quote! {
+        #auto_register_tokens
+
         #type_path_trait_tokens
 
         #typed_trait_tokens
@@ -88,8 +90,6 @@ pub(crate) fn impl_enum(info: &ReflectEnum) -> TokenStream {
         #get_type_meta_tokens
 
         #from_reflect_trait_tokens
-
-        #auto_register_tokens
     }
 }
 
@@ -299,8 +299,8 @@ fn impl_trait_enum(info: &ReflectEnum) -> TokenStream {
     }
 }
 
-/// Generate `Reflect::try_apply` implementation tokens.
-fn get_enum_try_apply_impl(info: &ReflectEnum) -> TokenStream {
+/// Generate `Reflect::apply` implementation tokens.
+fn get_enum_apply_impl(info: &ReflectEnum) -> TokenStream {
     use crate::path::fp::ResultFP;
 
     let meta = info.meta();
@@ -310,14 +310,14 @@ fn get_enum_try_apply_impl(info: &ReflectEnum) -> TokenStream {
     let apply_error_ = crate::path::apply_error_(vc_reflect_path);
     let macro_utils_ = crate::path::macro_utils_(vc_reflect_path);
     let from_reflect_ = crate::path::from_reflect_(vc_reflect_path);
-    let enum_try_apply_ = crate::path::enum_try_apply_(vc_reflect_path);
+    let enum_apply_ = crate::path::enum_apply_(vc_reflect_path);
 
     let input_ = Ident::new("__input__", Span::call_site());
 
-    let clone_tokens = get_common_try_apply_tokens(meta, &input_);
+    let clone_tokens = get_common_apply_tokens(meta, &input_);
 
     let from_reflect_tokens = if meta.attrs().impl_switchs.impl_from_reflect {
-        // `try_apply` different enum variants is necessary to use `FromReflect` trait, when `clone` is not available,
+        // `apply` different enum variants is necessary to use `FromReflect` trait, when `clone` is not available,
         //
         // If choose to apply field by field, the code will be very cumbersome, and each field needs to support 'FromReflect'.
         //
@@ -334,10 +334,10 @@ fn get_enum_try_apply_impl(info: &ReflectEnum) -> TokenStream {
     };
 
     quote! {
-        fn try_apply(&mut self, #input_: &dyn #reflect_) -> #ResultFP<(), #apply_error_>  {
+        fn apply(&mut self, #input_: &dyn #reflect_) -> #ResultFP<(), #apply_error_>  {
             #clone_tokens
 
-            if let Some(#input_) = #enum_try_apply_(self, #input_)? {
+            if let Some(#input_) = #enum_apply_(self, #input_)? {
                 #from_reflect_tokens
 
                 return #ResultFP::Err(
@@ -456,18 +456,18 @@ fn get_enum_clone_impl(info: &ReflectEnum) -> TokenStream {
     }
 }
 
-/// Generate `Reflect::reflect_partial_eq` implementation tokens.
-fn get_enum_partial_eq_impl(meta: &ReflectMeta) -> TokenStream {
+/// Generate `Reflect::reflect_eq` implementation tokens.
+fn get_enum_eq_impl(meta: &ReflectMeta) -> TokenStream {
     use crate::path::fp::{OptionFP, PartialEqFP};
     let vc_reflect_path = meta.vc_reflect_path();
     let reflect_ = crate::path::reflect_(vc_reflect_path);
 
-    if let Some(span) = meta.attrs().avail_traits.partial_eq {
-        let reflect_partial_eq = Ident::new("reflect_partial_eq", span);
+    if let Some(span) = meta.attrs().avail_traits.eq {
+        let reflect_eq = Ident::new("reflect_eq", span);
 
         quote! {
             #[inline]
-            fn #reflect_partial_eq(&self, __other__: &dyn #reflect_) -> #OptionFP<bool> {
+            fn #reflect_eq(&self, __other__: &dyn #reflect_) -> #OptionFP<bool> {
                 if let #OptionFP::Some(__value__) = <dyn #reflect_>::downcast_ref::<Self>(__other__) {
                     return #OptionFP::Some( #PartialEqFP::eq(self, __value__) );
                 }
@@ -475,28 +475,28 @@ fn get_enum_partial_eq_impl(meta: &ReflectMeta) -> TokenStream {
             }
         }
     } else {
-        let enum_partial_eq_ = crate::path::enum_partial_eq_(vc_reflect_path);
+        let enum_eq_ = crate::path::enum_eq_(vc_reflect_path);
         quote! {
             #[inline]
-            fn reflect_partial_eq(&self, __other__: &dyn #reflect_) -> #OptionFP<bool> {
-                #enum_partial_eq_(self, __other__)
+            fn reflect_eq(&self, __other__: &dyn #reflect_) -> #OptionFP<bool> {
+                #enum_eq_(self, __other__)
             }
         }
     }
 }
 
-/// Generate `Reflect::reflect_partial_cmp` implementation tokens.
-fn get_enum_partial_cmp_impl(meta: &ReflectMeta) -> TokenStream {
+/// Generate `Reflect::reflect_cmp` implementation tokens.
+fn get_enum_cmp_impl(meta: &ReflectMeta) -> TokenStream {
     use crate::path::fp::{OptionFP, PartialOrdFP};
     let vc_reflect_path = meta.vc_reflect_path();
     let reflect_ = crate::path::reflect_(vc_reflect_path);
 
-    if let Some(span) = meta.attrs().avail_traits.partial_cmp {
-        let reflect_partial_cmp = Ident::new("reflect_partial_cmp", span);
+    if let Some(span) = meta.attrs().avail_traits.cmp {
+        let reflect_cmp = Ident::new("reflect_cmp", span);
 
         quote! {
             #[inline]
-            fn #reflect_partial_cmp(&self, __other__: &dyn #reflect_) -> #OptionFP<::core::cmp::Ordering> {
+            fn #reflect_cmp(&self, __other__: &dyn #reflect_) -> #OptionFP<::core::cmp::Ordering> {
                 if let #OptionFP::Some(__value__) = <dyn #reflect_>::downcast_ref::<Self>(__other__) {
                     return #PartialOrdFP::partial_cmp(self, __value__);
                 }
@@ -504,11 +504,11 @@ fn get_enum_partial_cmp_impl(meta: &ReflectMeta) -> TokenStream {
             }
         }
     } else {
-        let enum_partial_cmp_ = crate::path::enum_partial_cmp_(vc_reflect_path);
+        let enum_cmp_ = crate::path::enum_cmp_(vc_reflect_path);
         quote! {
             #[inline]
-            fn reflect_partial_cmp(&self, __other__: &dyn #reflect_) -> #OptionFP<::core::cmp::Ordering> {
-                #enum_partial_cmp_(self, __other__)
+            fn reflect_cmp(&self, __other__: &dyn #reflect_) -> #OptionFP<::core::cmp::Ordering> {
+                #enum_cmp_(self, __other__)
             }
         }
     }

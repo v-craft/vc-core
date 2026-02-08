@@ -62,18 +62,18 @@ where
     }
 
     #[inline]
-    fn reflect_partial_eq(&self, value: &dyn Reflect) -> Option<bool> {
-        crate::impls::set_partial_eq(self, value)
+    fn reflect_eq(&self, value: &dyn Reflect) -> Option<bool> {
+        crate::impls::set_eq(self, value)
     }
 
     #[inline]
-    fn reflect_partial_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
-        crate::impls::set_partial_cmp(self, value)
+    fn reflect_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
+        crate::impls::set_cmp(self, value)
     }
 
     #[inline]
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        crate::impls::set_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::set_apply(self, value)
     }
 
     #[inline]
@@ -253,18 +253,18 @@ where
     }
 
     #[inline]
-    fn reflect_partial_eq(&self, value: &dyn Reflect) -> Option<bool> {
-        crate::impls::map_partial_eq(self, value)
+    fn reflect_eq(&self, value: &dyn Reflect) -> Option<bool> {
+        crate::impls::map_eq(self, value)
     }
 
     #[inline]
-    fn reflect_partial_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
-        crate::impls::map_partial_cmp(self, value)
+    fn reflect_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
+        crate::impls::map_cmp(self, value)
     }
 
     #[inline]
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        crate::impls::map_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::map_apply(self, value)
     }
 
     #[inline]
@@ -457,18 +457,18 @@ where
     }
 
     #[inline]
-    fn reflect_partial_eq(&self, value: &dyn Reflect) -> Option<bool> {
-        crate::impls::set_partial_eq(self, value)
+    fn reflect_eq(&self, value: &dyn Reflect) -> Option<bool> {
+        crate::impls::set_eq(self, value)
     }
 
     #[inline]
-    fn reflect_partial_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
-        crate::impls::set_partial_cmp(self, value)
+    fn reflect_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
+        crate::impls::set_cmp(self, value)
     }
 
     #[inline]
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        crate::impls::set_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::set_apply(self, value)
     }
 
     #[inline]
@@ -642,18 +642,18 @@ where
     }
 
     #[inline]
-    fn reflect_partial_eq(&self, value: &dyn Reflect) -> Option<bool> {
-        crate::impls::map_partial_eq(self, value)
+    fn reflect_eq(&self, value: &dyn Reflect) -> Option<bool> {
+        crate::impls::map_eq(self, value)
     }
 
     #[inline]
-    fn reflect_partial_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
-        crate::impls::map_partial_cmp(self, value)
+    fn reflect_cmp(&self, value: &dyn Reflect) -> Option<::core::cmp::Ordering> {
+        crate::impls::map_cmp(self, value)
     }
 
     #[inline]
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        crate::impls::map_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::map_apply(self, value)
     }
 
     #[inline]

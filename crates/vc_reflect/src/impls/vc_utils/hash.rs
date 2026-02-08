@@ -11,7 +11,7 @@ impl_type_path!(::vc_utils::hash::SparseHashState);
 
 impl_reflect_opaque!(
     ::vc_utils::hash::Hashed<V: Eq + PartialEq + Clone>
-    (clone, hash, partial_eq)
+    (clone, hash, eq)
 );
 
 impl_type_path!(

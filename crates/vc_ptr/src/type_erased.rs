@@ -16,6 +16,12 @@ macro_rules! impl_ptr {
         }
 
         impl $ptr<'_> {
+            /// Gets the underlying pointer, erasing the associated lifetime.
+            #[inline(always)]
+            pub const fn into_inner(self) -> NonNull<u8> {
+                self.0
+            }
+
             /// Check if the pointer is aligned to type `T`.
             ///
             /// This function is not const because the address of pointer
@@ -245,6 +251,13 @@ impl<'a, T: ?Sized> From<&'a mut T> for Ptr<'a> {
     #[inline(always)]
     fn from(val: &'a mut T) -> Self {
         Self::from_mut(val)
+    }
+}
+
+impl<'a> From<PtrMut<'a>> for Ptr<'a> {
+    #[inline(always)]
+    fn from(val: PtrMut<'a>) -> Self {
+        Ptr(val.0, PhantomData)
     }
 }
 
@@ -620,6 +633,29 @@ impl<'a> OwningPtr<'a> {
         Self(NonNull::from_mut(r).cast(), PhantomData)
     }
 
+    /// Returns an optional drop function for type `T`.
+    ///
+    /// If `T` implements `Drop` or contains fields that need dropping,
+    /// this returns `Some` with a function that can drop a `T` from
+    /// an [`OwningPtr`]. Otherwise, it returns `None`.
+    #[inline(always)]
+    pub const fn drop_fn_of<T>() -> Option<unsafe fn(OwningPtr<'_>)> {
+        /// # Safety
+        /// Ensure by caller.
+        unsafe fn drop_fn<T>(ptr: OwningPtr<'_>) {
+            ptr.debug_assert_aligned::<T>();
+            unsafe {
+                ptr.drop_as::<T>();
+            }
+        }
+
+        if ::core::mem::needs_drop::<T>() {
+            Some(drop_fn::<T>)
+        } else {
+            None
+        }
+    }
+
     /// Consumes the [`OwningPtr`] to drop the underlying data of type `T`.
     ///
     /// The caller must ensure the pointer is suitable for `T`.
@@ -648,7 +684,7 @@ impl<'a> OwningPtr<'a> {
     #[inline(always)]
     pub unsafe fn drop_as<T>(self) {
         // SAFETY: see function docs.
-        unsafe { ptr::drop_in_place(self.0.as_ptr().cast::<T>()) }
+        unsafe { ptr::drop_in_place::<T>(self.0.as_ptr().cast::<T>()) }
     }
 
     /// Consumes the [`OwningPtr`] to obtain ownership of the underlying data of type `T`.
@@ -679,17 +715,68 @@ impl<'a> OwningPtr<'a> {
     #[inline(always)]
     pub const unsafe fn read<T>(self) -> T {
         // SAFETY: see function docs.
-        unsafe { ptr::read(self.0.as_ptr().cast::<T>()) }
+        unsafe { ptr::read(self.0.as_ptr() as *mut T) }
     }
 
-    /// Consumes the [`OwningPtr`] to obtain ownership of the underlying data of type `T`.
+    /// Writes `value` into the memory pointed to by this pointer.
+    ///
+    /// This uses `ptr::write`, so it does not read or drop any existing value.
     ///
     /// # Safety
-    /// - `T` must be the compatible pointee type for this [`OwningPtr`].
+    /// - `self` must be valid for writes of a `T`.
+    /// - The pointer must be properly aligned for `T`.
+    /// - The pointee type must be `T`.
+    /// - The caller must ensure no double-drop or leak of any overwritten value.
     #[inline(always)]
-    pub const unsafe fn read_unaligned<T>(self) -> T {
-        // SAFETY: see function docs.
-        unsafe { ptr::read_unaligned(self.0.as_ptr().cast::<T>()) }
+    pub const unsafe fn write<T>(&mut self, value: T) {
+        unsafe {
+            ptr::write(self.0.as_ptr() as *mut T, value);
+        }
+    }
+
+    /// Copies `count` bytes from `src` into the memory pointed to by this pointer.
+    ///
+    /// This is equivalent to `ptr::copy_nonoverlapping`; the regions must not overlap.
+    ///
+    /// # Safety
+    /// - `self` must be valid for writes of `count` bytes.
+    /// - `src` must be valid for reads of `count` bytes.
+    /// - The source and destination regions must not overlap.
+    /// - The caller must ensure the written bytes are later interpreted with a
+    ///   compatible type and alignment.
+    #[inline(always)]
+    pub const unsafe fn write_bytes(&mut self, src: *const u8, count: usize) {
+        unsafe {
+            ptr::copy_nonoverlapping::<u8>(src, self.0.as_ptr(), count);
+        }
+    }
+
+    /// Creates an `OwningPtr` to a field at `offset` bytes from this pointer.
+    ///
+    /// The offset is in raw bytes because the pointer is type-erased.
+    ///
+    /// # Safety
+    /// - `offset` must keep the pointer within the same allocated object.
+    /// - The resulting pointer must be valid and properly aligned for its pointee.
+    /// - The caller must ensure the pointee type at the offset is correct.
+    /// - The resulting pointer must not outlive the original allocation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ptr::OwningPtr;
+    /// struct Foo {
+    ///     id: u32,
+    ///     data: [u8; 10],
+    /// }
+    ///
+    /// OwningPtr::make(Foo { id: 1, data: [0; 10] }, |mut ptr| unsafe {
+    ///     ptr.take_field(core::mem::offset_of!(Foo, data)).read::<[u8; 10]>()
+    /// });
+    /// ```
+    #[inline(always)]
+    pub const unsafe fn take_field(&mut self, offset: usize) -> OwningPtr<'_> {
+        unsafe { OwningPtr(self.0.byte_add(offset), PhantomData) }
     }
 
     /// Consumes a value and creates an [`OwningPtr`] to it
@@ -697,6 +784,8 @@ impl<'a> OwningPtr<'a> {
     ///
     /// This function cannot be used to create and return [`OwningPtr`],
     /// because the pointee value will be consumed within the function.
+    ///
+    /// We use inlining to avoid copying large data.
     ///
     /// # Safety
     /// - `OwningPtr` should be consumed in function `f`.
@@ -713,7 +802,7 @@ impl<'a> OwningPtr<'a> {
     /// });
     /// assert_eq!(ret, "123X");
     /// ```
-    #[inline]
+    #[inline(always)]
     pub fn make<T, F: FnOnce(OwningPtr<'_>) -> R, R>(val: T, f: F) -> R {
         let mut val = ManuallyDrop::new(val);
         f(OwningPtr(
@@ -792,4 +881,21 @@ impl<'a> OwningPtr<'a> {
         // SAFETY: Type correct, ptr aligned and pointee valid object.
         unsafe { &mut *self.0.as_ptr().cast::<T>() }
     }
+}
+
+/// An auxiliary macro that wraps the target value with
+/// `ManuallyDrop` and uses `OwningPtr` to point to it.
+///
+/// This can be used as a replacement for `make` to reduce
+/// compilation overhead.
+#[macro_export]
+macro_rules! into_owning {
+    ($data:ident) => {
+        let mut $data = ::core::mem::ManuallyDrop::new($data);
+        let $data = $crate::OwningPtr::from_value(&mut $data);
+    };
+    ($data:ident as $ptr:ident) => {
+        let mut $data = ::core::mem::ManuallyDrop::new($data);
+        let $ptr = $crate::OwningPtr::from_value(&mut $data);
+    };
 }

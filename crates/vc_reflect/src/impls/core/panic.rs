@@ -33,7 +33,7 @@ impl Typed for &'static Location<'static> {
 impl Reflect for &'static Location<'static> {
     crate::reflection::impl_reflect_cast_fn!(Opaque);
 
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
         if let Some(value) = value.downcast_ref::<Self>() {
             self.clone_from(value);
             Ok(())
@@ -53,7 +53,7 @@ impl Reflect for &'static Location<'static> {
         Ok(Box::new(*self))
     }
 
-    fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
+    fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
         if let Some(other) = other.downcast_ref::<Self>() {
             Some(PartialEq::eq(self, other))
         } else {
@@ -61,7 +61,7 @@ impl Reflect for &'static Location<'static> {
         }
     }
 
-    fn reflect_partial_cmp(&self, other: &dyn Reflect) -> Option<core::cmp::Ordering> {
+    fn reflect_cmp(&self, other: &dyn Reflect) -> Option<core::cmp::Ordering> {
         other
             .downcast_ref::<Self>()
             .map(|other| Ord::cmp(self, other))

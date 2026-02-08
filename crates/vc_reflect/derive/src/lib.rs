@@ -75,14 +75,19 @@ mod utils;
 ///
 /// ### Opaque Types
 ///
-/// Unit structs like `struct A;` are treated as `Opaque`. They contain no internal data, allowing the macro to automatically generate methods like `reflect_clone`, `reflect_partial_eq`, etc.
+/// Unit structs like `struct A;` are treated as `Opaque`. They contain no internal data,
+/// allowing the macro to automatically generate methods like `reflect_clone`, `reflect_eq`, etc.
 ///
 /// ```rust, ignore
 /// #[derive(Reflect)]
 /// struct MyFlag;
 /// ```
 ///
-/// The `Opaque` attribute forces a type to be treated as `Opaque` instead of `Struct`, `Enum`, or `TupleStruct`. When you mark a type as `Opaque`, the macro will not inspect its internal fields; consequently, methods such as `reflect_clone` or `reflect_hash` that depend on field content cannot be generated automatically. Therefore, `Opaque` types must implement `Clone` and be marked with the `clone` flag when applicable:
+/// The `Opaque` attribute forces a type to be treated as `Opaque` instead of `Struct`, `Enum`, or `TupleStruct`.
+///
+/// When you mark a type as `Opaque`, the macro will not inspect its internal fields; consequently, methods such
+/// as `reflect_clone` or `reflect_hash` that depend on field content cannot be generated automatically. Therefore,
+/// `Opaque` types must implement `Clone` and be marked with the `clone` flag when applicable:
 ///
 /// ```rust, ignore
 /// #[derive(Reflect)]
@@ -96,7 +101,10 @@ mod utils;
 ///
 /// ## Optimization with Standard Traits
 ///
-/// If a type implements standard traits like `Hash` or `Clone`, the reflection implementations can be simplified (often resulting in significant performance improvements). The macro cannot detect this automatically, so it does not assume their availability by default. Use attributes to declare available traits so the macro can optimize accordingly.
+/// If a type implements standard traits like `Hash` or `Clone`, the reflection implementations can be simplified
+/// (often resulting in significant performance improvements). The macro cannot detect this automatically, so it does
+/// not assume their availability by default. Use attributes to declare available traits so the macro can optimize
+/// accordingly.
 ///
 /// As noted, `Opaque` types require `Clone` support, so they must implement it and be marked with the `clone` flag.
 ///
@@ -112,14 +120,13 @@ mod utils;
 /// - `clone`: Standard `Clone`
 /// - `default`: Standard `Default`
 /// - `hash`: Standard `Hash`
-/// - `partial_eq`: Standard `PartialEq`
-/// - `partial_cmp`: Standard `PartialOrd`
+/// - `eq`: Standard `PartialEq`
+/// - `cmp`: Standard `PartialOrd`
 /// - `serialize`: `serde::Serialize`
 /// - `deserialize`: `serde::Deserialize`
 ///
-/// Three convenience bundles enable multiple flags simultaneously:
+/// Two convenience bundles enable multiple flags simultaneously:
 ///
-/// - `mini`: `clone` + `auto_register`
 /// - `serde`: `serialize` + `deserialize` + `auto_register`
 /// - `full`: All seven traits listed above + `auto_register`
 ///
@@ -127,7 +134,8 @@ mod utils;
 ///
 /// ## Auto Registration
 ///
-/// Unlike Bevy, automatic type registration is disabled by default (even when the `auto_register` feature is enabled). You must explicitly enable it using the `auto_register` attribute.
+/// Unlike Bevy, automatic type registration is disabled by default (even when the `auto_register` feature is enabled).
+/// You must explicitly enable it using the `auto_register` attribute.
 ///
 /// ### Example
 ///
@@ -145,14 +153,17 @@ mod utils;
 ///
 /// ## Custom GetTypeMeta
 ///
-/// By default, a type's `get_type_meta` includes at least `TypeTraitFromPtr`. The following type traits may also be included based on conditions:
+/// By default, a type's `get_type_meta` includes at least `TypeTraitFromPtr`. The following type traits may also be
+/// included based on conditions:
 ///
-/// - `TypeTraitFromReflect`: If the default `FromReflect` implementation is enabled (not disabled with `#[reflect(FromReflect = false)]`).
+/// - `TypeTraitFromReflect`: If the default `FromReflect` implementation is enabled (not disabled with
+///   `#[reflect(FromReflect = false)]`).
 /// - `TypeTraitDefault`: If `Default` is marked as available via `#[reflect(default)]`.
 /// - `TypeTraitSerialize`: If `serde::Serialize` is marked as available via `#[reflect(serialize)]`.
 /// - `TypeTraitDeserialize`: If `serde::Deserialize` is marked as available via `#[reflect(deserialize)]`.
 ///
-/// You can also manually add type traits using `#[reflect(type_trait = (...))]`. These will be automatically inserted into `get_type_meta`.
+/// You can also manually add type traits using `#[reflect(type_trait = (...))]`. These will be automatically
+/// inserted into `get_type_meta`.
 ///
 /// ### Example
 ///
@@ -257,7 +268,8 @@ mod utils;
 /// - `field_len` will be reduced.
 /// - All reflection APIs will be unable to access this field, as if it doesn't exist.
 ///
-/// Due to missing fields, `reflect_clone` may not provide a default implementation unless the type itself supports `Default` or `Clone`. `FromReflect` faces similar limitations.
+/// Due to missing fields, `reflect_clone` may not provide a default implementation unless the type itself supports
+/// `Default` or `Clone`. `FromReflect` faces similar limitations.
 ///
 /// This attribute can only be used on fields.
 #[proc_macro_derive(Reflect, attributes(reflect))]

@@ -1,48 +1,17 @@
-// -----------------------------------------------------------------------------
-// Modules
-
-mod index;
-mod resource;
+mod column;
+mod dense;
+mod global;
+mod impls;
 mod sparse;
-mod table;
 mod utils;
 
-// -----------------------------------------------------------------------------
-// Internal API
+use utils::{AbortOnPanic, VecRemoveExt};
 
-use utils::{AbortOnDrop, BlobArray, VecCopyRemove, VecSwapRemove};
+pub use column::Column;
 
-// -----------------------------------------------------------------------------
-// Exports
-
-pub use index::{StorageIndex, StorageType};
-pub use resource::{NoSendResourceData, NoSendResources, ResourceData, Resources};
-pub use sparse::SparseIndex;
-pub use sparse::{FixedSparseArray, SparseArray};
-pub use sparse::{SparseComponent, SparseSet, SparseSets};
-pub use table::{Table, TableBuilder, TableId, TableMoveResult, TableRow, Tables};
-pub use utils::Column;
-
-// -----------------------------------------------------------------------------
-// Inline-Exports
-
-pub struct Storages {
-    pub sparse_sets: SparseSets,
-    pub tables: Tables,
-    pub resources: Resources,
-    pub non_send_resources: NoSendResources,
-}
-
-impl Storages {
-    #[inline]
-    pub fn prepare_component(&mut self, component: &crate::component::ComponentInfo) {
-        match component.storage_type() {
-            StorageType::SparseSet => {
-                self.sparse_sets.prepare_component(component);
-            }
-            StorageType::Table => {
-                // table needs no preparation
-            }
-        }
-    }
-}
+pub use dense::{Table, TableMoveResult, Tables};
+pub use dense::{TableCol, TableId, TableRow};
+pub use global::{ResData, ResSet};
+pub use impls::Storages;
+pub use sparse::{Map, Maps};
+pub use sparse::{MapId, MapRow};

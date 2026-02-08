@@ -1,5 +1,3 @@
-#![expect(unsafe_code, reason = "`unwrap_unchecked` is unsafe.")]
-
 /// A debug checked version of [`Option::unwrap_unchecked`].
 ///
 /// Will panic in debug modes if unwrapping a `None` or `Err` value in debug mode,

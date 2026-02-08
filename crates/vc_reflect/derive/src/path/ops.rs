@@ -58,9 +58,9 @@ pub(crate) fn struct_field_iter_(vc_reflect_path: &syn::Path) -> TokenStream {
 }
 
 #[inline]
-pub(crate) fn struct_try_apply_(vc_reflect_path: &syn::Path) -> TokenStream {
+pub(crate) fn struct_apply_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::impls::struct_try_apply
+        #vc_reflect_path::impls::struct_apply
     }
 }
 
@@ -79,16 +79,16 @@ pub(crate) fn struct_debug_(vc_reflect_path: &syn::Path) -> TokenStream {
 }
 
 #[inline]
-pub(crate) fn struct_partial_eq_(vc_reflect_path: &syn::Path) -> TokenStream {
+pub(crate) fn struct_eq_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::impls::struct_partial_eq
+        #vc_reflect_path::impls::struct_eq
     }
 }
 
 #[inline]
-pub(crate) fn struct_partial_cmp_(vc_reflect_path: &syn::Path) -> TokenStream {
+pub(crate) fn struct_cmp_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::impls::struct_partial_cmp
+        #vc_reflect_path::impls::struct_cmp
     }
 }
 
@@ -114,9 +114,9 @@ pub(crate) fn tuple_struct_field_iter_(vc_reflect_path: &syn::Path) -> TokenStre
 }
 
 #[inline]
-pub(crate) fn tuple_struct_try_apply_(vc_reflect_path: &syn::Path) -> TokenStream {
+pub(crate) fn tuple_struct_apply_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::impls::tuple_struct_try_apply
+        #vc_reflect_path::impls::tuple_struct_apply
     }
 }
 
@@ -135,16 +135,16 @@ pub(crate) fn tuple_struct_debug_(vc_reflect_path: &syn::Path) -> TokenStream {
 }
 
 #[inline]
-pub(crate) fn tuple_struct_partial_eq_(vc_reflect_path: &syn::Path) -> TokenStream {
+pub(crate) fn tuple_struct_eq_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::impls::tuple_struct_partial_eq
+        #vc_reflect_path::impls::tuple_struct_eq
     }
 }
 
 #[inline]
-pub(crate) fn tuple_struct_partial_cmp_(vc_reflect_path: &syn::Path) -> TokenStream {
+pub(crate) fn tuple_struct_cmp_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::impls::tuple_struct_partial_cmp
+        #vc_reflect_path::impls::tuple_struct_cmp
     }
 }
 
@@ -163,9 +163,9 @@ pub(crate) fn enum_(vc_reflect_path: &syn::Path) -> TokenStream {
 }
 
 #[inline]
-pub(crate) fn enum_try_apply_(vc_reflect_path: &syn::Path) -> TokenStream {
+pub(crate) fn enum_apply_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::impls::enum_try_apply
+        #vc_reflect_path::impls::enum_apply
     }
 }
 
@@ -177,16 +177,16 @@ pub(crate) fn enum_debug_(vc_reflect_path: &syn::Path) -> TokenStream {
 }
 
 #[inline]
-pub(crate) fn enum_partial_eq_(vc_reflect_path: &syn::Path) -> TokenStream {
+pub(crate) fn enum_eq_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::impls::enum_partial_eq
+        #vc_reflect_path::impls::enum_eq
     }
 }
 
 #[inline]
-pub(crate) fn enum_partial_cmp_(vc_reflect_path: &syn::Path) -> TokenStream {
+pub(crate) fn enum_cmp_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::impls::enum_partial_cmp
+        #vc_reflect_path::impls::enum_cmp
     }
 }
 

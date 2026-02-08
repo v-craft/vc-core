@@ -26,22 +26,22 @@ pub(crate) fn impl_opaque(meta: &ReflectMeta) -> TokenStream {
 
     // trait: Reflect
     let reflect_trait_tokens = if meta.attrs().impl_switchs.impl_reflect {
-        let try_apply_tokens = get_opaque_try_apply_impl(meta);
+        let apply_tokens = get_opaque_apply_impl(meta);
         let to_dynamic_tokens = get_opaque_to_dynamic_impl(meta);
         let reflect_clone_tokens = get_opaque_clone_impl(meta);
-        let reflect_partial_eq_tokens = get_opaque_partial_eq_impl(meta);
-        let reflect_partial_cmp_tokens = get_opaque_partial_cmp_impl(meta);
+        let reflect_eq_tokens = get_opaque_eq_impl(meta);
+        let reflect_cmp_tokens = get_opaque_cmp_impl(meta);
         let reflect_hash_tokens = get_opaque_hash_impl(meta);
         let reflect_debug_tokens = get_opaque_debug_impl(meta);
 
         impl_trait_reflect(
             meta,
             quote!(Opaque),
-            try_apply_tokens,
+            apply_tokens,
             to_dynamic_tokens,
             reflect_clone_tokens,
-            reflect_partial_eq_tokens,
-            reflect_partial_cmp_tokens,
+            reflect_eq_tokens,
+            reflect_cmp_tokens,
             reflect_hash_tokens,
             reflect_debug_tokens,
             false,
@@ -68,6 +68,8 @@ pub(crate) fn impl_opaque(meta: &ReflectMeta) -> TokenStream {
     let auto_register_tokens = get_auto_register_impl(meta);
 
     quote! {
+        #auto_register_tokens
+
         #type_path_trait_tokens
 
         #typed_trait_tokens
@@ -77,13 +79,11 @@ pub(crate) fn impl_opaque(meta: &ReflectMeta) -> TokenStream {
         #get_type_meta_tokens
 
         #from_reflect_tokens
-
-        #auto_register_tokens
     }
 }
 
-/// Generate `Reflect::try_apply` implementation tokens.
-fn get_opaque_try_apply_impl(meta: &ReflectMeta) -> TokenStream {
+/// Generate `Reflect::apply` implementation tokens.
+fn get_opaque_apply_impl(meta: &ReflectMeta) -> TokenStream {
     use crate::path::fp::{CloneFP, OptionFP, ResultFP};
 
     let vc_reflect_path = meta.vc_reflect_path();
@@ -95,7 +95,7 @@ fn get_opaque_try_apply_impl(meta: &ReflectMeta) -> TokenStream {
 
     if meta.attrs().avail_traits.clone.is_some() {
         quote! {
-            fn try_apply(&mut self, __input__: &dyn #reflect_) -> #ResultFP<(), #apply_error_> {
+            fn apply(&mut self, __input__: &dyn #reflect_) -> #ResultFP<(), #apply_error_> {
                 if let #OptionFP::Some(__value__) = <dyn #reflect_>::downcast_ref::<Self>(__input__) {
                     #CloneFP::clone_from(self, __value__);
                     return #ResultFP::Ok(());
@@ -163,18 +163,18 @@ fn get_opaque_clone_impl(meta: &ReflectMeta) -> TokenStream {
     }
 }
 
-/// Generate `Reflect::reflect_partial_eq` implementation tokens.
-fn get_opaque_partial_eq_impl(meta: &ReflectMeta) -> TokenStream {
+/// Generate `Reflect::reflect_eq` implementation tokens.
+fn get_opaque_eq_impl(meta: &ReflectMeta) -> TokenStream {
     use crate::path::fp::{OptionFP, PartialEqFP};
     let vc_reflect_path = meta.vc_reflect_path();
     let reflect_ = crate::path::reflect_(vc_reflect_path);
 
-    if let Some(span) = meta.attrs().avail_traits.partial_eq {
-        let reflect_partial_eq = Ident::new("reflect_partial_eq", span);
+    if let Some(span) = meta.attrs().avail_traits.eq {
+        let reflect_eq = Ident::new("reflect_eq", span);
 
         quote! {
             #[inline]
-            fn #reflect_partial_eq(&self, __other__: &dyn #reflect_) -> #OptionFP<bool> {
+            fn #reflect_eq(&self, __other__: &dyn #reflect_) -> #OptionFP<bool> {
                 if let #OptionFP::Some(__value__) = <dyn #reflect_>::downcast_ref::<Self>(__other__) {
                     return #OptionFP::Some( #PartialEqFP::eq(self, __value__) );
                 }
@@ -186,18 +186,18 @@ fn get_opaque_partial_eq_impl(meta: &ReflectMeta) -> TokenStream {
     }
 }
 
-/// Generate `Reflect::reflect_partial_cmp` implementation tokens.
-fn get_opaque_partial_cmp_impl(meta: &ReflectMeta) -> TokenStream {
+/// Generate `Reflect::reflect_cmp` implementation tokens.
+fn get_opaque_cmp_impl(meta: &ReflectMeta) -> TokenStream {
     use crate::path::fp::{OptionFP, PartialOrdFP};
     let vc_reflect_path = meta.vc_reflect_path();
     let reflect_ = crate::path::reflect_(vc_reflect_path);
 
-    if let Some(span) = meta.attrs().avail_traits.partial_cmp {
-        let reflect_partial_cmp = Ident::new("reflect_partial_cmp", span);
+    if let Some(span) = meta.attrs().avail_traits.cmp {
+        let reflect_cmp = Ident::new("reflect_cmp", span);
 
         quote! {
             #[inline]
-            fn #reflect_partial_cmp(&self, __other__: &dyn #reflect_) -> #OptionFP<::core::cmp::Ordering> {
+            fn #reflect_cmp(&self, __other__: &dyn #reflect_) -> #OptionFP<::core::cmp::Ordering> {
                 if let #OptionFP::Some(__value__) = <dyn #reflect_>::downcast_ref::<Self>(__other__) {
                     return #PartialOrdFP::partial_cmp(self, __value__);
                 }

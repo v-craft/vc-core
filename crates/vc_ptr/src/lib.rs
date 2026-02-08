@@ -1,45 +1,34 @@
-//! This crate implements several pointer wrappers on top of Rust’s standard pointer types
-//! that will be used frequently in the ECS module.
+//! This crate provides lightweight pointer wrappers used by the ECS module.
 //!
-//! Currently, this is only an internal implementation, so only basic interfaces are provided.
+//! The goal is to avoid moving large values between stack frames by passing
+//! references or pointers instead, while adding lifetimes and optional alignment
+//! checks to improve safety over raw pointers.
 //!
-//! **ConstNonNull**:
+//! **ConstNonNull**
 //!
-//! [`ConstNonNull<T>`] is similar to [`NonNull<T>`](core::ptr::NonNull),
-//! a non-null pointer that cannot be used to obtain mutable references directly.
+//! [`ConstNonNull<T>`] is similar to [`NonNull<T>`](core::ptr::NonNull): a non-null
+//! pointer that cannot be used to obtain mutable references directly.
 //!
-//! **ThinSlicePtr**:
+//! **ThinSlice** and **ThinSliceMut**
 //!
-//! [`ThinSlicePtr`] is a thin slice pointer that does not store length (only a pointer),
-//! making it lighter. Access through it is unsafe because bounds checks are not available;
-//! in debug mod it may retain length info to help debugging.
+//! [`ThinSlice`] and [`ThinSliceMut`] is a thin slice pointer that stores only a
+//! data pointer (no length), making it smaller. Access through it is unsafe because
+//! bounds checks are not available.
 //!
-//! **Ptr** and **PtrMut**:
+//! **Ptr** and **PtrMut**
 //!
-//! [`Ptr<'a>`] and [`PtrMut<'a>`] are like type-erased `&T` and `&mut T`,
-//! Compared to raw pointers they add a lifetime and optional alignment checks to approach
-//! the safety of references.
+//! [`Ptr<'a>`] and [`PtrMut<'a>`] are type-erased `&T` and `&mut T` equivalents.
+//! Compared to raw pointers, they add a lifetime and optional alignment checks to
+//! better approximate the safety of references.
 //!
-//! **OwningPtr**:
+//! **OwningPtr**
 //!
-//! [`OwningPtr<'a>`] is an “ownership pointer”, it can be used to consume the pointee
-//! by [`drop_as`](OwningPtr::drop_as) or readout ownership by [`read`](OwningPtr::read).
+//! [`OwningPtr<'a>`] is an “ownership pointer” that can consume the pointee via
+//! [`drop_as`](OwningPtr::drop_as) or read out ownership via [`read`](OwningPtr::read).
+//! If the value is neither read nor dropped, it may leak.
 //!
-//! If the pointer does not read or drop value, it may cause a memory leak.
-//!
-//! It does **not** manage memory of the pointee(so typically points to stack
-//! values or objects managed by other containers).
-//!
-//! **MovingPtr**:
-//!
-//! This is an internal type, typically used only for the internal implementation of the
-//! ECS module.
-//!
-//! An `OwingPtr` with type information will automatically call the `Drop` of the target
-//! when it is `Drop`ed.
-//!
-//! It does **not** manage memory of the pointee(so typically points to stack
-//! values or objects managed by other containers).
+//! `OwningPtr` does **not** manage allocation; it typically points to stack values
+//! or data managed by other containers.
 #![expect(unsafe_code, reason = "Raw pointers are inherently unsafe.")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![no_std]
@@ -47,7 +36,6 @@
 // -----------------------------------------------------------------------------
 // Modules
 
-mod moving;
 mod non_null;
 mod thin_slice;
 mod type_erased;
@@ -55,7 +43,6 @@ mod type_erased;
 // -----------------------------------------------------------------------------
 // Top-level exports
 
-pub use moving::MovingPtr;
 pub use non_null::ConstNonNull;
-pub use thin_slice::ThinSlicePtr;
+pub use thin_slice::{ThinSlice, ThinSliceMut};
 pub use type_erased::{OwningPtr, Ptr, PtrMut};

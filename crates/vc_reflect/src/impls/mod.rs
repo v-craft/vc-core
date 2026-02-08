@@ -4,10 +4,11 @@
 //! - [`NonGenericTypeInfoCell`]: Used to implement [`Typed`] for non-generic types.
 //! - [`GenericTypePathCell`]: Used to implement [`TypePath`] for generic types.
 //! - [`GenericTypeInfoCell`]: Used to implement [`Typed`] for generic types.
-//! - `xxx_try_apply`: Used to implement [`Reflect::try_apply`] (e.g. [`array_try_apply`]).
+//! - `xxx_apply`: Used to implement [`Reflect::apply`] (e.g. [`array_apply`]).
 //! - `xxx_hash`: Used to implement [`Reflect::reflect_hash`] (e.g. [`array_hash`]).
 //! - `xxx_debug`: Used to implement [`Reflect::reflect_debug`] (e.g. [`array_debug`]).
-//! - `xxx_partial_eq`: Used to implement [`Reflect::reflect_partial_eq`] (e.g. [`array_partial_eq`]).
+//! - `xxx_eq`: Used to implement [`Reflect::reflect_eq`] (e.g. [`array_eq`]).
+//! - `xxx_cmp`: Used to implement [`Reflect::reflect_cmp`] (e.g. [`array_cmp`]).
 //!
 //! ## Implemented Menu
 //!
@@ -41,10 +42,11 @@
 //!     - `time::Instant`
 //!
 //! [`concat`]: crate::impls::concat
-//! [`Reflect::reflect_partial_eq`]: crate::Reflect::reflect_partial_eq
+//! [`Reflect::reflect_cmp`]: crate::Reflect::reflect_cmp
+//! [`Reflect::reflect_eq`]: crate::Reflect::reflect_eq
 //! [`Reflect::reflect_debug`]: crate::Reflect::reflect_debug
 //! [`Reflect::reflect_hash`]: crate::Reflect::reflect_hash
-//! [`Reflect::try_apply`]: crate::Reflect::try_apply
+//! [`Reflect::apply`]: crate::Reflect::apply
 //! [`TypePath`]: crate::info::TypePath
 //! [`Typed`]: crate::info::Typed
 

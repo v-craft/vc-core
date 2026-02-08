@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
+use core::cmp::Ordering;
 use core::{fmt, ops::Deref};
 
 use vc_utils::hash::{HashTable, hash_table};
@@ -31,7 +32,7 @@ use crate::reflection::impl_reflect_cast_fn;
 ///
 /// Values stored in a `DynamicSet` must support:
 /// - Hashing via [`Reflect::reflect_hash`]
-/// - Equality comparison via [`Reflect::reflect_partial_eq`]
+/// - Equality comparison via [`Reflect::reflect_eq`]
 /// - Self-equality (a value must be equal to itself)
 ///
 /// # Examples
@@ -172,7 +173,7 @@ impl DynamicSet {
     /// # Panics
     ///
     /// Panics if the value does not support `reflect_hash` or
-    /// `reflect_partial_eq`, or if it is not equal to itself.
+    /// `reflect_eq`, or if it is not equal to itself.
     ///
     /// # Examples
     ///
@@ -184,9 +185,9 @@ impl DynamicSet {
     /// ```
     pub fn extend_boxed(&mut self, value: Box<dyn Reflect>) -> bool {
         debug_assert_eq!(
-            value.reflect_partial_eq(&*value),
+            value.reflect_eq(&*value),
             Some(true),
-            "The value is not `reflect_partial_eq` to itself: `{}`.",
+            "The value is not `reflect_eq` to itself: `{}`.",
             value.reflect_type_path(),
         );
 
@@ -247,11 +248,11 @@ impl DynamicSet {
     /// entries in the hash table.
     ///
     /// The returned closure compares `value` with `other` using
-    /// `Reflect::reflect_partial_eq`, and will panic if that operation is not
+    /// `Reflect::reflect_eq`, and will panic if that operation is not
     /// supported on the compared value.
     fn internal_eq(value: &dyn Reflect) -> impl FnMut(&Box<dyn Reflect>) -> bool + '_ {
         |other| {
-            value.reflect_partial_eq(&**other).unwrap_or_else(|| {
+            value.reflect_eq(&**other).unwrap_or_else(|| {
                 panic!(
                     "the given value of type `{}` does not support reflect hashing",
                     other.reflect_type_path(),
@@ -285,8 +286,8 @@ impl Reflect for DynamicSet {
     }
 
     #[inline]
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        crate::impls::set_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::set_apply(self, value)
     }
 
     #[inline]
@@ -295,8 +296,13 @@ impl Reflect for DynamicSet {
     }
 
     #[inline]
-    fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-        crate::impls::set_partial_eq(self, other)
+    fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+        crate::impls::set_eq(self, other)
+    }
+
+    #[inline]
+    fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+        crate::impls::set_cmp(self, other)
     }
 
     #[inline]
@@ -375,7 +381,7 @@ impl<'a> IntoIterator for &'a DynamicSet {
 ///
 /// Implementors must ensure that elements:
 /// 1. Support hashing via [`Reflect::reflect_hash`]
-/// 2. Support equality comparison via [`Reflect::reflect_partial_eq`]
+/// 2. Support equality comparison via [`Reflect::reflect_eq`]
 /// 3. Are equal to themselves (reflexivity)
 /// 4. Use consistent hashing (equal values have equal hashes)
 ///
@@ -548,7 +554,7 @@ pub trait Set: Reflect {
     ///
     /// If type incompatible, return `Err(V)`.
     ///
-    /// Use for `try_apply` implementation, should not panic.
+    /// Use for `` implementation, should not panic.
     ///
     /// # Examples
     ///

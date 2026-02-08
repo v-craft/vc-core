@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
+use core::cmp::Ordering;
 use core::fmt;
 
 use crate::Reflect;
@@ -243,8 +244,8 @@ impl Reflect for DynamicList {
     }
 
     #[inline]
-    fn try_apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
-        crate::impls::list_try_apply(self, value)
+    fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError> {
+        crate::impls::list_apply(self, value)
     }
 
     #[inline]
@@ -253,8 +254,13 @@ impl Reflect for DynamicList {
     }
 
     #[inline]
-    fn reflect_partial_eq(&self, other: &dyn Reflect) -> Option<bool> {
-        crate::impls::list_partial_eq(self, other)
+    fn reflect_eq(&self, other: &dyn Reflect) -> Option<bool> {
+        crate::impls::list_eq(self, other)
+    }
+
+    #[inline]
+    fn reflect_cmp(&self, other: &dyn Reflect) -> Option<Ordering> {
+        crate::impls::list_cmp(self, other)
     }
 
     #[inline]

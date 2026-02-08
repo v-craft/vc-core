@@ -1,17 +1,13 @@
 // -----------------------------------------------------------------------------
-// Modules
+// Module
 
-mod index;
+mod ident;
 mod map;
-mod set;
-mod sets;
-mod sparse_component;
+mod maps;
 
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use index::SparseIndex;
-pub use map::{FixedSparseArray, SparseArray};
-pub use set::SparseSet;
-pub use sets::SparseSets;
-pub use sparse_component::SparseComponent;
+pub use ident::{MapId, MapRow};
+pub use map::Map;
+pub use maps::Maps;
