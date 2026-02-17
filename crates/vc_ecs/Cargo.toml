@@ -15,15 +15,10 @@ std = [
     "vc_reflect/std",
 ]
 
-# Enable `MaybeLocation` and `DebugName`.
-# 
-# The `bebug` of different modules are independent, and it is possible
-# to turn off the overall `debug` and only enable specific crate's `debug`.
 debug = []
 
-[dependencies]
-vc_ecs_derive = { path = "derive" }
 
+[dependencies]
 vc_ptr = { path = "../vc_ptr" }
 vc_cfg = { path = "../vc_cfg" }
 vc_utils = { path = "../vc_utils" }

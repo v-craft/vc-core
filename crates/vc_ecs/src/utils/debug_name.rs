@@ -1,12 +1,12 @@
 use alloc::string::{String, ToString};
 use core::fmt;
 
+#[cfg(any(debug_assertions, feature = "debug"))]
+use alloc::borrow::Cow;
+
 use crate::cfg;
 
-cfg::debug! {
-    if { use alloc::borrow::Cow; }
-    else { const DISABLED_NAME: &str = "_"; }
-}
+const ANONYMOUS_NAME: &str = "_unknown_";
 
 // -----------------------------------------------------------------------------
 // DebugName
@@ -25,6 +25,8 @@ impl DebugName {
     /// Create a new `DebugName` from a type by using its [`core::any::type_name`]
     ///
     /// The value will be ignored if the `debug` feature is not enabled
+    ///
+    /// TODO: Mark `const` when `core::any::type_name` is const function.
     #[inline(always)]
     pub fn type_name<T>() -> Self {
         cfg::debug! {
@@ -45,7 +47,7 @@ impl DebugName {
         cfg::debug! {
             if {
                 Self {
-                    name: Cow::Borrowed("_unknown_")
+                    name: Cow::Borrowed(ANONYMOUS_NAME)
                 }
             }
             else {
@@ -119,7 +121,7 @@ impl fmt::Display for DebugName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         cfg::debug! {
             if { debug_fmt(self.name.as_ref(), f) }
-            else { f.write_str(DISABLED_NAME) }
+            else { f.write_str(ANONYMOUS_NAME) }
         }
     }
 }
@@ -129,7 +131,7 @@ impl fmt::Debug for DebugName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         cfg::debug! {
             if { debug_fmt(self.name.as_ref(), f) }
-            else { f.write_str(DISABLED_NAME) }
+            else { f.write_str(ANONYMOUS_NAME) }
         }
     }
 }

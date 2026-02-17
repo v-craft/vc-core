@@ -1,47 +1,36 @@
-#![expect(unsafe_code, reason = "original implementation requires unsafe code.")]
-
 // -----------------------------------------------------------------------------
 // Modules
 
+mod blob_array;
+mod blob_box;
+mod column;
 mod index;
-mod resource;
-mod sparse;
-mod table;
+mod tick_array;
 mod utils;
 
-// -----------------------------------------------------------------------------
-// Internal API
+mod indices;
+mod resource;
+mod sparse;
+mod storages;
+mod table;
 
-use utils::{AbortOnPanic, BlobArray, Column, VecCopyRemove, VecSwapRemove};
+// -----------------------------------------------------------------------------
+// Internal
+
+// use utils::{VecCopyRemove, VecSwapRemove};
+use blob_array::BlobArray;
+use blob_box::BlobBox;
+use column::Column;
+use indices::ComponentIndices;
+use tick_array::TickArray;
+use utils::{AbortOnDropFail, AbortOnPanic, VecRemoveExt};
 
 // -----------------------------------------------------------------------------
 // Exports
 
 pub use index::{StorageIndex, StorageType};
-pub use resource::{NoSendResourceData, NoSendResources, ResourceData, Resources};
-pub use sparse::{SparseComponent, SparseSet, SparseSets};
-pub use table::{Table, TableBuilder, TableId, TableMoveResult, TableRow, Tables};
-
-// -----------------------------------------------------------------------------
-// Inline-Exports
-
-pub struct Storages {
-    pub sparse_sets: SparseSets,
-    pub tables: Tables,
-    pub resources: Resources,
-    pub non_send_resources: NoSendResources,
-}
-
-impl Storages {
-    #[inline]
-    pub fn prepare_component(&mut self, info: &crate::component::ComponentInfo) {
-        match info.storage_type() {
-            StorageType::SparseSet => {
-                self.sparse_sets.prepare_component(info);
-            }
-            StorageType::Table => {
-                // table needs no preparation
-            }
-        }
-    }
-}
+pub use resource::{NonSendData, NonSends, ResourceData, Resources};
+pub use sparse::{SparseComponent, SparseSets};
+pub use storages::Storages;
+pub use table::{Table, TableId, TableRow, Tables};
+pub use table::{TableMoveResult, TableRemoveResult};

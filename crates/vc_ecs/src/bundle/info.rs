@@ -1,128 +1,115 @@
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use vc_utils::hash::SparseHashSet;
-use vc_utils::index::{SparseIndexMap, SparseIndexSet};
+use core::any::TypeId;
+use core::fmt::Debug;
 
-use super::BundleId;
-use crate::component::RequiredComponent;
-use crate::component::{ComponentId, Components};
-use crate::storage::Storages;
+use alloc::vec::Vec;
+
+use vc_os::sync::Arc;
+use vc_utils::extra::TypeIdMap;
+
+use crate::bundle::BundleId;
+use crate::component::ComponentId;
+
+// -----------------------------------------------------------------------------
+// BundleInfo
 
 pub struct BundleInfo {
-    pub(super) id: BundleId,
-    pub(super) contributed_components: Box<[ComponentId]>,
-    pub(super) required_components: Box<[RequiredComponent]>,
+    pub id: BundleId,
+    pub in_table: u32,
+    pub components: Arc<[ComponentId]>,
 }
 
 impl BundleInfo {
-    pub unsafe fn new(
-        bundle_name: &'static str,
-        storages: &mut Storages,
-        components: &Components,
-        mut component_ids: Vec<ComponentId>,
-        id: BundleId,
-    ) -> BundleInfo {
-        #[cold]
-        #[inline(never)]
-        fn duplicated_component(
-            bundle_name: &'static str,
-            components: &Components,
-            component_ids: Vec<ComponentId>,
-        ) -> ! {
-            let mut seen = <SparseHashSet<ComponentId>>::new();
-            let mut dups = Vec::new();
-
-            for id in component_ids {
-                if !seen.insert(id) {
-                    dups.push(id);
-                }
-            }
-            let names = dups
-                .into_iter()
-                .map(|id| components.get_debug_name(id))
-                .collect::<Vec<_>>();
-
-            panic!("Bundle {bundle_name} has duplicate components: {names:?}")
-        }
-
-        let explicit_component_ids = component_ids
-            .iter()
-            .copied()
-            .collect::<SparseIndexSet<ComponentId>>();
-
-        if explicit_component_ids.len() != component_ids.len() {
-            duplicated_component(bundle_name, components, component_ids);
-        }
-
-        let mut depth_first_components = SparseIndexMap::<ComponentId, RequiredComponent>::new();
-        for &component_id in &component_ids {
-            // SAFETY: caller has verified that all ids are valid
-            let info = unsafe { components.get_info_unchecked(component_id) };
-
-            for (&required_id, required_component) in &info.required_components().all {
-                depth_first_components
-                    .entry(required_id)
-                    .or_insert_with(|| required_component.clone());
-            }
-
-            storages.prepare_component(info);
-        }
-
-        let required_components = depth_first_components
-            .into_iter()
-            .filter(|&(required_id, _)| !explicit_component_ids.contains(&required_id))
-            .inspect(|&(required_id, _)| {
-                // SAFETY: These ids came out of the passed `components`, so they must be valid.
-                storages.prepare_component(unsafe { components.get_info_unchecked(required_id) });
-                component_ids.push(required_id);
-            })
-            .map(|(_, required_component)| required_component)
-            .collect::<Box<[RequiredComponent]>>();
-
-        BundleInfo {
-            id,
-            contributed_components: component_ids.into_boxed_slice(),
-            required_components,
-        }
-    }
-
-    #[inline]
-    pub const fn id(&self) -> BundleId {
+    pub fn id(&self) -> BundleId {
         self.id
     }
 
+    pub fn components(&self) -> &[ComponentId] {
+        &self.components
+    }
+}
+
+impl Debug for BundleInfo {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        use core::mem::transmute;
+        let components = unsafe { transmute::<&[ComponentId], &[u32]>(&self.components) };
+        f.debug_struct("BundleInfo")
+            .field("id", &self.id.index_u32())
+            .field("components", &components)
+            .finish()
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Bundles
+
+pub struct Bundles {
+    pub(crate) infos: Vec<BundleInfo>,
+    pub(crate) indices: TypeIdMap<BundleId>,
+}
+
+impl Debug for Bundles {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        Debug::fmt(&self.infos, f)
+    }
+}
+
+impl Bundles {
+    pub(crate) fn new() -> Self {
+        let mut val = const {
+            Bundles {
+                infos: Vec::new(),
+                indices: TypeIdMap::new(),
+            }
+        };
+
+        val.indices.insert(TypeId::of::<()>(), BundleId::EMPTY);
+        val.infos.push(BundleInfo {
+            id: BundleId::EMPTY,
+            in_table: 0,
+            components: Arc::new([]),
+        });
+
+        val
+    }
+
+    pub(crate) unsafe fn register(
+        &mut self,
+        type_id: TypeId,
+        components: Arc<[ComponentId]>,
+        in_table: u32,
+    ) -> BundleId {
+        let index = self.infos.len();
+        assert!(index < u32::MAX as usize, "too many bundles");
+
+        let id = BundleId::new(index as u32);
+        let info = BundleInfo {
+            id,
+            components,
+            in_table,
+        };
+
+        self.infos.push(info);
+        self.indices.insert(type_id, id);
+
+        id
+    }
+
+    /// # Safety
+    /// The target must already exist.
     #[inline]
-    pub fn explicit_components_len(&self) -> usize {
-        self.contributed_components.len() - self.required_components.len()
+    pub unsafe fn get(&self, id: BundleId) -> &BundleInfo {
+        unsafe { self.infos.get_unchecked(id.index()) }
+    }
+
+    /// # Safety
+    /// The target must already exist.
+    #[inline]
+    pub unsafe fn get_mut(&mut self, id: BundleId) -> &mut BundleInfo {
+        unsafe { self.infos.get_unchecked_mut(id.index()) }
     }
 
     #[inline]
-    pub fn contributed_components(&self) -> &[ComponentId] {
-        &self.contributed_components
-    }
-
-    #[inline]
-    pub fn explicit_components(&self) -> &[ComponentId] {
-        &self.contributed_components[0..self.explicit_components_len()]
-    }
-
-    #[inline]
-    pub fn required_components(&self) -> &[ComponentId] {
-        &self.contributed_components[self.explicit_components_len()..]
-    }
-
-    #[inline]
-    pub fn iter_explicit_components(&self) -> impl Iterator<Item = ComponentId> + Clone + '_ {
-        self.explicit_components().iter().copied()
-    }
-
-    #[inline]
-    pub fn iter_contributed_components(&self) -> impl Iterator<Item = ComponentId> + Clone + '_ {
-        self.contributed_components().iter().copied()
-    }
-
-    #[inline]
-    pub fn iter_required_components(&self) -> impl Iterator<Item = ComponentId> + '_ {
-        self.required_components().iter().copied()
+    pub fn get_id(&self, id: TypeId) -> Option<BundleId> {
+        self.indices.get(&id).copied()
     }
 }

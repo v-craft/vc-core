@@ -1,15 +1,15 @@
-#![expect(unsafe_code, reason = "get_unchecked is unsafe")]
+#![allow(clippy::new_without_default, reason = "internal type")]
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::ops::{Index, IndexMut};
+use core::fmt::Debug;
 
+use vc_task::ComputeTaskPool;
 use vc_utils::hash::HashMap;
 
-use super::{Table, TableId};
+use super::{Table, TableBuilder, TableId};
 
 use crate::component::ComponentId;
-use crate::storage::TableBuilder;
 use crate::tick::CheckTicks;
 
 // -----------------------------------------------------------------------------
@@ -20,25 +20,9 @@ pub struct Tables {
     table_ids: HashMap<Box<[ComponentId]>, TableId>,
 }
 
-impl Index<TableId> for Tables {
-    type Output = Table;
-
-    #[inline]
-    fn index(&self, index: TableId) -> &Self::Output {
-        &self.tables[index.index()]
-    }
-}
-
-impl IndexMut<TableId> for Tables {
-    #[inline]
-    fn index_mut(&mut self, index: TableId) -> &mut Self::Output {
-        &mut self.tables[index.index()]
-    }
-}
-
 impl Tables {
     #[inline]
-    pub fn empty() -> Self {
+    pub(crate) fn new() -> Self {
         let mut tables: Vec<Table> = Vec::new();
         let mut table_ids: HashMap<Box<[ComponentId]>, TableId> = HashMap::new();
 
@@ -48,112 +32,93 @@ impl Tables {
         Tables { tables, table_ids }
     }
 
-    #[inline]
-    pub fn table_count(&self) -> usize {
-        self.tables.len()
-    }
-
-    #[inline]
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (TableId, &Table)> {
-        self.tables
-            .iter()
-            .enumerate()
-            .map(|(id, table)| (TableId::new(id as u32), table))
-    }
-
-    #[inline]
-    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (TableId, &mut Table)> {
-        self.tables
-            .iter_mut()
-            .enumerate()
-            .map(|(id, table)| (TableId::new(id as u32), table))
-    }
-
-    #[inline]
-    pub fn clear_entities(&mut self) {
-        for table in &mut self.tables {
-            table.dealloc();
-        }
-    }
-
-    #[inline]
     pub fn check_ticks(&mut self, check: CheckTicks) {
-        for table in &mut self.tables {
-            table.check_ticks(check);
+        if let Some(task_pool) = ComputeTaskPool::try_get() {
+            task_pool.scope(|scope| {
+                for table in &mut self.tables {
+                    scope.spawn(async move {
+                        table.check_ticks(check);
+                    });
+                }
+            });
+        } else {
+            for table in &mut self.tables {
+                table.check_ticks(check);
+            }
         }
     }
 
     #[inline(always)]
-    pub unsafe fn get_unchecked(&self, id: TableId) -> &Table {
+    pub unsafe fn get(&self, id: TableId) -> &Table {
+        debug_assert!(id.index() < self.tables.len());
         unsafe { self.tables.get_unchecked(id.index()) }
     }
 
     #[inline(always)]
-    pub unsafe fn get_unchecked_mut(&mut self, id: TableId) -> &mut Table {
+    pub unsafe fn get_mut(&mut self, id: TableId) -> &mut Table {
+        debug_assert!(id.index() < self.tables.len());
         unsafe { self.tables.get_unchecked_mut(id.index()) }
     }
+}
 
-    #[inline(always)]
-    pub unsafe fn get_unchecked_mut_2(
-        &mut self,
-        a: TableId,
-        b: TableId,
-    ) -> (&mut Table, &mut Table) {
-        // A manually implementation of `get_disjoint_unchecked_mut`.
-        let base_ptr = self.tables.as_mut_ptr();
-        unsafe { (&mut *base_ptr.add(a.index()), &mut *base_ptr.add(b.index())) }
+impl Debug for Tables {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_map()
+            .entries(self.tables.iter().enumerate())
+            .finish()
     }
 }
 
 // -----------------------------------------------------------------------------
-// Create Table From Components
+// register
 
 use crate::component::Components;
-use crate::utils::DebugCheckedUnwrap;
+use crate::storage::StorageIndex;
+use vc_utils::hash::hash_map::RawEntryMut;
 
 impl Tables {
-    pub unsafe fn get_id_and_raw_indecies_or_insert(
+    pub(crate) fn register(
         &mut self,
-        ids: &[ComponentId],
         components: &Components,
-    ) -> (TableId, Box<[u32]>) {
-        use vc_utils::hash::hash_map::RawEntryMut;
+        idents: &[ComponentId],
+        indices: &mut [StorageIndex],
+    ) -> TableId {
+        debug_assert_eq!(idents.len(), indices.len());
 
-        let tables = &mut self.tables;
-
-        let raw_entry = self.table_ids.raw_entry_mut().from_key(ids);
-
-        match raw_entry {
+        match self.table_ids.raw_entry_mut().from_key(idents) {
             RawEntryMut::Occupied(entry) => {
-                let table_id = *entry.into_key_value().1;
-                let table = &mut tables[table_id.index()];
+                let (_, &table_id) = entry.get_key_value();
+                let table = unsafe { self.tables.get_unchecked_mut(table_id.index()) };
 
-                let mut raw_indecies = Vec::<u32>::with_capacity(ids.len());
-                for &id in ids {
-                    raw_indecies.push(unsafe { table.get_raw_index(id).debug_checked_unwrap() });
-                }
+                idents
+                    .iter()
+                    .zip(indices.iter_mut())
+                    .for_each(|(&id, index)| {
+                        *index = unsafe { table.get_index(id) };
+                    });
 
-                (table_id, raw_indecies.into_boxed_slice())
+                table_id
             }
             RawEntryMut::Vacant(entry) => {
-                assert!(tables.len() <= u32::MAX as usize, "too many tables");
+                let table_id = self.tables.len();
+                assert!(table_id < u32::MAX as usize, "too many tables");
+                let table_id = TableId::new(table_id as u32);
 
-                let table_id = TableId::new(tables.len() as u32);
+                let mut builder = TableBuilder::new(idents.len());
 
-                let mut table = TableBuilder::new(ids.len());
+                idents
+                    .iter()
+                    .zip(indices.iter_mut())
+                    .for_each(|(&id, index)| {
+                        let info = unsafe { components.get(id) };
+                        *index = unsafe { builder.insert(id, info.layout(), info.drop_fn()) };
+                    });
 
-                let mut raw_indecies = Vec::<u32>::with_capacity(ids.len());
+                self.tables.push(builder.build());
 
-                for &id in ids {
-                    let info = unsafe { components.get_info_unchecked(id) };
-                    let raw_index = unsafe { table.insert(id, info.layout(), info.drop_fn()) };
-                    raw_indecies.push(raw_index);
-                }
+                entry.insert(Box::from(idents), table_id);
 
-                tables.push(table.build());
-                entry.insert(ids.into(), table_id);
-
-                (table_id, raw_indecies.into_boxed_slice())
+                table_id
             }
         }
     }

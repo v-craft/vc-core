@@ -1,251 +1,163 @@
-#![expect(unsafe_code, reason = "original implementation")]
-
 use core::alloc::Layout;
-use core::cell::UnsafeCell;
-use core::panic::Location;
+use core::fmt::Debug;
 
-use vc_ptr::{OwningPtr, Ptr};
-use vc_utils::UnsafeCellDeref;
+use vc_ptr::OwningPtr;
 
+use crate::borrow::{UntypedMut, UntypedRef};
 use crate::cfg;
-use crate::component::{ComponentTickCells, ComponentTicks, ComponentTicksMut, MutUntyped};
-use crate::storage::BlobArray;
-use crate::tick::{CheckTicks, Tick};
-use crate::utils::{DebugLocation, DebugName};
+use crate::component::{ComponentTicksMut, ComponentTicksRef};
+use crate::storage::BlobBox;
+use crate::tick::Tick;
+use crate::utils::DebugName;
 
 // -----------------------------------------------------------------------------
 // ResourceData
 
 pub struct ResourceData {
     name: DebugName,
-    /// Capacity is 1, length is 1 if `present` and 0 otherwise.
-    data: BlobArray,
-    is_present: bool,
-    added_tick: UnsafeCell<Tick>,
-    changed_tick: UnsafeCell<Tick>,
-    changed_by: DebugLocation<UnsafeCell<&'static Location<'static>>>,
+    data: BlobBox,
+    added_tick: Tick,
+    changed_tick: Tick,
 }
 
-impl Drop for ResourceData {
+impl Debug for ResourceData {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_tuple("ResourceData")
+            .field(&self.name)
+            .field(&self.is_valid())
+            .finish()
+    }
+}
+
+// -----------------------------------------------------------------------------
+// NonSendData
+
+#[cfg(feature = "std")]
+use std::thread::ThreadId;
+
+pub struct NonSendData {
+    name: DebugName,
+    data: BlobBox,
+    added_tick: Tick,
+    changed_tick: Tick,
+    #[cfg(feature = "std")]
+    thread_id: Option<ThreadId>,
+}
+
+impl Debug for NonSendData {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_tuple("NonSendData")
+            .field(&self.name)
+            .field(&self.is_valid())
+            .finish()
+    }
+}
+
+impl Drop for NonSendData {
     fn drop(&mut self) {
-        unsafe {
-            self.data.dealloc(1, self.is_present as usize);
+        if self.data.is_valid() {
+            #[cfg(feature = "std")]
+            if ::std::thread::panicking() {
+                return;
+            }
+            self.validate_access();
         }
     }
 }
 
+// -----------------------------------------------------------------------------
+// Basic methods
+
 impl ResourceData {
-    const INDEX: usize = 0;
+    /// # Safety
+    /// correct drop_fn and layout.
+    #[inline]
+    pub(super) unsafe fn new(
+        name: DebugName,
+        layout: Layout,
+        drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
+    ) -> Self {
+        let data = unsafe { BlobBox::new(layout, drop_fn) };
+        Self {
+            name,
+            data,
+            added_tick: Tick::new(0),
+            changed_tick: Tick::new(0),
+        }
+    }
 
     #[inline(always)]
     pub fn debug_name(&self) -> &DebugName {
         &self.name
     }
 
-    #[inline]
-    pub fn new(name: DebugName, layout: Layout, drop_fn: Option<unsafe fn(OwningPtr<'_>)>) -> Self {
-        let data = unsafe { BlobArray::with_capacity(layout, drop_fn, 1) };
+    /// Return `true` if already contains data.
+    #[inline(always)]
+    pub fn is_valid(&self) -> bool {
+        self.data.is_valid()
+    }
 
-        Self {
-            name,
-            data,
-            is_present: false,
-            added_tick: UnsafeCell::new(Tick::new(0)),
-            changed_tick: UnsafeCell::new(Tick::new(0)),
-            changed_by: DebugLocation::caller().map(UnsafeCell::new),
+    /// Drop data (if exist) and set `is_valid` to `false`.
+    #[inline(always)]
+    pub fn drop_data(&mut self) {
+        self.data.drop_data();
+    }
+
+    #[inline]
+    pub unsafe fn set_data(&mut self, value: OwningPtr<'_>, tick: Tick) {
+        unsafe {
+            self.data.set(value);
+        }
+        self.changed_tick = tick;
+        self.added_tick = tick;
+    }
+
+    #[inline]
+    pub unsafe fn get_ref(&self, last_run: Tick, this_run: Tick) -> UntypedRef<'_> {
+        debug_assert!(self.data.is_valid());
+        unsafe {
+            UntypedRef {
+                value: self.data.get(),
+                ticks: ComponentTicksRef {
+                    added: &self.added_tick,
+                    changed: &self.changed_tick,
+                    last_run,
+                    this_run,
+                },
+            }
+        }
+    }
+
+    #[inline]
+    pub unsafe fn get_mut(&mut self, last_run: Tick, this_run: Tick) -> UntypedMut<'_> {
+        debug_assert!(self.data.is_valid());
+        unsafe {
+            UntypedMut {
+                value: self.data.get_mut(),
+                ticks: ComponentTicksMut {
+                    added: &mut self.added_tick,
+                    changed: &mut self.changed_tick,
+                    last_run,
+                    this_run,
+                },
+            }
         }
     }
 
     #[inline(always)]
-    pub fn is_present(&self) -> bool {
-        self.is_present
-    }
-
-    #[inline]
-    pub fn get_data(&self) -> Option<Ptr<'_>> {
-        if self.is_present {
-            unsafe { Some(self.data.get_first()) }
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn get_component_ticks(&self) -> Option<ComponentTicks> {
-        if self.is_present {
-            Some(ComponentTicks {
-                added: unsafe { self.added_tick.read() },
-                changed: unsafe { self.changed_tick.read() },
-            })
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn get_data_with_ticks(&self) -> Option<(Ptr<'_>, ComponentTickCells<'_>)> {
-        if self.is_present {
-            Some((
-                unsafe { self.data.get_first() },
-                ComponentTickCells {
-                    added: &self.added_tick,
-                    changed: &self.changed_tick,
-                    changed_by: self.changed_by.as_ref(),
-                },
-            ))
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn get_mut(&mut self, last_run: Tick, this_run: Tick) -> Option<MutUntyped<'_>> {
-        if self.is_present {
-            let value = unsafe { self.data.get_first_mut() };
-            let cells = ComponentTickCells {
-                added: &self.added_tick,
-                changed: &self.changed_tick,
-                changed_by: self.changed_by.as_ref(),
-            };
-            let ticks = unsafe { ComponentTicksMut::from_tick_cells(cells, last_run, this_run) };
-            Some(MutUntyped { value, ticks })
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub unsafe fn insert(
-        &mut self,
-        value: OwningPtr<'_>,
-        change_tick: Tick,
-        _caller: DebugLocation,
-    ) {
-        if self.is_present {
-            unsafe {
-                self.data.replace_item(Self::INDEX, value);
-            }
-        } else {
-            unsafe {
-                self.data.init_item(Self::INDEX, value);
-            }
-            self.is_present = true;
-        }
-
-        unsafe {
-            *self.changed_tick.deref_mut() = change_tick;
-        }
-
-        cfg::debug! {
-            self.changed_by.as_ref()
-                .map(|changed_by| unsafe{ changed_by.deref_mut() })
-                .assign(_caller);
-        }
-    }
-
-    #[inline]
-    pub unsafe fn insert_with_ticks(
-        &mut self,
-        value: OwningPtr<'_>,
-        change_ticks: ComponentTicks,
-        _caller: DebugLocation,
-    ) {
-        if self.is_present {
-            unsafe {
-                self.data.replace_item(Self::INDEX, value);
-            }
-        } else {
-            unsafe {
-                self.data.init_item(Self::INDEX, value);
-            }
-            self.is_present = true;
-        }
-
-        unsafe {
-            *self.added_tick.deref_mut() = change_ticks.added;
-            *self.changed_tick.deref_mut() = change_ticks.changed;
-        }
-
-        cfg::debug! {
-            self.changed_by.as_ref()
-                .map(|changed_by| unsafe{ changed_by.deref_mut() })
-                .assign(_caller);
-        }
-    }
-
-    #[inline]
-    #[must_use = "The returned pointer to the removed component should be used or dropped"]
-    pub fn remove(&mut self) -> Option<(OwningPtr<'_>, ComponentTicks, DebugLocation)> {
-        if !self.is_present {
-            return None;
-        }
-
-        self.is_present = false;
-
-        unsafe {
-            let ptr = self.data.remove_last(Self::INDEX);
-            let ticks = ComponentTicks {
-                added: self.added_tick.read(),
-                changed: self.changed_tick.read(),
-            };
-            let caller = self.changed_by.as_ref().map(|changed_by| changed_by.read());
-
-            Some((ptr, ticks, caller))
-        }
-    }
-
-    #[inline]
-    pub fn remove_and_drop(&mut self) {
-        if self.is_present {
-            unsafe {
-                self.data.drop_last(Self::INDEX);
-            }
-            self.is_present = false;
-        }
-    }
-
-    #[inline]
-    pub fn check_ticks(&mut self, check: CheckTicks) {
-        self.added_tick.get_mut().check_age(check.tick());
-        self.changed_tick.get_mut().check_age(check.tick());
+    pub(super) fn quick_check(&mut self, now: Tick, fall_back: Tick) {
+        self.added_tick.quick_check(now, fall_back);
+        self.changed_tick.quick_check(now, fall_back);
     }
 }
 
-// -----------------------------------------------------------------------------
-// NoSendResourceData
-
-#[cfg(feature = "std")]
-use std::thread::ThreadId;
-
-pub struct NoSendResourceData {
-    name: DebugName,
-    /// Capacity is 1, length is 1 if `present` and 0 otherwise.
-    data: BlobArray,
-    is_present: bool,
-    added_tick: UnsafeCell<Tick>,
-    changed_tick: UnsafeCell<Tick>,
-    changed_by: DebugLocation<UnsafeCell<&'static Location<'static>>>,
-    #[cfg(feature = "std")]
-    thread_id: Option<ThreadId>,
-}
-
-impl Drop for NoSendResourceData {
-    fn drop(&mut self) {
-        unsafe {
-            self.data.dealloc(1, self.is_present as usize);
-        }
-    }
-}
-
-impl NoSendResourceData {
-    const INDEX: usize = 0;
-
+impl NonSendData {
     #[inline(always)]
     fn validate_access(&self) {
         cfg::std! {
             #[cold]
             #[inline(never)]
-            fn invalid_access(this: &NoSendResourceData) -> ! {
+            fn invalid_access(this: &NonSendData) -> ! {
                 panic!(
                     "Attempted to access or drop non-send resource {} from thread {:?} on a thread {:?}.",
                     this.name,
@@ -258,7 +170,6 @@ impl NoSendResourceData {
                 invalid_access(self);
             }
         }
-
         // Currently, no_std is single-threaded only, so this is safe to ignore.
     }
 
@@ -269,188 +180,94 @@ impl NoSendResourceData {
         }
     }
 
-    #[inline(always)]
-    pub fn debug_name(&self) -> &DebugName {
-        &self.name
-    }
-
+    /// # Safety
+    /// correct drop_fn and layout.
     #[inline]
-    pub fn new(name: DebugName, layout: Layout, drop_fn: Option<unsafe fn(OwningPtr<'_>)>) -> Self {
-        let data = unsafe { BlobArray::with_capacity(layout, drop_fn, 1) };
+    pub(super) unsafe fn new(
+        name: DebugName,
+        layout: Layout,
+        drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
+    ) -> Self {
+        let data = unsafe { BlobBox::new(layout, drop_fn) };
 
         Self {
             name,
             data,
-            is_present: false,
-            added_tick: UnsafeCell::new(Tick::new(0)),
-            changed_tick: UnsafeCell::new(Tick::new(0)),
-            changed_by: DebugLocation::caller().map(UnsafeCell::new),
+            added_tick: Tick::new(0),
+            changed_tick: Tick::new(0),
             #[cfg(feature = "std")]
             thread_id: None,
         }
     }
 
+    /// Drop data (if exist) and set `is_valid` to `false`.
     #[inline(always)]
-    pub fn is_present(&self) -> bool {
-        self.is_present
+    pub fn drop_data(&mut self) {
+        self.validate_access();
+        self.data.drop_data();
+    }
+
+    #[inline(always)]
+    pub fn debug_name(&self) -> &DebugName {
+        &self.name
+    }
+
+    /// Return `true` if already contains data.
+    #[inline(always)]
+    pub fn is_valid(&self) -> bool {
+        self.data.is_valid()
     }
 
     #[inline]
-    pub fn get_data(&self) -> Option<Ptr<'_>> {
-        if self.is_present {
+    pub unsafe fn set_data(&mut self, value: OwningPtr<'_>, tick: Tick) {
+        if self.is_valid() {
             self.validate_access();
-            unsafe { Some(self.data.get_first()) }
-        } else {
-            None
         }
-    }
-
-    #[inline]
-    pub fn get_component_ticks(&self) -> Option<ComponentTicks> {
-        if self.is_present {
-            self.validate_access();
-            Some(ComponentTicks {
-                added: unsafe { self.added_tick.read() },
-                changed: unsafe { self.changed_tick.read() },
-            })
-        } else {
-            None
+        self.init_thread_id();
+        unsafe {
+            self.data.set(value);
         }
+        self.changed_tick = tick;
+        self.added_tick = tick;
     }
 
     #[inline]
-    pub fn get_data_with_ticks(&self) -> Option<(Ptr<'_>, ComponentTickCells<'_>)> {
-        if self.is_present {
-            self.validate_access();
-            Some((
-                unsafe { self.data.get_first() },
-                ComponentTickCells {
+    pub unsafe fn get_ref(&self, last_run: Tick, this_run: Tick) -> UntypedRef<'_> {
+        debug_assert!(self.data.is_valid());
+        self.validate_access();
+        unsafe {
+            UntypedRef {
+                value: self.data.get(),
+                ticks: ComponentTicksRef {
                     added: &self.added_tick,
                     changed: &self.changed_tick,
-                    changed_by: self.changed_by.as_ref(),
+                    last_run,
+                    this_run,
                 },
-            ))
-        } else {
-            None
+            }
         }
     }
 
     #[inline]
-    pub fn get_mut(&mut self, last_run: Tick, this_run: Tick) -> Option<MutUntyped<'_>> {
-        if self.is_present {
-            self.validate_access();
-            let value = unsafe { self.data.get_first_mut() };
-            let cells = ComponentTickCells {
-                added: &self.added_tick,
-                changed: &self.changed_tick,
-                changed_by: self.changed_by.as_ref(),
-            };
-            let ticks = unsafe { ComponentTicksMut::from_tick_cells(cells, last_run, this_run) };
-            Some(MutUntyped { value, ticks })
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub unsafe fn insert(
-        &mut self,
-        value: OwningPtr<'_>,
-        change_tick: Tick,
-        _caller: DebugLocation,
-    ) {
-        if self.is_present {
-            self.validate_access();
-            unsafe {
-                self.data.replace_item(Self::INDEX, value);
-            }
-        } else {
-            self.init_thread_id();
-            unsafe {
-                self.data.init_item(Self::INDEX, value);
-            }
-            self.is_present = true;
-        }
-
-        unsafe {
-            *self.changed_tick.deref_mut() = change_tick;
-        }
-
-        cfg::debug! {
-            self.changed_by.as_ref()
-                .map(|changed_by| unsafe{ changed_by.deref_mut() })
-                .assign(_caller);
-        }
-    }
-
-    #[inline]
-    pub unsafe fn insert_with_ticks(
-        &mut self,
-        value: OwningPtr<'_>,
-        change_ticks: ComponentTicks,
-        _caller: DebugLocation,
-    ) {
-        if self.is_present {
-            self.validate_access();
-            unsafe {
-                self.data.replace_item(Self::INDEX, value);
-            }
-        } else {
-            self.init_thread_id();
-            unsafe {
-                self.data.init_item(Self::INDEX, value);
-            }
-            self.is_present = true;
-        }
-
-        unsafe {
-            *self.added_tick.deref_mut() = change_ticks.added;
-            *self.changed_tick.deref_mut() = change_ticks.changed;
-        }
-
-        cfg::debug! {
-            self.changed_by.as_ref()
-                .map(|changed_by| unsafe{ changed_by.deref_mut() })
-                .assign(_caller);
-        }
-    }
-
-    #[inline]
-    #[must_use = "The returned pointer to the removed component should be used or dropped"]
-    pub fn remove(&mut self) -> Option<(OwningPtr<'_>, ComponentTicks, DebugLocation)> {
-        if !self.is_present {
-            return None;
-        }
-
+    pub unsafe fn get_mut(&mut self, last_run: Tick, this_run: Tick) -> UntypedMut<'_> {
+        debug_assert!(self.data.is_valid());
         self.validate_access();
-        self.is_present = false;
-
         unsafe {
-            let ptr = self.data.remove_last(Self::INDEX);
-            let ticks = ComponentTicks {
-                added: self.added_tick.read(),
-                changed: self.changed_tick.read(),
-            };
-            let caller = self.changed_by.as_ref().map(|changed_by| changed_by.read());
-
-            Some((ptr, ticks, caller))
-        }
-    }
-
-    #[inline]
-    pub fn remove_and_drop(&mut self) {
-        if self.is_present {
-            self.validate_access();
-            unsafe {
-                self.data.drop_last(Self::INDEX);
+            UntypedMut {
+                value: self.data.get_mut(),
+                ticks: ComponentTicksMut {
+                    added: &mut self.added_tick,
+                    changed: &mut self.changed_tick,
+                    last_run,
+                    this_run,
+                },
             }
-            self.is_present = false;
         }
     }
 
-    #[inline]
-    pub fn check_ticks(&mut self, check: CheckTicks) {
-        self.added_tick.get_mut().check_age(check.tick());
-        self.changed_tick.get_mut().check_age(check.tick());
+    #[inline(always)]
+    pub(super) fn quick_check(&mut self, now: Tick, fall_back: Tick) {
+        self.added_tick.quick_check(now, fall_back);
+        self.changed_tick.quick_check(now, fall_back);
     }
 }

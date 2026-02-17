@@ -4,15 +4,16 @@ use core::hash;
 // -----------------------------------------------------------------------------
 // TableId
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct TableId(u32);
 
 impl TableId {
+    pub const PLACEHOLDER: TableId = TableId(u32::MAX);
     pub const EMPTY: TableId = TableId(0);
 
     #[inline(always)]
-    pub const fn new(index: u32) -> Self {
+    pub(crate) const fn new(index: u32) -> Self {
         Self(index)
     }
 
@@ -51,8 +52,10 @@ use nonmax::NonMaxU32;
 pub struct TableRow(NonMaxU32);
 
 impl TableRow {
+    pub const PLACEHOLDER: TableRow = TableRow(NonMaxU32::MAX);
+
     #[inline(always)]
-    pub const fn new(index: NonMaxU32) -> Self {
+    pub(crate) const fn new(index: NonMaxU32) -> Self {
         Self(index)
     }
 

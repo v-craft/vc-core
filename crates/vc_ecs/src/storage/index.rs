@@ -12,28 +12,22 @@ pub enum StorageType {
 // StorageIndex
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-#[repr(align(4))]
-pub struct StorageIndex {
-    storage_type: StorageType,
-    raw_index: u32,
-}
+#[repr(transparent)]
+pub struct StorageIndex(u32);
 
 impl StorageIndex {
     #[inline(always)]
-    pub const fn new(storage_type: StorageType, raw_index: u32) -> StorageIndex {
-        Self {
-            storage_type,
-            raw_index,
-        }
+    pub(crate) const fn new(index: u32) -> Self {
+        Self(index)
     }
 
     #[inline(always)]
-    pub const fn raw_index(self) -> u32 {
-        self.raw_index
+    pub const fn index_u32(self) -> u32 {
+        self.0
     }
 
     #[inline(always)]
-    pub const fn storage_type(self) -> StorageType {
-        self.storage_type
+    pub const fn index(self) -> usize {
+        self.0 as usize
     }
 }

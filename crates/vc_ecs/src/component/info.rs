@@ -1,272 +1,266 @@
+#![allow(clippy::new_without_default, reason = "internal function")]
+
+use alloc::vec::Vec;
 use core::alloc::Layout;
 use core::any::TypeId;
+use core::fmt::Debug;
 
 use vc_ptr::OwningPtr;
-use vc_utils::index::SparseIndexSet;
+use vc_utils::extra::TypeIdMap;
 
-use super::{ComponentCloneBehavior, RequiredComponents};
-
-use crate::archetype::ArchetypeFlags;
-use crate::component::ComponentId;
-use crate::lifecycle::ComponentHooks;
-use crate::relationship::RelationshipAccessor;
+use crate::clone::CloneBehavior;
+use crate::component::{Component, ComponentId, NonSendResource, Resource};
 use crate::storage::StorageType;
-use crate::utils::DebugName;
+use crate::utils::{DebugCheckedUnwrap, DebugName};
+
+// -----------------------------------------------------------------------------
+// ComponentKind
+
+#[derive(Debug, Clone, Copy)]
+pub enum ComponentKind {
+    Component,
+    Resource,
+    NonSendResource,
+}
+
+impl PartialEq for ComponentKind {
+    #[inline(always)]
+    fn eq(&self, other: &Self) -> bool {
+        *self as u8 == *other as u8
+    }
+}
+
+impl Eq for ComponentKind {}
 
 // -----------------------------------------------------------------------------
 // ComponentDescriptor
 
 #[derive(Debug, Clone)]
 pub struct ComponentDescriptor {
-    debug_name: DebugName,
-    storage_type: StorageType,
-    is_send_and_sync: bool,
-    type_id: Option<TypeId>,
-    layout: Layout,
-    mutable: bool,
-    drop_fn: Option<for<'a> unsafe fn(OwningPtr<'a>)>,
-    clone_behavior: ComponentCloneBehavior,
-    relationship_accessor: Option<RelationshipAccessor>,
+    pub debug_name: DebugName,
+    pub type_id: TypeId,
+    pub layout: Layout,
+    pub kind: ComponentKind,
+    pub mutable: bool,
+    pub storage_type: StorageType,
+    pub drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
+    pub clone_behavior: CloneBehavior,
+    // TODO: relationship
 }
 
 impl ComponentDescriptor {
-    /// Returns a value indicating the storage strategy for the current component.
-    #[inline(always)]
-    pub fn storage_type(&self) -> StorageType {
-        self.storage_type
+    /// # Safety
+    /// type correct
+    unsafe fn debug_checked_drop_as<T>(ptr: OwningPtr<'_>) {
+        ptr.debug_assert_aligned::<T>();
+        unsafe {
+            ptr.drop_as::<T>();
+        }
     }
 
-    /// Returns the [`TypeId`] of the underlying component type.
-    /// Returns `None` if the component does not correspond to a Rust type.
-    #[inline(always)]
-    pub fn type_id(&self) -> Option<TypeId> {
-        self.type_id
+    #[inline]
+    const fn drop_fn_for<T>() -> Option<unsafe fn(OwningPtr<'_>)> {
+        if core::mem::needs_drop::<T>() {
+            Some(Self::debug_checked_drop_as::<T>)
+        } else {
+            None
+        }
     }
 
-    /// Returns the name of the current component.
-    #[inline(always)]
-    pub fn debug_name(&self) -> &DebugName {
-        &self.debug_name
+    // TODO: Mark as `const fn` when `type_name` is const fn.
+    #[inline]
+    pub fn new_component<T: Component>() -> Self {
+        Self {
+            type_id: TypeId::of::<T>(),
+            layout: Layout::new::<T>(),
+            kind: ComponentKind::Component,
+            mutable: T::MUTABLE,
+            storage_type: T::STORAGE_TYPE,
+            clone_behavior: T::CLONE_BEHAVIOR,
+            drop_fn: Self::drop_fn_for::<T>(),
+            debug_name: DebugName::type_name::<T>(),
+        }
     }
 
-    /// Returns whether this component is mutable.
-    #[inline(always)]
-    pub fn mutable(&self) -> bool {
-        self.mutable
+    // TODO: Mark as `const fn` when `type_name` is const fn.
+    #[inline]
+    pub fn new_resource<T: Resource>() -> Self {
+        Self {
+            type_id: TypeId::of::<T>(),
+            layout: Layout::new::<T>(),
+            kind: ComponentKind::Resource,
+            mutable: T::MUTABLE,
+            storage_type: StorageType::SparseSet, // unused
+            clone_behavior: T::CLONE_BEHAVIOR,
+            drop_fn: Self::drop_fn_for::<T>(),
+            debug_name: DebugName::type_name::<T>(),
+        }
+    }
+
+    // TODO: Mark as `const fn` when `type_name` is const fn.
+    #[inline]
+    pub fn new_non_send<T: NonSendResource>() -> Self {
+        Self {
+            type_id: TypeId::of::<T>(),
+            layout: Layout::new::<T>(),
+            kind: ComponentKind::NonSendResource,
+            mutable: T::MUTABLE,
+            storage_type: StorageType::SparseSet, // unused
+            clone_behavior: T::CLONE_BEHAVIOR,
+            drop_fn: Self::drop_fn_for::<T>(),
+            debug_name: DebugName::type_name::<T>(),
+        }
     }
 }
 
 // -----------------------------------------------------------------------------
 // ComponentInfo
 
-#[derive(Debug, Clone)]
 pub struct ComponentInfo {
-    pub(super) id: ComponentId,
-    pub(super) descriptor: ComponentDescriptor,
-    pub(super) hooks: ComponentHooks,
-    pub(super) required_components: RequiredComponents,
-    /// Invariant: components in this set always appear
-    /// after the components that they require.
-    pub(super) required_by: SparseIndexSet<ComponentId>,
+    id: ComponentId,
+    descriptor: ComponentDescriptor,
+    // TODO: required
+}
+
+impl Debug for ComponentInfo {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ComponentInfo")
+            .field("id", &self.id.index_u32())
+            .field("kind", &self.descriptor.kind)
+            .field("name", &self.descriptor.debug_name)
+            .field("storage", &self.descriptor.storage_type)
+            .field("mutable", &self.descriptor.mutable)
+            .finish()
+    }
 }
 
 impl ComponentInfo {
+    #[inline]
+    pub(crate) fn new(id: ComponentId, descriptor: ComponentDescriptor) -> Self {
+        Self { id, descriptor }
+    }
+
     #[inline(always)]
-    pub const fn id(&self) -> ComponentId {
+    pub fn id(&self) -> ComponentId {
         self.id
     }
 
     #[inline(always)]
-    pub const fn index(&self) -> usize {
-        self.id.index()
+    pub fn debug_name(&self) -> DebugName {
+        self.descriptor.debug_name.clone()
     }
 
     #[inline(always)]
-    pub const fn storage_type(&self) -> StorageType {
-        self.descriptor.storage_type
-    }
-
-    #[inline(always)]
-    pub const fn layout(&self) -> Layout {
-        self.descriptor.layout
-    }
-
-    #[inline(always)]
-    pub const fn drop_fn(&self) -> Option<for<'a> unsafe fn(OwningPtr<'a>)> {
-        self.descriptor.drop_fn
-    }
-
-    #[inline(always)]
-    pub const fn is_send_and_sync(&self) -> bool {
-        self.descriptor.is_send_and_sync
-    }
-
-    #[inline(always)]
-    pub const fn type_id(&self) -> Option<TypeId> {
+    pub fn type_id(&self) -> TypeId {
         self.descriptor.type_id
     }
 
     #[inline(always)]
-    pub const fn mutable(&self) -> bool {
+    pub fn layout(&self) -> Layout {
+        self.descriptor.layout
+    }
+
+    #[inline(always)]
+    pub fn kind(&self) -> ComponentKind {
+        self.descriptor.kind
+    }
+
+    #[inline(always)]
+    pub fn mutable(&self) -> bool {
         self.descriptor.mutable
     }
 
     #[inline(always)]
-    pub const fn clone_behavior(&self) -> &ComponentCloneBehavior {
-        &self.descriptor.clone_behavior
+    pub fn storage_type(&self) -> StorageType {
+        self.descriptor.storage_type
     }
 
     #[inline(always)]
-    pub const fn debug_name(&self) -> &DebugName {
-        &self.descriptor.debug_name
+    pub fn drop_fn(&self) -> Option<unsafe fn(OwningPtr<'_>)> {
+        self.descriptor.drop_fn
     }
 
     #[inline(always)]
-    pub const fn hooks(&self) -> &ComponentHooks {
-        &self.hooks
-    }
-
-    #[inline(always)]
-    pub const fn required_components(&self) -> &RequiredComponents {
-        &self.required_components
-    }
-
-    #[inline(always)]
-    pub const fn required_by(&self) -> &SparseIndexSet<ComponentId> {
-        &self.required_by
-    }
-
-    #[inline(always)]
-    pub const fn relationship_accessor(&self) -> Option<&RelationshipAccessor> {
-        self.descriptor.relationship_accessor.as_ref()
+    pub fn clone_behavior(&self) -> CloneBehavior {
+        self.descriptor.clone_behavior
     }
 }
 
 // -----------------------------------------------------------------------------
-// Extra implementation for ComponentInfo
 
-impl ComponentInfo {
-    pub const fn new(id: ComponentId, descriptor: ComponentDescriptor) -> Self {
-        ComponentInfo {
-            id,
-            descriptor,
-            hooks: ComponentHooks::empty(),
-            required_components: RequiredComponents::empty(),
-            required_by: SparseIndexSet::new(),
-        }
-    }
+pub struct Components {
+    pub(crate) infos: Vec<Option<ComponentInfo>>,
+    pub(crate) components: TypeIdMap<ComponentId>,
+    pub(crate) resources: TypeIdMap<ComponentId>,
+    pub(crate) non_sends: TypeIdMap<ComponentId>,
+}
 
-    pub fn update_archetype_flags(&self, flags: &mut ArchetypeFlags) {
-        if self.hooks.on_add.is_some() {
-            flags.insert(ArchetypeFlags::ON_ADD_HOOK);
-        }
-        if self.hooks.on_insert.is_some() {
-            flags.insert(ArchetypeFlags::ON_INSERT_HOOK);
-        }
-        if self.hooks.on_replace.is_some() {
-            flags.insert(ArchetypeFlags::ON_REPLACE_HOOK);
-        }
-        if self.hooks.on_remove.is_some() {
-            flags.insert(ArchetypeFlags::ON_REMOVE_HOOK);
-        }
-        if self.hooks.on_despawn.is_some() {
-            flags.insert(ArchetypeFlags::ON_DESPAWN_HOOK);
-        }
+impl Debug for Components {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        Debug::fmt(&self.infos, f)
     }
 }
 
-// -----------------------------------------------------------------------------
-// Extra implementation for ComponentDescriptor
-
-use super::{Component, ComponentMutability};
-use crate::resource::Resource;
-
-/// # Safety
-/// As same as `OwingPtr::drop_as`
-unsafe fn drop_owning<T>(x: OwningPtr<'_>) {
-    // `OwningPtr::drop_as` cannot convert to `unsafe fn(OwingPtr<'_>)` directly.
-    unsafe {
-        x.drop_as::<T>();
-    }
-}
-
-const fn get_drop_fn<T>() -> Option<unsafe fn(OwningPtr<'_>)> {
-    if core::mem::needs_drop::<T>() {
-        Some(drop_owning::<T>)
-    } else {
-        None
-    }
-}
-
-impl ComponentDescriptor {
-    #[inline]
-    pub fn new_component<T: Component>() -> Self {
+impl Components {
+    pub(crate) const fn new() -> Self {
         Self {
-            type_id: Some(TypeId::of::<T>()),
-            layout: Layout::new::<T>(),
-            drop_fn: get_drop_fn::<T>(),
-            mutable: T::Mutability::MUTABLE,
-            is_send_and_sync: true,
-            storage_type: T::STORAGE_TYPE,
-            debug_name: DebugName::type_name::<T>(),
-            clone_behavior: T::clone_behavior(),
-            relationship_accessor: T::relationship_accessor(),
+            infos: Vec::new(),
+            components: TypeIdMap::new(),
+            resources: TypeIdMap::new(),
+            non_sends: TypeIdMap::new(),
+        }
+    }
+
+    /// # Safety
+    /// The target must already exist.
+    #[inline]
+    pub unsafe fn get(&self, id: ComponentId) -> &ComponentInfo {
+        // SAFETY: The caller ensures `id` is valid.
+        unsafe {
+            self.infos
+                .get_unchecked(id.index())
+                .as_ref()
+                .debug_checked_unwrap()
         }
     }
 
     #[inline]
-    pub fn new_resource<T: Resource>() -> Self {
-        Self {
-            type_id: Some(TypeId::of::<T>()),
-            layout: Layout::new::<T>(),
-            drop_fn: get_drop_fn::<T>(),
-            mutable: true,
-            is_send_and_sync: true,
-            // This field has no effect for `Resource` types,
-            // as they are always stored in `Resources` rather
-            // than in `Tables` or `SparseSets`.
-            storage_type: StorageType::SparseSet,
-            debug_name: DebugName::type_name::<T>(),
-            clone_behavior: ComponentCloneBehavior::Default,
-            relationship_accessor: None,
-        }
+    pub fn try_get(&self, id: ComponentId) -> Option<&ComponentInfo> {
+        self.infos.get(id.index()).and_then(|v| v.as_ref())
     }
 
     #[inline]
-    pub fn new_non_send<T: core::any::Any>() -> Self {
-        Self {
-            type_id: Some(TypeId::of::<T>()),
-            layout: Layout::new::<T>(),
-            drop_fn: get_drop_fn::<T>(),
-            mutable: true,
-            is_send_and_sync: false,
-            storage_type: StorageType::Table,
-            debug_name: DebugName::type_name::<T>(),
-            clone_behavior: ComponentCloneBehavior::Default,
-            relationship_accessor: None,
-        }
+    pub(crate) unsafe fn get_component_id_unchecked(&self, type_id: TypeId) -> ComponentId {
+        unsafe { *self.components.get(&type_id).debug_checked_unwrap() }
     }
 
     #[inline]
-    pub unsafe fn new_dynamic(
-        debug_name: DebugName,
-        storage_type: StorageType,
-        layout: Layout,
-        drop_fn: Option<for<'a> unsafe fn(OwningPtr<'a>)>,
-        mutable: bool,
-        clone_behavior: ComponentCloneBehavior,
-        relationship_accessor: Option<RelationshipAccessor>,
-    ) -> Self {
-        Self {
-            debug_name,
-            storage_type,
-            is_send_and_sync: true,
-            type_id: None,
-            layout,
-            drop_fn,
-            mutable,
-            clone_behavior,
-            relationship_accessor,
-        }
+    pub fn get_component_id(&self, type_id: TypeId) -> Option<ComponentId> {
+        self.components.get(&type_id).copied()
+    }
+
+    #[inline]
+    pub fn get_resource_id(&self, type_id: TypeId) -> Option<ComponentId> {
+        self.resources.get(&type_id).copied()
+    }
+
+    #[inline]
+    pub fn get_non_send_id(&self, type_id: TypeId) -> Option<ComponentId> {
+        self.non_sends.get(&type_id).copied()
+    }
+
+    #[inline(always)]
+    pub fn contains_component(&self, type_id: TypeId) -> bool {
+        self.components.contains(&type_id)
+    }
+
+    #[inline(always)]
+    pub fn contains_resource(&self, type_id: TypeId) -> bool {
+        self.resources.contains(&type_id)
+    }
+
+    #[inline(always)]
+    pub fn contains_non_send(&self, type_id: TypeId) -> bool {
+        self.non_sends.contains(&type_id)
     }
 }

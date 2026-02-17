@@ -1,150 +1,179 @@
-#![expect(unsafe_code, reason = "original implementation need unsafe codes.")]
+#![allow(clippy::new_without_default, reason = "internal type")]
 
-use super::{NoSendResourceData, ResourceData};
+use alloc::vec::Vec;
+use core::fmt::Debug;
+
+use super::{NonSendData, ResourceData};
 use crate::component::ComponentId;
-use crate::storage::SparseSet;
-use crate::tick::CheckTicks;
+use crate::storage::ComponentIndices;
+use crate::tick::{CheckTicks, Tick};
 
 // -----------------------------------------------------------------------------
 // Resources
 
 pub struct Resources {
-    resources: SparseSet<ResourceData>,
+    resources: Vec<ResourceData>,
+    ids: Vec<ComponentId>,
+    indices: ComponentIndices,
 }
 
-impl Resources {
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.resources.len()
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.resources.is_empty()
-    }
-
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = (ComponentId, &ResourceData)> {
-        self.resources.iter().map(|(id, data)| (*id, data))
-    }
-
-    #[inline]
-    pub fn get(&self, component_id: ComponentId) -> Option<&ResourceData> {
-        self.resources.get(component_id)
-    }
-
-    #[inline]
-    pub fn get_mut(&mut self, component_id: ComponentId) -> Option<&mut ResourceData> {
-        self.resources.get_mut(component_id)
-    }
-
-    #[inline]
-    pub fn clear(&mut self) {
-        self.resources.clear();
-    }
-
-    #[inline]
-    pub fn check_ticks(&mut self, check: CheckTicks) {
-        for info in self.resources.values_mut() {
-            info.check_ticks(check);
-        }
+impl Debug for Resources {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_map()
+            .entries(self.ids.iter().zip(self.resources.iter()))
+            .finish()
     }
 }
 
 // -----------------------------------------------------------------------------
-// NoSendResources
+// NonSends
 
-pub struct NoSendResources {
-    resources: SparseSet<NoSendResourceData>,
+pub struct NonSends {
+    non_sends: Vec<NonSendData>,
+    ids: Vec<ComponentId>,
+    indices: ComponentIndices,
 }
 
-impl NoSendResources {
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.resources.len()
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.resources.is_empty()
-    }
-
-    #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = (ComponentId, &NoSendResourceData)> {
-        self.resources.iter().map(|(id, data)| (*id, data))
-    }
-
-    #[inline]
-    pub fn get(&self, component_id: ComponentId) -> Option<&NoSendResourceData> {
-        self.resources.get(component_id)
-    }
-
-    #[inline]
-    pub fn get_mut(&mut self, component_id: ComponentId) -> Option<&mut NoSendResourceData> {
-        self.resources.get_mut(component_id)
-    }
-
-    #[inline]
-    pub fn clear(&mut self) {
-        self.resources.clear();
-    }
-
-    #[inline]
-    pub fn check_ticks(&mut self, check: CheckTicks) {
-        for info in self.resources.values_mut() {
-            info.check_ticks(check);
-        }
+impl Debug for NonSends {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_map()
+            .entries(self.ids.iter().zip(self.non_sends.iter()))
+            .finish()
     }
 }
 
 // -----------------------------------------------------------------------------
-// Create ResourceData From Components
-
-use crate::component::Components;
-use crate::utils::DebugCheckedUnwrap;
+// Basic methods
 
 impl Resources {
-    pub fn get_data_or_insert(
-        &mut self,
-        id: ComponentId,
-        components: &Components,
-    ) -> &mut ResourceData {
-        self.resources.get_or_insert_with(id, || {
-            let info = unsafe {
-                components
-                    .infos
-                    .get_unchecked(id.index())
-                    .as_ref()
-                    .debug_checked_unwrap()
-            };
+    #[inline]
+    pub(crate) const fn new() -> Self {
+        Self {
+            resources: Vec::new(),
+            ids: Vec::new(),
+            indices: ComponentIndices::new(),
+        }
+    }
 
-            assert!(
-                info.is_send_and_sync(),
-                "Send + Sync resource {} initialized as non_send.",
-                info.debug_name(),
-            );
+    #[inline]
+    pub unsafe fn get(&self, id: ComponentId) -> &ResourceData {
+        unsafe {
+            let index = self.indices.get_unchecked(id);
+            self.resources.get_unchecked(index as usize)
+        }
+    }
 
-            ResourceData::new(info.debug_name().clone(), info.layout(), info.drop_fn())
+    #[inline]
+    pub unsafe fn get_mut(&mut self, id: ComponentId) -> &mut ResourceData {
+        unsafe {
+            let index = self.indices.get_unchecked(id);
+            self.resources.get_unchecked_mut(index as usize)
+        }
+    }
+
+    pub fn try_get(&self, id: ComponentId) -> Option<&ResourceData> {
+        self.indices.map(id, |index| unsafe {
+            self.resources.get_unchecked(index as usize)
         })
+    }
+
+    pub fn try_get_mut(&self, id: ComponentId) -> Option<&ResourceData> {
+        self.indices.map(id, |index| unsafe {
+            self.resources.get_unchecked(index as usize)
+        })
+    }
+
+    #[inline]
+    pub fn check_ticks(&mut self, check: CheckTicks) {
+        let now = check.tick();
+        let fall_back = now.relative_to(Tick::MAX_AGE);
+        self.resources.iter_mut().for_each(move |data| {
+            data.quick_check(now, fall_back);
+        });
     }
 }
 
-impl NoSendResources {
-    pub fn get_data_or_insert(
-        &mut self,
-        id: ComponentId,
-        components: &Components,
-    ) -> &mut NoSendResourceData {
-        self.resources.get_or_insert_with(id, || {
-            let info = unsafe {
-                components
-                    .infos
-                    .get_unchecked(id.index())
-                    .as_ref()
-                    .debug_checked_unwrap()
-            };
+impl NonSends {
+    #[inline]
+    pub(crate) const fn new() -> Self {
+        Self {
+            non_sends: Vec::new(),
+            ids: Vec::new(),
+            indices: ComponentIndices::new(),
+        }
+    }
 
-            NoSendResourceData::new(info.debug_name().clone(), info.layout(), info.drop_fn())
+    #[inline]
+    pub unsafe fn get(&self, id: ComponentId) -> &NonSendData {
+        unsafe {
+            let index = self.indices.get_unchecked(id);
+            self.non_sends.get_unchecked(index as usize)
+        }
+    }
+
+    #[inline]
+    pub unsafe fn get_mut(&mut self, id: ComponentId) -> &mut NonSendData {
+        unsafe {
+            let index = self.indices.get_unchecked(id);
+            self.non_sends.get_unchecked_mut(index as usize)
+        }
+    }
+
+    pub fn try_get(&self, id: ComponentId) -> Option<&NonSendData> {
+        self.indices.map(id, |index| unsafe {
+            self.non_sends.get_unchecked(index as usize)
         })
+    }
+
+    pub fn try_get_mut(&mut self, id: ComponentId) -> Option<&mut NonSendData> {
+        self.indices.map(id, |index| unsafe {
+            self.non_sends.get_unchecked_mut(index as usize)
+        })
+    }
+
+    #[inline]
+    pub fn check_ticks(&mut self, check: CheckTicks) {
+        let now = check.tick();
+        let fall_back = now.relative_to(Tick::MAX_AGE);
+        self.non_sends.iter_mut().for_each(move |data| {
+            data.quick_check(now, fall_back);
+        });
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Prepare
+
+use crate::component::ComponentInfo;
+
+impl Resources {
+    pub(crate) fn prepare(&mut self, info: &ComponentInfo) {
+        let id = info.id();
+        if !self.indices.contains(id) {
+            unsafe {
+                let data = ResourceData::new(info.debug_name(), info.layout(), info.drop_fn());
+
+                let index = self.resources.len() as u32;
+                self.resources.push(data);
+                self.ids.push(id);
+                self.indices.set(id, index);
+            }
+        }
+    }
+}
+
+impl NonSends {
+    pub(crate) fn prepare(&mut self, info: &ComponentInfo) {
+        let id = info.id();
+        if !self.indices.contains(id) {
+            unsafe {
+                let data = NonSendData::new(info.debug_name(), info.layout(), info.drop_fn());
+
+                let index = self.non_sends.len() as u32;
+                self.non_sends.push(data);
+                self.ids.push(id);
+                self.indices.set(id, index);
+            }
+        }
     }
 }

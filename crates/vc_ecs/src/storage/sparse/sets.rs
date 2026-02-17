@@ -1,112 +1,130 @@
-#![expect(unsafe_code, reason = "original implementation need unsafe codes.")]
+#![allow(clippy::new_without_default, reason = "internal type")]
+
+use alloc::vec::Vec;
+use core::fmt::Debug;
 
 use vc_ptr::OwningPtr;
+use vc_task::ComputeTaskPool;
 
-use super::SparseSet;
+use super::SparseComponent;
 
 use crate::component::ComponentId;
 use crate::entity::EntityId;
-use crate::storage::SparseComponent;
+use crate::storage::{ComponentIndices, StorageIndex};
 use crate::tick::{CheckTicks, Tick};
 
+// -----------------------------------------------------------------------------
+// SparseSets
+
 pub struct SparseSets {
-    sets: SparseSet<SparseComponent>,
+    sets: Vec<SparseComponent>,
+    ids: Vec<ComponentId>,
+    indices: ComponentIndices,
 }
+
+impl Debug for SparseSets {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_map()
+            .entries(self.ids.iter().zip(self.sets.iter()))
+            .finish()
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Basic methods
 
 impl SparseSets {
     #[inline]
-    pub const fn empty() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
-            sets: SparseSet::empty(),
+            sets: Vec::new(),
+            ids: Vec::new(),
+            indices: ComponentIndices::new(),
         }
     }
 
+    #[inline(always)]
+    pub unsafe fn get(&self, index: StorageIndex) -> &SparseComponent {
+        debug_assert!(index.index() < self.sets.len());
+        unsafe { self.sets.get_unchecked(index.index()) }
+    }
+
+    #[inline(always)]
+    pub unsafe fn get_mut(&mut self, index: StorageIndex) -> &mut SparseComponent {
+        debug_assert!(index.index() < self.sets.len());
+        unsafe { self.sets.get_unchecked_mut(index.index()) }
+    }
+
     #[inline]
-    pub fn component_count(&self) -> usize {
-        self.sets.len()
-    }
-
-    #[inline]
-    pub fn get_raw_index(&self, id: ComponentId) -> Option<u32> {
-        self.sets.get_raw_index(id)
-    }
-
-    #[inline(always)]
-    pub unsafe fn get_unchecked(&self, raw_index: u32) -> &SparseComponent {
-        unsafe { self.sets.get_raw(raw_index) }
-    }
-
-    #[inline(always)]
-    pub unsafe fn get_unchecked_mut(&mut self, raw_index: u32) -> &mut SparseComponent {
-        unsafe { self.sets.get_mut_raw(raw_index) }
-    }
-
-    #[inline(always)]
     pub unsafe fn init_component(
         &mut self,
-        raw_index: u32,
+        index: StorageIndex,
         id: EntityId,
         data: OwningPtr<'_>,
         tick: Tick,
-        caller: DebugLocation,
     ) {
         unsafe {
-            self.sets
-                .get_mut_raw(raw_index)
-                .insert(id, data, tick, caller);
+            self.get_mut(index).init_component(id, data, tick);
         }
     }
 
     #[inline]
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (ComponentId, &SparseComponent)> {
-        self.sets.iter().map(|(&id, data)| (id, data))
-    }
-
-    #[inline]
-    pub fn iter_mut(
-        &mut self,
-    ) -> impl ExactSizeIterator<Item = (ComponentId, &mut SparseComponent)> {
-        self.sets.iter_mut().map(|(&id, data)| (id, data))
-    }
-
-    #[inline]
-    pub fn clear_entities(&mut self) {
-        for set in self.sets.values_mut() {
-            set.dealloc();
+    pub unsafe fn remove_and_drop(&mut self, index: StorageIndex, id: EntityId) {
+        unsafe {
+            self.get_mut(index).remove_and_drop(id);
         }
     }
 
-    #[inline]
     pub fn check_ticks(&mut self, check: CheckTicks) {
-        for set in self.sets.values_mut() {
-            set.check_ticks(check);
+        if let Some(task_pool) = ComputeTaskPool::try_get() {
+            task_pool.scope(|scope| {
+                for table in &mut self.sets {
+                    scope.spawn(async move {
+                        table.check_ticks(check);
+                    });
+                }
+            });
+        } else {
+            for table in &mut self.sets {
+                table.check_ticks(check);
+            }
         }
     }
 }
 
 // -----------------------------------------------------------------------------
-// Create SparseComponent From ComponentInfo
+// register
 
-use crate::component::ComponentInfo;
-use crate::utils::DebugLocation;
+use crate::component::Components;
 
 impl SparseSets {
-    #[inline]
-    pub fn prepare_component(&mut self, info: &ComponentInfo) {
-        if self.sets.get_raw_index(info.id()).is_none() {
-            self.sets.insert(info.id(), unsafe {
-                SparseComponent::empty(info.layout(), info.drop_fn())
+    pub(crate) fn register(
+        &mut self,
+        components: &Components,
+        idents: &[ComponentId],
+        indices: &mut [StorageIndex],
+    ) {
+        debug_assert_eq!(idents.len(), indices.len());
+
+        idents
+            .iter()
+            .zip(indices.iter_mut())
+            .for_each(|(&id, index)| {
+                if let Some(idx) = self.indices.get(id) {
+                    *index = StorageIndex::new(idx);
+                } else {
+                    unsafe {
+                        let idx = self.sets.len() as u32;
+
+                        let info = components.get(id);
+                        let value = SparseComponent::new(info.layout(), info.drop_fn());
+                        self.sets.push(value);
+                        self.ids.push(id);
+                        self.indices.set(id, idx);
+
+                        *index = StorageIndex::new(idx);
+                    }
+                }
             });
-        }
-    }
-
-    pub fn get_raw_index_or_insert(&mut self, info: &ComponentInfo) -> u32 {
-        if let Some(raw_index) = self.sets.get_raw_index(info.id()) {
-            return raw_index;
-        };
-
-        self.sets.insert(info.id(), unsafe {
-            SparseComponent::with_capacity(info.layout(), info.drop_fn(), 16)
-        })
     }
 }
