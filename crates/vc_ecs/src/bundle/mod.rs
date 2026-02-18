@@ -7,8 +7,6 @@ mod info;
 // -----------------------------------------------------------------------------
 // Exports
 
-use core::any::TypeId;
-
 pub use ident::BundleId;
 pub use info::{BundleInfo, Bundles};
 
@@ -16,6 +14,8 @@ pub use info::{BundleInfo, Bundles};
 // Inline
 
 use alloc::vec::Vec;
+use core::any::TypeId;
+
 use vc_ptr::OwningPtr;
 use vc_utils::range_invoke;
 
@@ -24,6 +24,7 @@ use crate::component::{CompIdAllocator, Component, ComponentId, Components};
 use crate::entity::EntityId;
 use crate::storage::{SparseSets, StorageType, Table, TableRow};
 use crate::tick::Tick;
+use crate::utils::DebugCheckedUnwrap;
 
 pub struct BundleComponentRegistrar<'a> {
     pub(crate) components: &'a mut Components,
@@ -59,7 +60,11 @@ impl BundleComponentWriter<'_> {
     #[inline(never)]
     fn write_internal(&mut self, type_id: TypeId, offset: usize) {
         let data = unsafe { self.data.borrow_mut().byte_add(offset).promote() };
-        let component_id = unsafe { self.components.get_component_id_unchecked(type_id) };
+        let component_id = unsafe {
+            self.components
+                .get_component_id(type_id)
+                .debug_checked_unwrap()
+        };
         let (s_type, s_index) = self.archetype.get_storage_info(component_id);
         match s_type {
             StorageType::Table => unsafe {

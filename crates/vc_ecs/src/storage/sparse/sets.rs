@@ -6,9 +6,9 @@ use core::fmt::Debug;
 use vc_ptr::OwningPtr;
 use vc_task::ComputeTaskPool;
 
-use super::SparseComponent;
+use super::SparseSet;
 
-use crate::component::ComponentId;
+use crate::component::{ComponentId, ComponentInfo};
 use crate::entity::EntityId;
 use crate::storage::{ComponentIndices, StorageIndex};
 use crate::tick::{CheckTicks, Tick};
@@ -17,7 +17,7 @@ use crate::tick::{CheckTicks, Tick};
 // SparseSets
 
 pub struct SparseSets {
-    sets: Vec<SparseComponent>,
+    sets: Vec<SparseSet>,
     ids: Vec<ComponentId>,
     indices: ComponentIndices,
 }
@@ -44,15 +44,20 @@ impl SparseSets {
     }
 
     #[inline(always)]
-    pub unsafe fn get(&self, index: StorageIndex) -> &SparseComponent {
+    pub unsafe fn get(&self, index: StorageIndex) -> &SparseSet {
         debug_assert!(index.index() < self.sets.len());
         unsafe { self.sets.get_unchecked(index.index()) }
     }
 
     #[inline(always)]
-    pub unsafe fn get_mut(&mut self, index: StorageIndex) -> &mut SparseComponent {
+    pub unsafe fn get_mut(&mut self, index: StorageIndex) -> &mut SparseSet {
         debug_assert!(index.index() < self.sets.len());
         unsafe { self.sets.get_unchecked_mut(index.index()) }
+    }
+
+    #[inline(always)]
+    pub unsafe fn get_index(&self, id: ComponentId) -> StorageIndex {
+        StorageIndex::new(unsafe { self.indices.get_unchecked(id) })
     }
 
     #[inline]
@@ -98,6 +103,19 @@ impl SparseSets {
 use crate::component::Components;
 
 impl SparseSets {
+    pub(crate) fn prepare(&mut self, info: &ComponentInfo) {
+        let id = info.id();
+        if !self.indices.contains(id) {
+            unsafe {
+                let idx = self.sets.len() as u32;
+                let value = SparseSet::new(info.layout(), info.drop_fn());
+                self.sets.push(value);
+                self.ids.push(id);
+                self.indices.set(id, idx);
+            }
+        }
+    }
+
     pub(crate) fn register(
         &mut self,
         components: &Components,
@@ -117,7 +135,7 @@ impl SparseSets {
                         let idx = self.sets.len() as u32;
 
                         let info = components.get(id);
-                        let value = SparseComponent::new(info.layout(), info.drop_fn());
+                        let value = SparseSet::new(info.layout(), info.drop_fn());
                         self.sets.push(value);
                         self.ids.push(id);
                         self.indices.set(id, idx);

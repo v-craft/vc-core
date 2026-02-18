@@ -12,32 +12,61 @@ use crate::entity::{Entity, EntityId};
 use crate::storage::{TableId, TableRow};
 use crate::utils::DebugCheckedUnwrap;
 
+// -----------------------------------------------------------------------------
+// EntityLocation
+
 /// A location of an entity in an archetype.
 #[derive(Debug, Copy, Clone)]
-pub struct EntityLocation {
+pub(crate) struct EntityLocation {
     pub archetype_id: ArchetypeId,
     pub table_id: TableId,
     pub table_row: TableRow,
 }
 
+// -----------------------------------------------------------------------------
+// EntityInfo
+
 /// Info does not need to include an Id,
 /// as its index in `Vec` represents the EntityId.
 pub struct EntityInfo {
     // pub id: EntityId,
-    pub generation: EntityGeneration,
-    pub location: EntityLocation,
+    pub(crate) generation: EntityGeneration,
+    pub(crate) location: EntityLocation,
 }
 
 impl Debug for EntityInfo {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_tuple("EntityInfo")
-            .field(&self.generation)
-            .field(&self.location.archetype_id)
-            .field(&self.location.table_id)
-            .field(&self.location.table_row)
+        f.debug_struct("EntityInfo")
+            .field("generation", &self.generation)
+            .field("archetype", &self.location.archetype_id)
             .finish()
     }
 }
+
+impl EntityInfo {
+    #[inline]
+    pub fn generation(&self) -> EntityGeneration {
+        self.generation
+    }
+
+    #[inline]
+    pub fn archetype_id(&self) -> ArchetypeId {
+        self.location.archetype_id
+    }
+
+    #[inline]
+    pub fn table_id(&self) -> TableId {
+        self.location.table_id
+    }
+
+    #[inline]
+    pub fn table_row(&self) -> TableRow {
+        self.location.table_row
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Entities
 
 pub struct Entities {
     pub(crate) infos: Vec<Option<EntityInfo>>,
@@ -85,7 +114,7 @@ impl Entities {
         self.infos.get(id.index()).and_then(Option::as_ref)
     }
 
-    pub(crate) fn set_despawned(&mut self, entity: Entity) -> EntityLocation {
+    pub(crate) unsafe fn set_despawned(&mut self, entity: Entity) -> EntityLocation {
         unsafe {
             let info_mut = self.infos.get_unchecked_mut(entity.index());
 
@@ -101,7 +130,7 @@ impl Entities {
         }
     }
 
-    pub(crate) fn set_spawned(&mut self, entity: Entity, location: EntityLocation) {
+    pub(crate) unsafe fn set_spawned(&mut self, entity: Entity, location: EntityLocation) {
         #[cold]
         #[inline(never)]
         fn resize_infos(this: &mut Entities, len: usize) {

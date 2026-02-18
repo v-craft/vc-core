@@ -37,14 +37,14 @@ impl Eq for ComponentKind {}
 
 #[derive(Debug, Clone)]
 pub struct ComponentDescriptor {
-    pub debug_name: DebugName,
-    pub type_id: TypeId,
-    pub layout: Layout,
-    pub kind: ComponentKind,
-    pub mutable: bool,
-    pub storage_type: StorageType,
-    pub drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
-    pub clone_behavior: CloneBehavior,
+    pub(crate) debug_name: DebugName,
+    pub(crate) type_id: TypeId,
+    pub(crate) layout: Layout,
+    pub(crate) kind: ComponentKind,
+    pub(crate) mutable: bool,
+    pub(crate) storage_type: StorageType,
+    pub(crate) drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
+    pub(crate) clone_behavior: CloneBehavior,
     // TODO: relationship
 }
 
@@ -58,7 +58,6 @@ impl ComponentDescriptor {
         }
     }
 
-    #[inline]
     const fn drop_fn_for<T>() -> Option<unsafe fn(OwningPtr<'_>)> {
         if core::mem::needs_drop::<T>() {
             Some(Self::debug_checked_drop_as::<T>)
@@ -67,9 +66,7 @@ impl ComponentDescriptor {
         }
     }
 
-    // TODO: Mark as `const fn` when `type_name` is const fn.
-    #[inline]
-    pub fn new_component<T: Component>() -> Self {
+    pub const fn new_component<T: Component>() -> Self {
         Self {
             type_id: TypeId::of::<T>(),
             layout: Layout::new::<T>(),
@@ -82,9 +79,7 @@ impl ComponentDescriptor {
         }
     }
 
-    // TODO: Mark as `const fn` when `type_name` is const fn.
-    #[inline]
-    pub fn new_resource<T: Resource>() -> Self {
+    pub const fn new_resource<T: Resource>() -> Self {
         Self {
             type_id: TypeId::of::<T>(),
             layout: Layout::new::<T>(),
@@ -97,9 +92,7 @@ impl ComponentDescriptor {
         }
     }
 
-    // TODO: Mark as `const fn` when `type_name` is const fn.
-    #[inline]
-    pub fn new_non_send<T: NonSendResource>() -> Self {
+    pub const fn new_non_send<T: NonSendResource>() -> Self {
         Self {
             type_id: TypeId::of::<T>(),
             layout: Layout::new::<T>(),
@@ -125,7 +118,7 @@ pub struct ComponentInfo {
 impl Debug for ComponentInfo {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ComponentInfo")
-            .field("id", &self.id.index_u32())
+            .field("id", &self.id)
             .field("kind", &self.descriptor.kind)
             .field("name", &self.descriptor.debug_name)
             .field("storage", &self.descriptor.storage_type)
@@ -147,7 +140,7 @@ impl ComponentInfo {
 
     #[inline(always)]
     pub fn debug_name(&self) -> DebugName {
-        self.descriptor.debug_name.clone()
+        self.descriptor.debug_name
     }
 
     #[inline(always)]
@@ -230,11 +223,6 @@ impl Components {
     }
 
     #[inline]
-    pub(crate) unsafe fn get_component_id_unchecked(&self, type_id: TypeId) -> ComponentId {
-        unsafe { *self.components.get(&type_id).debug_checked_unwrap() }
-    }
-
-    #[inline]
     pub fn get_component_id(&self, type_id: TypeId) -> Option<ComponentId> {
         self.components.get(&type_id).copied()
     }
@@ -249,18 +237,37 @@ impl Components {
         self.non_sends.get(&type_id).copied()
     }
 
-    #[inline(always)]
     pub fn contains_component(&self, type_id: TypeId) -> bool {
         self.components.contains(&type_id)
     }
 
-    #[inline(always)]
     pub fn contains_resource(&self, type_id: TypeId) -> bool {
         self.resources.contains(&type_id)
     }
 
-    #[inline(always)]
     pub fn contains_non_send(&self, type_id: TypeId) -> bool {
         self.non_sends.contains(&type_id)
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use super::ComponentKind;
+
+    #[test]
+    fn kind_eq() {
+        assert_eq!(ComponentKind::Component, ComponentKind::Component);
+        assert_eq!(ComponentKind::Resource, ComponentKind::Resource);
+        assert_eq!(
+            ComponentKind::NonSendResource,
+            ComponentKind::NonSendResource
+        );
+
+        assert_ne!(ComponentKind::Component, ComponentKind::Resource);
+        assert_ne!(ComponentKind::Resource, ComponentKind::NonSendResource);
+        assert_ne!(ComponentKind::NonSendResource, ComponentKind::Component);
     }
 }

@@ -1,15 +1,14 @@
-use core::fmt;
-use core::hash;
+use core::fmt::{Debug, Display};
+use core::hash::Hash;
 
 // -----------------------------------------------------------------------------
 // BundleId
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct BundleId(u32);
 
 impl BundleId {
-    pub const PLACEHOLDER: BundleId = BundleId(u32::MAX);
     pub const EMPTY: BundleId = BundleId(0);
 
     #[inline(always)]
@@ -28,16 +27,23 @@ impl BundleId {
     }
 }
 
-impl fmt::Display for BundleId {
+impl Debug for BundleId {
     #[inline(always)]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        Debug::fmt(&self.0, f)
     }
 }
 
-impl hash::Hash for BundleId {
+impl Display for BundleId {
     #[inline(always)]
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
+
+impl Hash for BundleId {
+    #[inline(always)]
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         state.write_u32(self.0);
     }
 }

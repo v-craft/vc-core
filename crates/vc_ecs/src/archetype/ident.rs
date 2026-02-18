@@ -1,18 +1,16 @@
-use core::fmt;
-use core::hash;
-use core::mem;
+use core::fmt::{Debug, Display};
+use core::hash::Hash;
 
 use nonmax::NonMaxU32;
 
 // -----------------------------------------------------------------------------
 // ArchetypeId
 
-#[derive(Debug, Copy, Clone, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct ArchetypeId(NonMaxU32);
 
 impl ArchetypeId {
-    pub const PLACEHOLDER: ArchetypeId = ArchetypeId(NonMaxU32::MAX);
     pub const EMPTY: ArchetypeId = ArchetypeId(NonMaxU32::ZERO);
 
     #[inline(always)]
@@ -31,16 +29,23 @@ impl ArchetypeId {
     }
 }
 
-impl fmt::Display for ArchetypeId {
+impl Debug for ArchetypeId {
     #[inline(always)]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        Debug::fmt(&self.0.get(), f)
     }
 }
 
-impl hash::Hash for ArchetypeId {
+impl Display for ArchetypeId {
     #[inline(always)]
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        Display::fmt(&self.0.get(), f)
+    }
+}
+
+impl Hash for ArchetypeId {
+    #[inline(always)]
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         // we do not use underlying value here,
         // then `SparseHash` is faster.
         state.write_u32(self.0.get());
@@ -50,8 +55,34 @@ impl hash::Hash for ArchetypeId {
 impl PartialEq for ArchetypeId {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        unsafe { mem::transmute_copy::<Self, u32>(self) == mem::transmute_copy::<Self, u32>(other) }
+        use core::mem::transmute_copy;
+        unsafe { transmute_copy::<Self, u32>(self) == transmute_copy::<Self, u32>(other) }
     }
 }
 
 impl Eq for ArchetypeId {}
+
+// -----------------------------------------------------------------------------
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use super::ArchetypeId;
+    use nonmax::NonMaxU32;
+
+    #[test]
+    fn index() {
+        let inner = NonMaxU32::new(123456_u32).unwrap();
+        assert_eq!(ArchetypeId::new(inner).index_u32(), 123456_u32);
+        assert_eq!(ArchetypeId::new(inner).index(), 123456_usize);
+    }
+
+    #[test]
+    fn eq() {
+        let inner1 = NonMaxU32::new(12345).unwrap();
+        let inner2 = NonMaxU32::new(54321).unwrap();
+        assert_eq!(ArchetypeId::new(inner1), ArchetypeId::new(inner1));
+        assert_eq!(ArchetypeId::new(inner2), ArchetypeId::new(inner2));
+        assert_ne!(ArchetypeId::new(inner1), ArchetypeId::new(inner2));
+    }
+}

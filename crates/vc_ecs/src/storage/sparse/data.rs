@@ -16,23 +16,23 @@ use crate::tick::{CheckTicks, Tick};
 use crate::utils::DebugCheckedUnwrap;
 
 // -----------------------------------------------------------------------------
-// SparseComponent
+// SparseSet
 
-pub struct SparseComponent {
+pub struct SparseSet {
     column: Column,
     entities: Vec<EntityId>,
     sparse: SparseHashMap<EntityId, u32>,
 }
 
-impl Debug for SparseComponent {
+impl Debug for SparseSet {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("SparseComponent")
+        f.debug_struct("SparseSet")
             .field("entities", &self.entities)
             .finish()
     }
 }
 
-impl Drop for SparseComponent {
+impl Drop for SparseSet {
     fn drop(&mut self) {
         let len = self.entity_count();
         let current_capacity = self.capacity();
@@ -42,13 +42,13 @@ impl Drop for SparseComponent {
     }
 }
 
-unsafe impl Send for SparseComponent {}
-unsafe impl Sync for SparseComponent {}
+unsafe impl Send for SparseSet {}
+unsafe impl Sync for SparseSet {}
 
 // -----------------------------------------------------------------------------
 // Basic methods
 
-impl SparseComponent {
+impl SparseSet {
     #[inline]
     pub(crate) const unsafe fn new(
         layout: Layout,
@@ -79,7 +79,7 @@ impl SparseComponent {
     pub unsafe fn init_component(&mut self, id: EntityId, data: OwningPtr<'_>, tick: Tick) {
         #[cold]
         #[inline(never)]
-        fn reserve_one(this: &mut SparseComponent) {
+        fn reserve_one(this: &mut SparseSet) {
             let abort_guard = AbortOnPanic;
 
             let old_capacity = this.capacity();

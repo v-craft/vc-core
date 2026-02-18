@@ -35,17 +35,15 @@ pub struct Archetype {
 
 impl Debug for Archetype {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        use core::mem::transmute;
-
         let in_table = self.in_table as usize;
-        let tables = unsafe { transmute::<&[ComponentId], &[u32]>(&self.components[0..in_table]) };
-        let sparse = unsafe { transmute::<&[ComponentId], &[u32]>(&self.components[in_table..]) };
+        let tables = &self.components[0..in_table];
+        let sparse = &self.components[in_table..];
 
         f.debug_struct("Archetype")
-            .field("id", &self.id.index_u32())
-            .field("table_id", &self.table_id.index_u32())
-            .field("table_components", &tables)
-            .field("sparse_set_components", &sparse)
+            .field("id", &self.id)
+            .field("table_id", &self.table_id)
+            .field("in_table", &tables)
+            .field("in_sparse_set", &sparse)
             .finish()
     }
 }
@@ -83,6 +81,22 @@ impl Archetype {
         }
 
         unreachable!("The given component was not found")
+    }
+
+    pub fn contains_component(&self, component_id: ComponentId) -> bool {
+        let table_len = self.in_table as usize;
+
+        let table_comps = &self.components[0..table_len];
+        if table_comps.binary_search(&component_id).is_ok() {
+            return true;
+        }
+
+        let sparse_comps = &self.components[table_len..];
+        if sparse_comps.binary_search(&component_id).is_ok() {
+            return true;
+        }
+
+        false
     }
 }
 
@@ -219,5 +233,28 @@ impl Archetypes {
         unsafe {
             *self.bundle_map.get_unchecked_mut(index) = Some(archetype_id);
         }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use crate::archetype::ArchetypeId;
+    use crate::storage::TableId;
+
+    use super::Archetypes;
+
+    #[test]
+    fn archetypes_new() {
+        let archetypes = Archetypes::new();
+        let id = archetypes.get_id(&[]).unwrap();
+        assert_eq!(id, ArchetypeId::EMPTY);
+
+        let archetype = unsafe { archetypes.get(id) };
+        assert_eq!(archetype.id, ArchetypeId::EMPTY);
+        assert_eq!(archetype.table_id, TableId::EMPTY);
+        assert_eq!(&*archetype.components, &[]);
     }
 }

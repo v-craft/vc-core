@@ -4,7 +4,7 @@ use crate::world::World;
 
 impl World {
     pub fn despawn(&mut self, entity: Entity) {
-        let location = self.entities.set_despawned(entity);
+        let location = unsafe { self.entities.set_despawned(entity) };
         let archetype_info = unsafe { self.archetypes.get(location.archetype_id) };
 
         {

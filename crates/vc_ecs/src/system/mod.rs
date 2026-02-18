@@ -1,11 +1,9 @@
 // -----------------------------------------------------------------------------
 // Modules
 
-mod data;
-mod sets;
+mod param;
 
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use data::SparseSet;
-pub use sets::SparseSets;
+pub use param::SystemParam;

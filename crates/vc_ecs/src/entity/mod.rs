@@ -8,9 +8,11 @@ mod info;
 // -----------------------------------------------------------------------------
 // Internal
 
+pub(crate) use info::EntityLocation;
+
 // -----------------------------------------------------------------------------
 // Exports
 
 pub use allocator::{EntityAllocator, RemoteAllocator};
 pub use ident::{Entity, EntityGeneration, EntityId};
-pub use info::{Entities, EntityInfo, EntityLocation};
+pub use info::{Entities, EntityInfo};

@@ -83,7 +83,7 @@ pub struct UntypedRef<'w> {
 }
 
 // -----------------------------------------------------------------------------
-// MutUntyped
+// UntypedMut
 
 pub struct UntypedMut<'w> {
     pub(crate) value: PtrMut<'w>,
@@ -998,9 +998,9 @@ impl<'w> UntypedMut<'w> {
     ///
     /// `T` must be the erased pointee type for this [`UntypedMut`].
     #[inline(always)]
-    pub unsafe fn into_res<T: Resource>(self) -> Mut<'w, T> {
+    pub unsafe fn into_res<T: Resource>(self) -> ResMut<'w, T> {
         self.value.debug_assert_aligned::<T>();
-        Mut {
+        ResMut {
             value: unsafe { self.value.consume() },
             ticks: self.ticks,
         }

@@ -30,7 +30,7 @@ use utils::{AbortOnDropFail, AbortOnPanic, VecRemoveExt};
 
 pub use index::{StorageIndex, StorageType};
 pub use resource::{NonSendData, NonSends, ResourceData, Resources};
-pub use sparse::{SparseComponent, SparseSets};
+pub use sparse::{SparseSet, SparseSets};
 pub use storages::Storages;
 pub use table::{Table, TableId, TableRow, Tables};
 pub use table::{TableMoveResult, TableRemoveResult};

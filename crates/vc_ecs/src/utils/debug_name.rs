@@ -1,9 +1,6 @@
 use alloc::string::{String, ToString};
 use core::fmt;
 
-#[cfg(any(debug_assertions, feature = "debug"))]
-use alloc::borrow::Cow;
-
 use crate::cfg;
 
 const ANONYMOUS_NAME: &str = "_unknown_";
@@ -15,10 +12,10 @@ const ANONYMOUS_NAME: &str = "_unknown_";
 ///
 /// - If the `debug` feature is enabled or in `Debug` mode, the name will be used.
 /// - If it is disabled, a string mentioning the disabled feature will be us.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 pub struct DebugName {
     #[cfg(any(debug_assertions, feature = "debug"))]
-    name: Cow<'static, str>,
+    name: fn() -> &'static str,
 }
 
 impl DebugName {
@@ -28,15 +25,11 @@ impl DebugName {
     ///
     /// TODO: Mark `const` when `core::any::type_name` is const function.
     #[inline(always)]
-    pub fn type_name<T>() -> Self {
+    pub const fn type_name<T>() -> Self {
         cfg::debug! {
             if {
-                let type_name = ::core::any::type_name::<T>();
-                Self {
-                    name: Cow::Borrowed(type_name)
-                }
-            }
-            else {
+                Self { name: ::core::any::type_name::<T> }
+            } else {
                 Self {}
             }
         }
@@ -47,7 +40,7 @@ impl DebugName {
         cfg::debug! {
             if {
                 Self {
-                    name: Cow::Borrowed(ANONYMOUS_NAME)
+                    name: || { ANONYMOUS_NAME },
                 }
             }
             else {
@@ -58,18 +51,7 @@ impl DebugName {
 
     #[inline]
     pub fn parse(&self) -> String {
-        ToString::to_string(&self)
-    }
-}
-
-impl From<Option<DebugName>> for DebugName {
-    #[inline(always)]
-    fn from(value: Option<DebugName>) -> Self {
-        if let Some(name) = value {
-            name
-        } else {
-            DebugName::anonymous()
-        }
+        ToString::to_string(self)
     }
 }
 
@@ -120,7 +102,7 @@ impl fmt::Display for DebugName {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         cfg::debug! {
-            if { debug_fmt(self.name.as_ref(), f) }
+            if { debug_fmt((self.name)(), f) }
             else { f.write_str(ANONYMOUS_NAME) }
         }
     }
@@ -130,7 +112,7 @@ impl fmt::Debug for DebugName {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         cfg::debug! {
-            if { debug_fmt(self.name.as_ref(), f) }
+            if { debug_fmt((self.name)(), f) }
             else { f.write_str(ANONYMOUS_NAME) }
         }
     }

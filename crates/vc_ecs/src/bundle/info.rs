@@ -13,9 +13,9 @@ use crate::component::ComponentId;
 // BundleInfo
 
 pub struct BundleInfo {
-    pub id: BundleId,
-    pub in_table: u32,
-    pub components: Arc<[ComponentId]>,
+    pub(crate) id: BundleId,
+    pub(crate) in_table: u32,
+    pub(crate) components: Arc<[ComponentId]>,
 }
 
 impl BundleInfo {
@@ -30,11 +30,9 @@ impl BundleInfo {
 
 impl Debug for BundleInfo {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        use core::mem::transmute;
-        let components = unsafe { transmute::<&[ComponentId], &[u32]>(&self.components) };
         f.debug_struct("BundleInfo")
-            .field("id", &self.id.index_u32())
-            .field("components", &components)
+            .field("id", &self.id)
+            .field("components", &self.components)
             .finish()
     }
 }
@@ -106,6 +104,16 @@ impl Bundles {
     #[inline]
     pub unsafe fn get_mut(&mut self, id: BundleId) -> &mut BundleInfo {
         unsafe { self.infos.get_unchecked_mut(id.index()) }
+    }
+
+    #[inline]
+    pub fn try_get(&self, id: BundleId) -> Option<&BundleInfo> {
+        self.infos.get(id.index())
+    }
+
+    #[inline]
+    pub fn try_get_mut(&mut self, id: BundleId) -> Option<&mut BundleInfo> {
+        self.infos.get_mut(id.index())
     }
 
     #[inline]

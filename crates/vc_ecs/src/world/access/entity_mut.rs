@@ -1,0 +1,138 @@
+use core::any::TypeId;
+use core::fmt::Debug;
+
+use crate::archetype::Archetype;
+use crate::borrow::{Mut, Ref, UntypedMut, UntypedRef};
+use crate::component::{Component, ComponentId};
+use crate::entity::{Entity, EntityLocation};
+use crate::storage::StorageType;
+use crate::tick::Tick;
+use crate::world::World;
+
+pub struct EntityMut<'w> {
+    pub(crate) world: &'w mut World,
+    pub(crate) entity: Entity,
+    pub(crate) location: EntityLocation,
+    pub(crate) now_tick: Tick,
+}
+
+impl Debug for EntityMut<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("EntityMut")
+            .field("world", &self.world.id)
+            .field("entity", &self.entity)
+            .finish()
+    }
+}
+
+impl<'w> EntityMut<'w> {
+    pub fn entity(&self) -> Entity {
+        self.entity
+    }
+
+    #[inline]
+    pub fn archetype(&self) -> &Archetype {
+        unsafe { self.world.archetypes.get(self.location.archetype_id) }
+    }
+
+    #[inline]
+    pub fn contains<T: Component>(&self) -> bool {
+        let Some(id) = self.world.components.get_component_id(TypeId::of::<T>()) else {
+            return false;
+        };
+        self.contains_id(id)
+    }
+
+    #[inline]
+    pub fn contains_id(&self, id: ComponentId) -> bool {
+        self.archetype().contains_component(id)
+    }
+
+    #[inline]
+    pub fn contains_type_id(&self, type_id: TypeId) -> bool {
+        let Some(id) = self.world.components.get_component_id(type_id) else {
+            return false;
+        };
+        self.contains_id(id)
+    }
+
+    #[inline]
+    pub fn get_ref<T: Component>(&self) -> Option<Ref<'_, T>> {
+        let id = self.world.components.get_component_id(TypeId::of::<T>())?;
+        match T::STORAGE_TYPE {
+            StorageType::Table => unsafe { Some(self.get_ref_in_table(id).with_type::<T>()) },
+            StorageType::SparseSet => unsafe { Some(self.get_ref_in_sparse(id).with_type::<T>()) },
+        }
+    }
+
+    #[inline]
+    pub fn get_untyped_ref(&self, id: ComponentId) -> Option<UntypedRef<'_>> {
+        let info = self.world.components.try_get(id)?;
+        match info.storage_type() {
+            StorageType::Table => unsafe { Some(self.get_ref_in_table(id)) },
+            StorageType::SparseSet => unsafe { Some(self.get_ref_in_sparse(id)) },
+        }
+    }
+
+    unsafe fn get_ref_in_table(&self, id: ComponentId) -> UntypedRef<'_> {
+        unsafe {
+            let table = self.world.storages.tables.get(self.location.table_id);
+            let storag_index = table.get_index(id);
+            let table_row = self.location.table_row;
+            let last_run = self.world.last_change;
+            let this_run = self.now_tick;
+            table.get_ref(storag_index, table_row, last_run, this_run)
+        }
+    }
+
+    unsafe fn get_ref_in_sparse(&self, id: ComponentId) -> UntypedRef<'_> {
+        unsafe {
+            let storag_index = self.world.storages.sparse_sets.get_index(id);
+            let sparse_set = self.world.storages.sparse_sets.get(storag_index);
+            let entity_id = self.entity.id();
+            let last_run = self.world.last_change;
+            let this_run = self.now_tick;
+            sparse_set.get_ref(entity_id, last_run, this_run)
+        }
+    }
+
+    #[inline]
+    pub fn get_mut<T: Component>(&mut self) -> Option<Mut<'_, T>> {
+        let id = self.world.components.get_component_id(TypeId::of::<T>())?;
+        match T::STORAGE_TYPE {
+            StorageType::Table => unsafe { Some(self.get_mut_in_table(id).with_type::<T>()) },
+            StorageType::SparseSet => unsafe { Some(self.get_mut_in_sparse(id).with_type::<T>()) },
+        }
+    }
+
+    #[inline]
+    pub fn get_untyped_mut(&mut self, id: ComponentId) -> Option<UntypedMut<'_>> {
+        let info = self.world.components.try_get(id)?;
+        match info.storage_type() {
+            StorageType::Table => unsafe { Some(self.get_mut_in_table(id)) },
+            StorageType::SparseSet => unsafe { Some(self.get_mut_in_sparse(id)) },
+        }
+    }
+
+    unsafe fn get_mut_in_table(&mut self, id: ComponentId) -> UntypedMut<'_> {
+        unsafe {
+            let table = self.world.storages.tables.get_mut(self.location.table_id);
+            let storag_index = table.get_index(id);
+            let table_row = self.location.table_row;
+            let last_run = self.world.last_change;
+            let this_run = self.now_tick;
+            table.get_mut(storag_index, table_row, last_run, this_run)
+        }
+    }
+
+    unsafe fn get_mut_in_sparse(&mut self, id: ComponentId) -> UntypedMut<'_> {
+        unsafe {
+            let storag_index = self.world.storages.sparse_sets.get_index(id);
+            let sparse_set = self.world.storages.sparse_sets.get_mut(storag_index);
+            let entity_id = self.entity.id();
+            let last_run = self.world.last_change;
+            let this_run = self.now_tick;
+            sparse_set.get_mut(entity_id, last_run, this_run)
+        }
+    }
+}

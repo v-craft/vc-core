@@ -11,13 +11,15 @@ use crate::bundle::{
     Bundle, BundleComponentRegistrar, BundleComponentWriter, BundleId, BundleInfo,
 };
 use crate::component::ComponentId;
-use crate::entity::{Entity, EntityLocation};
+use crate::entity::EntityLocation;
 use crate::storage::{StorageIndex, StorageType};
+use crate::tick::Tick;
+use crate::world::EntityMut;
 
 impl World {
     #[inline(always)]
     #[cfg_attr(any(debug_assertions, feature = "debug"), track_caller)]
-    pub fn spawn<B: Bundle>(&mut self, bundle: B) -> Entity {
+    pub fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityMut<'_> {
         let bundle_id = self.register_bundle::<B>();
 
         vc_ptr::into_owning!(bundle);
@@ -31,7 +33,7 @@ impl World {
         data: OwningPtr<'_>,
         bundle_id: BundleId,
         write_fn: fn(usize, &mut BundleComponentWriter),
-    ) -> Entity {
+    ) -> EntityMut<'_> {
         let archetype_id = self.register_archetype(bundle_id);
         let archetype = unsafe { self.archetypes.get(archetype_id) };
 
@@ -46,7 +48,7 @@ impl World {
         let entity_id = entity.id();
         let table_row = unsafe { table.allocate(entity) };
 
-        let tick = self.now;
+        let tick = Tick::new(*self.now_tick.get_mut());
 
         let mut writer = BundleComponentWriter {
             data,
@@ -60,15 +62,22 @@ impl World {
         };
         write_fn(0, &mut writer);
 
-        let entity_location = EntityLocation {
+        let location = EntityLocation {
             archetype_id,
             table_id,
             table_row,
         };
 
-        self.entities.set_spawned(entity, entity_location);
+        unsafe {
+            self.entities.set_spawned(entity, location);
+        }
 
-        entity
+        EntityMut {
+            now_tick: Tick::new(*self.now_tick.get_mut()),
+            world: self,
+            entity,
+            location,
+        }
     }
 
     #[inline]
@@ -180,11 +189,7 @@ impl World {
 
 #[cfg(test)]
 mod tests {
-    use core::any::TypeId;
-
-    use crate::borrow::Ref;
     use crate::component::Component;
-    use crate::entity::Entity;
     use crate::storage::StorageType;
     use crate::world::{World, WorldId};
 
@@ -199,38 +204,13 @@ mod tests {
     }
     impl Component for Bar {}
 
-    fn get_ref<T: Component>(world: &World, entity: Entity) -> Ref<'_, T> {
-        let component_id = world
-            .components
-            .get_component_id(TypeId::of::<T>())
-            .unwrap();
-        let location = world.entities.try_get(entity.id()).unwrap().location;
-        let archetype = unsafe { world.archetypes.get(location.archetype_id) };
-        let (stype, sindex) = archetype.get_storage_info(component_id);
-        match stype {
-            StorageType::Table => unsafe {
-                let table = world.storages.tables.get(location.table_id);
-                table
-                    .get_ref(sindex, location.table_row, world.now, world.now)
-                    .with_type::<T>()
-            },
-            StorageType::SparseSet => unsafe {
-                let sparse_set = world.storages.sparse_sets.get(sindex);
-                sparse_set
-                    .get_ref(entity.id(), world.now, world.now)
-                    .with_type::<T>()
-            },
-        }
-    }
-
     #[test]
     fn spawn_basic() {
         let mut world = World::new(WorldId::new(1));
 
         let entity = world.spawn((Foo, Bar(123)));
-
-        assert_eq!(get_ref::<Foo>(&world, entity).into_inner(), &Foo);
-        assert_eq!(get_ref::<Bar>(&world, entity).into_inner(), &Bar(123));
+        assert_eq!(entity.get_ref::<Foo>().unwrap().into_inner(), &Foo);
+        assert_eq!(entity.get_ref::<Bar>().unwrap().into_inner(), &Bar(123));
 
         // std::eprintln!("{world:?}");
 

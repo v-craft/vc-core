@@ -23,7 +23,7 @@ use vc_reflect::derive::Reflect;
 ///
 /// [`Entity`]: crate::entity::Entity
 /// [`Entities`]: crate::entity::Entities
-#[derive(Debug, Clone, Copy, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct EntityId(NonZeroU32);
 
@@ -33,18 +33,6 @@ impl EntityId {
         const ID: EntityId = EntityId(NonZeroU32::new(VAL).unwrap());
         assert!(VAL == ID.index_u32());
     };
-
-    pub const PLACEHOLDER: Self = Self(NonZeroU32::MAX);
-
-    // #[inline(always)]
-    // pub(crate) const fn new(index: NonZeroU32) -> Self {
-    //     Self(index)
-    // }
-
-    // #[inline(always)]
-    // pub(crate) const fn from_u32(index: u32) -> Self {
-    //     Self(NonZeroU32::new(index).unwrap())
-    // }
 
     /// Gets the index of the entity.
     #[inline(always)]
@@ -75,6 +63,13 @@ impl Hash for EntityId {
     }
 }
 
+impl Debug for EntityId {
+    #[inline(always)]
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        Debug::fmt(&self.index_u32(), f)
+    }
+}
+
 impl Display for EntityId {
     #[inline(always)]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -100,7 +95,7 @@ impl Display for EntityId {
 /// hold an `Entity` for a long time.
 ///
 /// [`Entity`]: crate::entity::Entity
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct EntityGeneration(u32);
 
@@ -154,6 +149,13 @@ impl Hash for EntityGeneration {
     }
 }
 
+impl Debug for EntityGeneration {
+    #[inline(always)]
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        Debug::fmt(&self.0, f)
+    }
+}
+
 impl Display for EntityGeneration {
     #[inline(always)]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -190,12 +192,11 @@ pub struct Entity {
 
 impl Entity {
     const _STATIC_ASSERT_: () = const {
-        assert!(Entity::PLACEHOLDER.index_u32() == EntityId::PLACEHOLDER.index_u32());
         assert!(Entity::from_bits(20260101).index_u32() == 20260101);
     };
 
     /// A placeholder entity representing an invalid or uninitialized entity.
-    pub const PLACEHOLDER: Self = unsafe { mem::transmute(u64::MAX) };
+    pub(crate) const PLACEHOLDER: Self = unsafe { mem::transmute(u64::MAX) };
 
     /// Creates a new `Entity` from its constituent parts.
     #[inline(always)]
@@ -215,7 +216,7 @@ impl Entity {
     /// # Safety
     /// `id != 0 && id != u32::MAX`
     #[inline(always)]
-    pub(super) const unsafe fn from_u32_unchecked(id: u32) -> Entity {
+    pub(super) const unsafe fn from_u32(id: u32) -> Entity {
         Self {
             id: unsafe { mem::transmute::<u32, EntityId>(id) },
             generation: EntityGeneration::FIRST,
@@ -384,5 +385,11 @@ mod tests {
             Entity::from_bits(123456789012_u64).to_bits(),
             123456789012_u64
         );
+    }
+
+    #[test]
+    fn entity_eq() {
+        assert_eq!(Entity::from_bits(12345), Entity::from_bits(12345));
+        assert_ne!(Entity::from_bits(12345), Entity::from_bits(54321));
     }
 }

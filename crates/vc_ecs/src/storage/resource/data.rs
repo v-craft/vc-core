@@ -24,7 +24,7 @@ impl Debug for ResourceData {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_tuple("ResourceData")
             .field(&self.name)
-            .field(&self.is_valid())
+            .field(&self.data.is_valid())
             .finish()
     }
 }
@@ -48,7 +48,7 @@ impl Debug for NonSendData {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_tuple("NonSendData")
             .field(&self.name)
-            .field(&self.is_valid())
+            .field(&self.data.is_valid())
             .finish()
     }
 }

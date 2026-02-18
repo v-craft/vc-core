@@ -3,10 +3,13 @@
 
 mod despawn;
 mod insert;
+mod register;
 mod spawn;
 
 // -----------------------------------------------------------------------------
 // Worlds
+
+use vc_os::sync::atomic::AtomicU32;
 
 use super::WorldId;
 
@@ -18,8 +21,10 @@ use crate::storage::Storages;
 use crate::tick::Tick;
 
 pub struct World {
-    id: WorldId,
-    pub(crate) now: Tick,
+    pub(crate) id: WorldId,
+    pub(crate) now_tick: AtomicU32,
+    pub(crate) last_change: Tick,
+    pub(crate) last_check: Tick,
     pub(crate) archetypes: Archetypes,
     pub(crate) bundles: Bundles,
     pub(crate) storages: Storages,
@@ -33,7 +38,9 @@ impl core::fmt::Debug for World {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("World")
             .field("id", &self.id)
-            .field("now", &self.now)
+            .field("now_tick", &self.now_tick)
+            .field("last_change", &self.last_change)
+            .field("last_check", &self.last_check)
             .field("archetypes", &self.archetypes)
             .field("bundles", &self.bundles)
             .field("storages", &self.storages)
@@ -49,7 +56,9 @@ impl World {
     pub fn new(id: WorldId) -> World {
         Self {
             id,
-            now: Tick::new(0),
+            now_tick: AtomicU32::new(0),
+            last_change: Tick::new(0),
+            last_check: Tick::new(0),
             archetypes: Archetypes::new(),
             bundles: Bundles::new(),
             storages: Storages::new(),

@@ -3,28 +3,32 @@ use core::any::TypeId;
 use vc_ptr::OwningPtr;
 
 use super::World;
+use crate::borrow::{NonSendMut, ResMut, UntypedMut};
 use crate::component::{ComponentId, NonSendResource, Resource};
+use crate::tick::Tick;
 
 impl World {
     #[inline(always)]
-    pub fn insert_resource<T: Resource>(&mut self, value: T) {
+    pub fn insert_resource<T: Resource>(&mut self, value: T) -> ResMut<'_, T> {
         let id = self
             .components
             .register_resource::<T>(&mut self.compid_allocator);
 
         vc_ptr::into_owning!(value);
 
-        self.insert_resouce_internal(value, id);
+        unsafe { self.insert_resouce_internal(value, id).into_res::<T>() }
     }
 
     #[inline(never)]
-    fn insert_resouce_internal(&mut self, value: OwningPtr<'_>, id: ComponentId) {
+    fn insert_resouce_internal(&mut self, value: OwningPtr<'_>, id: ComponentId) -> UntypedMut<'_> {
         let info = unsafe { self.components.get(id) };
         self.storages.resources.prepare(info);
 
         unsafe {
             let data = self.storages.resources.get_mut(id);
-            data.set_data(value, self.now);
+            let tick = Tick::new(*self.now_tick.get_mut());
+            data.set_data(value, tick);
+            data.get_mut(self.last_change, Tick::new(*self.now_tick.get_mut()))
         }
     }
 
@@ -36,24 +40,33 @@ impl World {
     }
 
     #[inline(always)]
-    pub fn insert_non_send<T: NonSendResource>(&mut self, value: T) {
+    pub fn insert_non_send<T: NonSendResource>(&mut self, value: T) -> NonSendMut<'_, T> {
         let id = self
             .components
             .register_non_send::<T>(&mut self.compid_allocator);
 
         vc_ptr::into_owning!(value);
 
-        self.insert_non_send_internal(value, id);
+        unsafe {
+            self.insert_non_send_internal(value, id)
+                .into_non_send::<T>()
+        }
     }
 
     #[inline(never)]
-    fn insert_non_send_internal(&mut self, value: OwningPtr<'_>, id: ComponentId) {
+    fn insert_non_send_internal(
+        &mut self,
+        value: OwningPtr<'_>,
+        id: ComponentId,
+    ) -> UntypedMut<'_> {
         let info = unsafe { self.components.get(id) };
         self.storages.non_sends.prepare(info);
 
         unsafe {
             let data = self.storages.non_sends.get_mut(id);
-            data.set_data(value, self.now);
+            let tick = Tick::new(*self.now_tick.get_mut());
+            data.set_data(value, tick);
+            data.get_mut(self.last_change, Tick::new(*self.now_tick.get_mut()))
         }
     }
 
@@ -67,9 +80,6 @@ impl World {
 
 #[cfg(test)]
 mod tests {
-    use core::any::TypeId;
-
-    use crate::borrow::{NonSend, Res};
     use crate::component::{NonSendResource, Resource};
     use crate::world::{World, WorldId};
 
@@ -81,44 +91,16 @@ mod tests {
 
     impl Resource for Foo {}
     impl NonSendResource for Bar {}
-
-    fn get_res<T: Resource>(world: &World) -> Res<'_, T> {
-        let component_id = world.components.get_resource_id(TypeId::of::<T>()).unwrap();
-        unsafe {
-            world
-                .storages
-                .resources
-                .get(component_id)
-                .get_ref(world.now, world.now)
-                .into_res::<T>()
-        }
-    }
-
-    fn get_non_send<T: NonSendResource>(world: &World) -> NonSend<'_, T> {
-        let component_id = world.components.get_non_send_id(TypeId::of::<T>()).unwrap();
-        unsafe {
-            world
-                .storages
-                .non_sends
-                .get(component_id)
-                .get_ref(world.now, world.now)
-                .into_non_send::<T>()
-        }
-    }
-
     #[test]
     fn insert_basic() {
         let mut world = World::new(WorldId::new(1));
-        world.insert_resource(Foo);
-        world.insert_non_send(Bar(234));
+        assert_eq!(*world.insert_resource(Foo).into_inner(), Foo);
+        assert_eq!(*world.insert_non_send(Bar(234)).into_inner(), Bar(234));
 
-        assert_eq!(get_res::<Foo>(&world).into_inner(), &Foo);
-        assert_eq!(get_non_send::<Bar>(&world).into_inner(), &Bar(234));
-
-        std::eprintln!(
-            "{:?} | {:?}",
-            get_res::<Foo>(&world),
-            get_non_send::<Bar>(&world),
-        );
+        // std::eprintln!(
+        //     "{:?} | {:?}",
+        //     get_res::<Foo>(&world),
+        //     get_non_send::<Bar>(&world),
+        // );
     }
 }

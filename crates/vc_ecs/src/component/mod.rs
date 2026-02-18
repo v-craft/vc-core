@@ -9,14 +9,13 @@ mod tick;
 // -----------------------------------------------------------------------------
 // Internal API
 
-pub(crate) use ident::CompIdAllocator;
 pub(crate) use tick::{ComponentTicksMut, ComponentTicksRef};
 pub(crate) use tick::{ComponentTicksSliceMut, ComponentTicksSliceRef};
 
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use ident::ComponentId;
+pub use ident::{CompIdAllocator, ComponentId};
 pub use info::{ComponentDescriptor, ComponentInfo, ComponentKind, Components};
 
 // -----------------------------------------------------------------------------

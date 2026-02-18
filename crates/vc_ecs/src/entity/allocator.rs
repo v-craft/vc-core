@@ -599,7 +599,7 @@ impl FreshAllocator {
             Self::on_overflow();
         }
         // SAFETY: `next_id` starts from 1 and increments, never reaching 0
-        unsafe { Entity::from_u32_unchecked(index) }
+        unsafe { Entity::from_u32(index) }
     }
 
     /// Allocates multiple new entity IDs.
@@ -628,7 +628,7 @@ impl Iterator for FreshEntityIter {
     fn next(&mut self) -> Option<Self::Item> {
         self.0
             .next()
-            .map(|index| unsafe { Entity::from_u32_unchecked(index) })
+            .map(|index| unsafe { Entity::from_u32(index) })
     }
 
     #[inline]

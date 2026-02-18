@@ -14,7 +14,7 @@ use vc_os::sync::atomic::AtomicU32;
 ///
 /// `ComponentId` is only valid for a given `World`,
 /// and is not globally unique.
-#[derive(Debug, Clone, Copy, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct ComponentId(NonZeroU32);
 
@@ -53,6 +53,13 @@ impl Hash for ComponentId {
     }
 }
 
+impl Debug for ComponentId {
+    #[inline(always)]
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        Debug::fmt(&self.index_u32(), f)
+    }
+}
+
 impl Display for ComponentId {
     #[inline(always)]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -67,7 +74,7 @@ impl Display for ComponentId {
 ///
 /// # Panics
 /// Panics if the allocated ID would exceed or equal `u32::MAX`.
-pub(crate) struct CompIdAllocator {
+pub struct CompIdAllocator {
     next: AtomicU32,
 }
 
@@ -79,7 +86,7 @@ impl CompIdAllocator {
 
     /// Creates a new `ComponentIdAllocator` that starts allocating IDs from `1`.
     #[inline(always)]
-    pub const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             // SAFETY: IDs start from `1` instead of `0`.
             next: AtomicU32::new(1),
@@ -92,50 +99,44 @@ impl CompIdAllocator {
         self.next.load(Ordering::Relaxed) as usize - 1
     }
 
-    /// Allocates and returns the next available ID.
-    ///
-    /// This method requires exclusive mutable access, so it
-    /// doesn't need atomic operations.
-    pub fn next_mut(&mut self) -> ComponentId {
+    pub fn alloc(&self) -> ComponentId {
+        let next = self.next.fetch_add(1, Ordering::Relaxed);
+        assert!(next < u32::MAX, "too many components");
+        unsafe { Self::force_cast(next) }
+    }
+
+    pub fn alloc_mut(&mut self) -> ComponentId {
         let next = self.next.get_mut();
         assert!(*next < u32::MAX, "too many components");
         let result = unsafe { Self::force_cast(*next) };
         *next += 1;
         result
     }
-
-    // /// Returns the next ID without allocating it.
-    // ///
-    // /// This operation is atomic and does not increment the internal counter.
-    // #[inline]
-    // pub fn peek(&self) -> ComponentId {
-    //     let next = self.next.load(Ordering::Relaxed);
-    //     unsafe { Self::force_cast(next) }
-    // }
-
-    // /// Allocates and returns the next available ID.
-    // ///
-    // /// This operation is atomic and increments the internal counter.
-    // pub fn next(&self) -> ComponentId {
-    //     let next = self.next.fetch_add(1, Ordering::Relaxed);
-    //     assert!(next < u32::MAX, "too many components");
-    //     unsafe { Self::force_cast(next) }
-    // }
-
-    // /// Returns the next ID without allocating it.
-    // ///
-    // /// This method requires exclusive mutable access, so it
-    // /// doesn't need atomic operations.
-    // #[inline]
-    // pub fn peek_mut(&mut self) -> ComponentId {
-    //     unsafe { Self::force_cast(*self.next.get_mut()) }
-    // }
 }
 
 impl Debug for CompIdAllocator {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("CompIdAllocator")
-            .field("total_allocated", &self.count())
+            .field("allocated", &self.count())
             .finish()
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use super::CompIdAllocator;
+
+    #[test]
+    fn alloc() {
+        let mut allocator = CompIdAllocator::new();
+        assert_eq!(allocator.alloc().index_u32(), 1);
+        assert_eq!(allocator.alloc().index_u32(), 2);
+        assert_eq!(allocator.alloc_mut().index_u32(), 3);
+        assert_eq!(allocator.alloc_mut().index_u32(), 4);
+        assert_eq!(allocator.alloc().index_u32(), 5);
+        assert_eq!(allocator.alloc_mut().index_u32(), 6);
     }
 }

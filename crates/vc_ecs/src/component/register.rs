@@ -1,9 +1,8 @@
 use core::any::TypeId;
 
-use super::{CompIdAllocator, ComponentDescriptor, Components};
-use super::{Component, ComponentId, NonSendResource, Resource};
-
-use crate::component::ComponentInfo;
+use super::{CompIdAllocator, ComponentId, Components};
+use super::{Component, NonSendResource, Resource};
+use super::{ComponentDescriptor, ComponentInfo};
 
 impl Components {
     #[inline]
@@ -26,7 +25,7 @@ impl Components {
         if let Some(id) = self.get_component_id(TypeId::of::<T>()) {
             return id;
         }
-        let id = allocator.next_mut();
+        let id = allocator.alloc_mut();
         let descriptor = ComponentDescriptor::new_component::<T>();
         register_component_internal(self, id, descriptor);
         id
@@ -52,7 +51,7 @@ impl Components {
         if let Some(id) = self.get_resource_id(TypeId::of::<T>()) {
             return id;
         }
-        let id = allocator.next_mut();
+        let id = allocator.alloc_mut();
         let descriptor = ComponentDescriptor::new_resource::<T>();
         register_resource_internal(self, id, descriptor);
         id
@@ -78,7 +77,7 @@ impl Components {
         if let Some(id) = self.get_non_send_id(TypeId::of::<T>()) {
             return id;
         }
-        let id = allocator.next_mut();
+        let id = allocator.alloc_mut();
         let descriptor = ComponentDescriptor::new_non_send::<T>();
         register_non_send_internal(self, id, descriptor);
         id
@@ -90,15 +89,14 @@ impl Components {
         #[inline(never)]
         fn resize_infos(this: &mut Components, len: usize) {
             this.infos.resize_with(len, || None);
-            // 强制填充以减少 resize 调用次数，但这导致你不能用 infos 判断有效组件数
+            // we fill Vec to reduce the resize function calls,
+            // so you cannot infer the number of components based on len.
             this.infos.resize_with(this.infos.capacity(), || None);
         }
 
         let index = id.index();
-
-        let least_len = index + 1;
-        if least_len > self.infos.len() {
-            resize_infos(self, least_len);
+        if index >= self.infos.len() {
+            resize_infos(self, index + 1);
         }
 
         let info = ComponentInfo::new(id, descriptor);
