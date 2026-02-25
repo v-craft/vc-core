@@ -1,3 +1,5 @@
+#![allow(clippy::len_without_is_empty, reason = "internal type")]
+
 use core::any::TypeId;
 use core::fmt::Debug;
 
@@ -20,9 +22,27 @@ use crate::component::ComponentId;
 /// including which components are stored densely (in tables) versus sparsely
 /// (in maps).
 pub struct BundleInfo {
-    pub(crate) id: BundleId,
-    pub(crate) dense_len: u32,
-    pub(crate) components: Arc<[ComponentId]>,
+    // A unique identifier for a Bundle.
+    // Also the index in the archetypes array
+    id: BundleId,
+    // Use u32 to reduce the size of the struct.
+    dense_len: u32,
+    // - `[0..dense_len]` are stored in Tables, sorted.
+    // - `[dense_len..]` sare stored in Maps, sorted.
+    // We use Arc to reduce memory allocation overhead.
+    components: Arc<[ComponentId]>,
+}
+
+impl BundleInfo {
+    #[inline(always)]
+    pub(crate) fn dense_len(&self) -> usize {
+        self.dense_len as usize
+    }
+
+    #[inline(always)]
+    pub(crate) fn clone_components(&self) -> Arc<[ComponentId]> {
+        self.components.clone()
+    }
 }
 
 impl BundleInfo {
@@ -45,6 +65,36 @@ impl BundleInfo {
     pub fn sparse_components(&self) -> &[ComponentId] {
         &self.components[self.dense_len as usize..]
     }
+
+    /// Checks if this archetype contains a specific component type.
+    ///
+    /// # Complexity
+    /// - Time: O(log n) where n is the total number of component types
+    /// - Space: O(1)
+    #[inline]
+    pub fn contains_component(&self, id: ComponentId) -> bool {
+        self.contains_dense_component(id) || self.contains_sparse_component(id)
+    }
+
+    /// Checks if this archetype contains a specific dense component type.
+    ///
+    /// # Complexity
+    /// - Time: O(log n) where n is the number of dense components
+    /// - Space: O(1)
+    #[inline]
+    pub fn contains_dense_component(&self, id: ComponentId) -> bool {
+        self.dense_components().binary_search(&id).is_ok()
+    }
+
+    /// Checks if this archetype contains a specific sparse component type.
+    ///
+    /// # Complexity
+    /// - Time: O(log s) where s is the number of sparse components
+    /// - Space: O(1)
+    #[inline]
+    pub fn contains_sparse_component(&self, id: ComponentId) -> bool {
+        self.sparse_components().binary_search(&id).is_ok()
+    }
 }
 
 impl Debug for BundleInfo {
@@ -66,9 +116,9 @@ impl Debug for BundleInfo {
 /// that identical component sets are assigned the same bundle ID, preventing
 /// duplication and enabling bundle sharing.
 pub struct Bundles {
-    pub(crate) infos: Vec<BundleInfo>,
-    pub(crate) mapper: HashMap<Arc<[ComponentId]>, BundleId>,
-    pub(crate) type_mapper: TypeIdMap<BundleId>,
+    infos: Vec<BundleInfo>,
+    mapper: HashMap<Arc<[ComponentId]>, BundleId>,
+    type_mapper: TypeIdMap<BundleId>,
 }
 
 impl Debug for Bundles {
@@ -138,11 +188,13 @@ impl Bundles {
             id
         }
     }
+}
 
-    /// Returns the bundle ID associated with a type ID, if it exists.
+impl Bundles {
+    /// Returns the number of registered bundles.
     #[inline]
-    pub fn get_id(&self, id: TypeId) -> Option<BundleId> {
-        self.type_mapper.get(&id).copied()
+    pub const fn len(&self) -> usize {
+        self.infos.len()
     }
 
     /// Returns the bundle information for a given bundle ID, if it exists.
@@ -159,5 +211,17 @@ impl Bundles {
     pub unsafe fn get_unchecked(&self, id: BundleId) -> &BundleInfo {
         debug_assert!(id.index() < self.infos.len());
         unsafe { self.infos.get_unchecked(id.index()) }
+    }
+
+    /// Returns the bundle ID associated with ComponentIds, if it exists.
+    #[inline]
+    pub fn get_id(&self, components: &[ComponentId]) -> Option<BundleId> {
+        self.mapper.get(components).copied()
+    }
+
+    /// Returns the bundle ID associated with a type ID, if it exists.
+    #[inline]
+    pub fn get_id_by_type(&self, id: TypeId) -> Option<BundleId> {
+        self.type_mapper.get(&id).copied()
     }
 }

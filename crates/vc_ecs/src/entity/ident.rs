@@ -36,7 +36,7 @@ impl EntityId {
 
     /// Gets the index of the entity.
     #[inline(always)]
-    pub const fn index_u32(self) -> u32 {
+    const fn index_u32(self) -> u32 {
         unsafe { mem::transmute(self) }
     }
 
@@ -192,7 +192,7 @@ pub struct Entity {
 
 impl Entity {
     const _STATIC_ASSERT_: () = const {
-        assert!(Entity::from_bits(20260101).index_u32() == 20260101);
+        assert!(Entity::from_bits(20260101).id.index_u32() == 20260101);
     };
 
     /// A placeholder entity representing an invalid or uninitialized entity.
@@ -219,14 +219,6 @@ impl Entity {
     #[inline(always)]
     pub const fn index(self) -> usize {
         self.id.index()
-    }
-
-    /// Returns the entity's index as a `u32`.
-    ///
-    /// As same as [`EntityId::index_u32`] .
-    #[inline(always)]
-    pub const fn index_u32(self) -> u32 {
-        self.id.index_u32()
     }
 
     /// Returns the `EntityId` of this entity.

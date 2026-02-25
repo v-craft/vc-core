@@ -1,5 +1,3 @@
-#![allow(clippy::new_without_default, reason = "internal function")]
-
 use vc_task::ComputeTaskPool;
 
 use crate::component::{ComponentInfo, ComponentStorage};

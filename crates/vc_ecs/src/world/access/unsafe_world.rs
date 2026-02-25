@@ -11,6 +11,16 @@ pub enum WorldMode {
     FullMut = 2,
 }
 
+impl WorldMode {
+    pub const fn merge(self, other: Self) -> Self {
+        if self as u8 >= other as u8 {
+            self
+        } else {
+            other
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct UnsafeWorld<'a> {
     world: NonNull<World>,

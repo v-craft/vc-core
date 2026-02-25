@@ -1,4 +1,5 @@
+mod arche;
 mod despawn;
-mod insert;
+mod resource;
 mod register;
 mod spawn;

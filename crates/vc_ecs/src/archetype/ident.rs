@@ -19,6 +19,13 @@ impl ArcheId {
         Self(NonMaxU32::new(id).expect("too many archetypes"))
     }
 
+    /// # Safety
+    /// The value must not be the maximum value of the underlying integer type.
+    #[inline(always)]
+    pub(crate) const unsafe fn new_unchecked(id: u32) -> Self {
+        Self(unsafe { NonMaxU32::new_unchecked(id) })
+    }
+
     /// Returns the archetype index as a usize.
     #[inline(always)]
     pub const fn index(self) -> usize {

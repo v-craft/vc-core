@@ -1,5 +1,3 @@
-#![allow(clippy::new_without_default, reason = "internal type")]
-
 use super::ResData;
 use crate::resource::{ResourceId, ResourceInfo};
 use crate::storage::AbortOnPanic;

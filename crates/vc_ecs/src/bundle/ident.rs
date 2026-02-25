@@ -13,8 +13,8 @@ impl BundleId {
     pub const EMPTY: BundleId = BundleId(0);
 
     #[inline(always)]
-    pub(crate) const fn new(index: u32) -> Self {
-        Self(index)
+    pub(crate) const fn new(id: u32) -> Self {
+        Self(id)
     }
 
     /// Returns the bundle index as a usize.

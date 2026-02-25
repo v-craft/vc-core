@@ -1,6 +1,6 @@
 use vc_ptr::OwningPtr;
-use vc_utils::extra::TypeIdMap;
 
+use crate::archetype::ArcheId;
 use crate::bundle::{Bundle, BundleId};
 use crate::component::ComponentWriter;
 use crate::entity::{EntityLocation, SpawnError};
@@ -16,7 +16,7 @@ impl World {
 
         vc_ptr::into_owning!(bundle);
 
-        self.spawn_internal(bundle, bundle_id, B::write_fields, B::write_required)
+        self.spawn_internal(bundle, bundle_id, B::write_explicit, B::write_required)
     }
 
     #[inline(never)]
@@ -24,15 +24,15 @@ impl World {
         &mut self,
         data: OwningPtr<'_>,
         bundle_id: BundleId,
-        write_fields: unsafe fn(&mut ComponentWriter, usize),
+        write_explicit: unsafe fn(&mut ComponentWriter, usize),
         write_required: unsafe fn(&mut ComponentWriter),
     ) -> WorldEntityMut<'_> {
         let tick = Tick::new(*self.this_run.get_mut());
 
-        let arche_id = self.register_archetype(bundle_id);
+        let arche_id = self.register_archetype_by_bundle(bundle_id);
         let archetype = unsafe { self.archetypes.get_unchecked_mut(arche_id) };
 
-        let table_id = archetype.table_id;
+        let table_id = archetype.table_id();
         let table = unsafe { self.storages.tables.get_unchecked_mut(table_id) };
 
         let maps = &mut self.storages.maps;
@@ -57,7 +57,7 @@ impl World {
                 let _ = map.allocate(entity);
             });
         let table_row = unsafe { table.allocate(entity) };
-        let arche_row = unsafe { archetype.allocate(entity) };
+        let arche_row = unsafe { archetype.insert_entity(entity) };
 
         unsafe {
             let mut writer = ComponentWriter {
@@ -68,10 +68,10 @@ impl World {
                 entity,
                 table_row,
                 tick,
-                writed: TypeIdMap::new(),
+                writed: Default::default(),
             };
 
-            write_fields(&mut writer, 0);
+            write_explicit(&mut writer, 0);
             write_required(&mut writer);
         }
 
@@ -90,6 +90,42 @@ impl World {
             world: self,
             entity,
             location,
+        }
+    }
+
+    #[inline]
+    fn register_archetype_by_bundle(&mut self, bundle_id: BundleId) -> ArcheId {
+        if let Some(id) = self.archetypes.get_id_by_bundle(bundle_id) {
+            id
+        } else {
+            self.register_archetype_by_bundle_slow(bundle_id)
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn register_archetype_by_bundle_slow(&mut self, bundle_id: BundleId) -> ArcheId {
+        let info = self.bundles.get(bundle_id).unwrap();
+        if let Some(id) = self.archetypes.get_id(info.components()) {
+            unsafe {
+                self.archetypes.set_bundle_map(bundle_id, id);
+            }
+            return id;
+        }
+
+        let dense_len = info.dense_len();
+        let components = info.clone_components();
+        let table_id = unsafe {
+            let sparses = info.sparse_components();
+            self.storages.maps.register(&self.components, sparses);
+            let denses = info.dense_components();
+            self.storages.tables.register(&self.components, denses)
+        };
+
+        unsafe {
+            let id = self.archetypes.register(table_id, dense_len, components);
+            self.archetypes.set_bundle_map(bundle_id, id);
+            id
         }
     }
 }

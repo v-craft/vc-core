@@ -9,7 +9,7 @@ impl World {
         let arche_id = location.arche_id;
         let arche_row = location.arche_row;
         let archetype = unsafe { self.archetypes.get_unchecked_mut(arche_id) };
-        let arche_moved = unsafe { archetype.swap_remove(arche_row) };
+        let arche_moved = unsafe { archetype.remove_entity(arche_row) };
 
         let table_id = location.table_id;
         let table_row = location.table_row;

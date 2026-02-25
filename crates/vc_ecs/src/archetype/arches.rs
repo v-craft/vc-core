@@ -1,3 +1,5 @@
+#![allow(clippy::len_without_is_empty, reason = "internal type")]
+
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
@@ -13,10 +15,29 @@ use crate::storage::TableId;
 // Archetypes
 
 /// A collection of all archetypes in the ECS world.
+///
+/// # Overview
+/// `Archetypes` serves as the central registry for all archetype instances,
+/// providing efficient lookup and filtering capabilities for the ECS query system.
+/// It maintains multiple indexing structures to support different access patterns:
+///
+/// - **Direct access**: By [`ArcheId`] (primary key)
+/// - **Bundle-based**: Maps [`BundleId`] to the corresponding archetype
+/// - **Component-based**: Maps each [`ComponentId`] to all archetypes containing it
+/// - **Precise matching**: Maps exact component sets to their archetype IDs
+///
+/// # Initial State
+/// Always contains at least one archetype: the **empty archetype** (no components),
+/// which serves as the starting point for all entities.
 pub struct Archetypes {
+    /// Primary storage for all archetype instances.
+    /// Index corresponds directly to [`ArcheId`].
     arches: Vec<Archetype>,
+    /// Maps bundle IDs to their corresponding archetype IDs.
     bundle_map: Vec<Option<ArcheId>>,
+    /// Inverted index mapping component IDs to sets of archetype IDs.
     component_map: Vec<SparseHashSet<ArcheId>>,
+    /// Maps exact component sets to archetype IDs.
     precise_map: HashMap<Arc<[ComponentId]>, ArcheId>,
 }
 
@@ -27,8 +48,7 @@ impl Debug for Archetypes {
 }
 
 impl Archetypes {
-    /// Creates a new archetypes, initializes with
-    /// the empty archetype (no components),
+    /// Creates a new archetypes collection, initialized with the empty archetype.
     pub(crate) fn new() -> Self {
         let mut val = const {
             Archetypes {
@@ -39,26 +59,30 @@ impl Archetypes {
             }
         };
 
-        val.arches.push(Archetype {
-            id: ArcheId::EMPTY,
-            table_id: TableId::EMPTY,
-            dense_len: 0,
-            entities: Vec::new(),
-            components: Arc::new([]),
-        });
+        let arche = unsafe { Archetype::new(ArcheId::EMPTY, TableId::EMPTY, 0, Arc::new([])) };
+        val.arches.push(arche);
         val.bundle_map.push(Some(ArcheId::EMPTY));
         val.precise_map.insert(Arc::new([]), ArcheId::EMPTY);
 
         val
     }
 
-    /// Inserts a mapping from bundle ID to archetype ID.
+    /// Inserts a mapping from a bundle ID to an archetype ID.
+    ///
+    /// This mapping enables fast archetype lookup when spawning entities
+    /// from known bundles.
     ///
     /// # Safety
-    /// - The bundle ID must be valid and properly initialized.
-    /// - The archetype ID must reference a valid archetype.
-    /// - This method may resize the bundle map; ensure no concurrent access.
-    pub(crate) unsafe fn insert_bundle_id(&mut self, bundle_id: BundleId, arche_id: ArcheId) {
+    /// This method is unsafe because it modifies internal indexing structures
+    /// and requires the caller to uphold the following invariants:
+    ///
+    /// - **Bundle validity**: The `bundle_id` must be valid and properly initialized
+    ///   (i.e., corresponds to a registered bundle type).
+    /// - **Archetype validity**: The `arche_id` must reference a valid, already-registered
+    ///   archetype that exactly matches the component set of the bundle.
+    /// - **No concurrent access**: This method may resize the bundle map; ensure no
+    ///   other operations are concurrently reading or writing the bundle map.
+    pub(crate) unsafe fn set_bundle_map(&mut self, bundle_id: BundleId, arche_id: ArcheId) {
         #[cold]
         #[inline(never)]
         fn resize_bundle_map(map: &mut Vec<Option<ArcheId>>, len: usize) {
@@ -77,10 +101,21 @@ impl Archetypes {
 
     /// Registers a new archetype with the given component set.
     ///
+    /// This method creates a new archetype and updates all indexing structures
+    /// to make it discoverable through various lookup paths.
+    ///
     /// # Safety
-    /// - Component IDs must be valid and properly registered.
-    /// - The component set must be unique (no duplicate archetype with same set).
-    /// - Bundle ID must not already have a mapping (unless intentionally overwriting).
+    /// This method is unsafe and requires the caller to ensure:
+    ///
+    /// - **Component validity**: All `ComponentId`s in `components` must be valid and
+    ///   properly registered in the component registry.
+    /// - **Uniqueness**: The exact component set must not already have an archetype
+    ///   (no duplicates), unless intentionally creating a new archetype for the same
+    ///   set (which would violate ECS invariants).
+    /// - **Sorting**: The `components` slice must be sorted, as this is relied upon
+    ///   for binary search operations in archetype methods.
+    /// - **Bundle consistency**: If a bundle corresponds to this component set, its
+    ///   mapping should be updated separately via [`insert_bundle_id`](Self::insert_bundle_id).
     pub(crate) unsafe fn register(
         &mut self,
         table_id: TableId,
@@ -94,15 +129,11 @@ impl Archetypes {
             map.resize_with(map.capacity(), SparseHashSet::new);
         }
 
-        let id = ArcheId::new(self.arches.len() as u32);
+        let arche_id = ArcheId::new(self.arches.len() as u32);
 
-        self.arches.push(Archetype {
-            id,
-            table_id,
-            dense_len,
-            entities: Vec::new(),
-            components: components.clone(),
-        });
+        let arche = unsafe { Archetype::new(arche_id, table_id, dense_len, components.clone()) };
+
+        self.arches.push(arche);
 
         components.iter().for_each(|&cid| {
             let index = cid.index();
@@ -110,22 +141,35 @@ impl Archetypes {
                 resize_component_map(&mut self.component_map, index + 1);
             }
             unsafe {
-                self.component_map.get_unchecked_mut(index).insert(id);
+                self.component_map
+                    .get_unchecked_mut(index)
+                    .insert_unique_unchecked(arche_id);
             }
         });
 
-        self.precise_map.insert(components, id);
+        self.precise_map.insert(components, arche_id);
 
-        id
+        arche_id
     }
+}
 
+impl Archetypes {
     /// Returns the current version (number of archetypes).
     ///
-    /// The version increments each time a new archetype is created.
+    /// The version increments each time a new archetype is created,
+    /// making it useful for change detection and cache invalidation.
     #[inline]
     pub fn version(&self) -> u32 {
         // See `ArcheId::new`, arches.len is <= u32::MAX.
         self.arches.len() as u32
+    }
+
+    /// Returns the number of registered archetypes.
+    ///
+    /// Similar to [`Archetypes::version`] .
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.arches.len()
     }
 
     /// Returns a reference to the archetype with the given ID, if it exists.
@@ -143,7 +187,8 @@ impl Archetypes {
     /// Returns a reference to the archetype with the given ID without bounds checking.
     ///
     /// # Safety
-    /// `id` is in valid.
+    /// The caller must ensure that `id` is valid (within bounds of `arches`).
+    /// Violating this condition leads to undefined behavior.
     #[inline]
     pub unsafe fn get_unchecked(&self, id: ArcheId) -> &Archetype {
         debug_assert!(id.index() < self.arches.len());
@@ -153,28 +198,29 @@ impl Archetypes {
     /// Returns a mutable reference to the archetype with the given ID without bounds checking.
     ///
     /// # Safety
-    /// `id` is in valid.
+    /// The caller must ensure that `id` is valid (within bounds of `arches`).
+    /// Violating this condition leads to undefined behavior.
     #[inline]
     pub unsafe fn get_unchecked_mut(&mut self, id: ArcheId) -> &mut Archetype {
         debug_assert!(id.index() < self.arches.len());
         unsafe { self.arches.get_unchecked_mut(id.index()) }
     }
 
-    /// Returns the archetype ID for an exact set of components, if it exists.
+    /// Finds the archetype ID for an exact component set.
     #[inline]
     pub fn get_id(&self, components: &[ComponentId]) -> Option<ArcheId> {
         self.precise_map.get(components).copied()
     }
 
-    /// Returns the archetype ID associated with a bundle ID, if it exists.
+    /// Returns the archetype ID associated with a specific bundle.
     #[inline]
-    pub fn get_by_bundle(&self, id: BundleId) -> Option<ArcheId> {
+    pub fn get_id_by_bundle(&self, id: BundleId) -> Option<ArcheId> {
         self.bundle_map.get(id.index()).and_then(|t| *t)
     }
 
-    /// Creates a new filter for querying archetypes by component presence/absence.
+    /// Creates a new filter builder for querying archetypes by component requirements.
     #[inline]
-    pub fn get_filter(&self) -> ArcheFilter<'_> {
+    pub fn filter(&self) -> ArcheFilter<'_> {
         ArcheFilter {
             arches: self,
             with: None,
@@ -186,16 +232,26 @@ impl Archetypes {
 // -----------------------------------------------------------------------------
 // ArcheFilter
 
-#[derive(Debug)]
+/// A builder for filtering archetypes based on component requirements.
+#[derive(Debug, Clone)]
 pub struct ArcheFilter<'a> {
+    /// Reference to the parent archetypes collection
     arches: &'a Archetypes,
-    // ↓ None means all ArcheId, instead of empty.
+    /// Set of candidate archetype IDs that satisfy all `with` constraints so far.
+    /// `None` means "all archetypes" (initial state), which is distinct from
+    /// an empty set (which would mean no archetypes can match).
     with: Option<SparseHashSet<ArcheId>>,
+    /// Set of archetype IDs to exclude (those containing any `without` component).
+    /// This grows as more `without` constraints are added.
     without: SparseHashSet<ArcheId>,
 }
 
 impl ArcheFilter<'_> {
     /// Adds a requirement that archetypes must contain the specified component.
+    ///
+    /// This narrows down the candidate set to only archetypes that include
+    /// this component. If the component doesn't exist in any archetype,
+    /// the filter becomes empty (no matches possible).
     pub fn with(&mut self, id: ComponentId) {
         if let Some(set) = self.arches.component_map.get(id.index()) {
             if let Some(with) = &mut self.with {
@@ -211,6 +267,8 @@ impl ArcheFilter<'_> {
     }
 
     /// Adds a requirement that archetypes must NOT contain the specified component.
+    ///
+    /// This excludes all archetypes that include this component from the results.
     pub fn without(&mut self, id: ComponentId) {
         if let Some(set) = self.arches.component_map.get(id.index()) {
             self.without.extend(set.iter());
@@ -220,11 +278,19 @@ impl ArcheFilter<'_> {
         }
     }
 
-    pub fn filter(&self, id: ArcheId) -> bool {
-        if let Some(with) = &self.with {
-            with.contains(&id)
+    /// Adds a requirement that archetypes must NOT contain the specified component.
+    ///
+    /// This excludes all archetypes that include this component from the results.
+    pub fn collect(self) -> Vec<ArcheId> {
+        if let Some(with) = self.with {
+            let mut ret: Vec<ArcheId> = with.into_iter().collect();
+            ret.sort();
+            ret
         } else {
-            !self.without.contains(&id)
+            (0..self.arches.arches.len())
+                .map(|idx| unsafe { ArcheId::new_unchecked(idx as u32) })
+                .filter(|id| !self.without.contains(id))
+                .collect()
         }
     }
 }

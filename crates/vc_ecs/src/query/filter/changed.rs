@@ -80,7 +80,7 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
         arche: &'w Archetype,
     ) {
         if T::STORAGE.is_dense() {
-            let table_id = arche.table_id;
+            let table_id = arche.table_id();
             let table = unsafe { cache.storages.tables.get_unchecked(table_id) };
             let Some(table_col) = table.get_table_col(*state) else {
                 cache.ticks = StorageSwitch { dense: None };

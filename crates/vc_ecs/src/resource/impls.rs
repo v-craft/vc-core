@@ -7,3 +7,5 @@ pub unsafe trait Resource: Sized + 'static {
     const MUTABLE: bool;
     const CLONE_BEHAVIOR: CloneBehavior = CloneBehavior::Refuse;
 }
+
+

@@ -1,5 +1,3 @@
-#![allow(clippy::new_without_default, reason = "internal type")]
-
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;

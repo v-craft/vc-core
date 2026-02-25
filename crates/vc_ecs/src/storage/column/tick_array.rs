@@ -1,5 +1,3 @@
-#![allow(clippy::new_without_default, reason = "internal type")]
-
 use alloc::alloc as malloc;
 use core::alloc::Layout;
 use core::num::NonZeroUsize;

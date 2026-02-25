@@ -24,12 +24,6 @@ impl ComponentId {
         Self(NonMaxU32::new(id).expect("too many components"))
     }
 
-    /// Convert `ComponentId` to u32.
-    #[inline(always)]
-    pub const fn index_u32(self) -> u32 {
-        self.0.get()
-    }
-
     /// Convert `ComponentId` to usize.
     #[inline(always)]
     pub const fn index(self) -> usize {
@@ -58,13 +52,13 @@ impl Hash for ComponentId {
 impl Debug for ComponentId {
     #[inline(always)]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        Debug::fmt(&self.index_u32(), f)
+        Debug::fmt(&self.0.get(), f)
     }
 }
 
 impl Display for ComponentId {
     #[inline(always)]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        Display::fmt(&self.index_u32(), f)
+        Display::fmt(&self.0.get(), f)
     }
 }

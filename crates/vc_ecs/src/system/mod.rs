@@ -2,10 +2,13 @@
 // Modules
 
 mod access;
+mod filter;
 mod param;
 
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use access::{AccessTable, FilterData, FilterParam, FilterParamBuilder};
+pub use filter::{FilterData, FilterParam, FilterParamBuilder};
+
+pub use access::AccessTable;
 pub use param::SystemParam;

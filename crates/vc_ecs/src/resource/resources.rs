@@ -1,4 +1,3 @@
-#![allow(clippy::new_without_default, reason = "internal type")]
 #![allow(clippy::len_without_is_empty, reason = "internal type")]
 
 use alloc::vec::Vec;

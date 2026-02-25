@@ -5,6 +5,7 @@ use core::fmt::Debug;
 use vc_ptr::OwningPtr;
 
 use super::{Component, ComponentId, ComponentStorage};
+use super::{ComponentCollector, ComponentWriter};
 use crate::clone::CloneBehavior;
 use crate::utils::DebugName;
 
@@ -24,6 +25,8 @@ pub struct ComponentDescriptor {
     pub storage: ComponentStorage,
     pub drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
     pub clone_behavior: CloneBehavior,
+    pub collect_required: unsafe fn(&mut ComponentCollector),
+    pub write_required: unsafe fn(&mut ComponentWriter),
 }
 
 impl ComponentDescriptor {
@@ -38,6 +41,8 @@ impl ComponentDescriptor {
                 storage: T::STORAGE,
                 clone_behavior: T::CLONE_BEHAVIOR,
                 drop_fn: OwningPtr::drop_fn_of::<T>(),
+                collect_required: T::collect_required,
+                write_required: T::write_required,
             }
         }
     }
@@ -118,5 +123,13 @@ impl ComponentInfo {
     #[inline(always)]
     pub fn clone_behavior(&self) -> CloneBehavior {
         self.descriptor.clone_behavior
+    }
+
+    pub fn collect_required(&self) -> unsafe fn(&mut ComponentCollector) {
+        self.descriptor.collect_required
+    }
+
+    pub fn write_required(&self) -> unsafe fn(&mut ComponentWriter) {
+        self.descriptor.write_required
     }
 }

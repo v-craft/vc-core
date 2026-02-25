@@ -118,6 +118,10 @@ impl<T: Component> FetchComponent for T {
         last_run: Tick,
         this_run: Tick,
     ) -> Option<Self::Mut<'a>> {
+        if !T::MUTABLE {
+            return None;
+        }
+
         let world = unsafe { &mut *world.as_ptr() };
         let id = world.components.get_id(TypeId::of::<T>())?;
         match T::STORAGE {
@@ -223,6 +227,10 @@ impl<T: Component> FetchComponent for Option<T> {
         last_run: Tick,
         this_run: Tick,
     ) -> Option<Self::Mut<'a>> {
+        if !T::MUTABLE {
+            return None;
+        }
+
         let world = unsafe { &mut *world.as_ptr() };
         let Some(id) = world.components.get_id(TypeId::of::<T>()) else {
             return Some(None);
