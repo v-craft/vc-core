@@ -8,6 +8,6 @@ mod info;
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use arches::Archetypes;
+pub use arches::{ArcheFilter, Archetypes};
 pub use ident::{ArcheId, ArcheRow};
 pub use info::Archetype;

@@ -118,8 +118,10 @@ unsafe impl<T: Component> Bundle for T {
     }
 
     unsafe fn write_required(writer: &mut ComponentWriter) {
-        unsafe {
-            T::write_required(writer);
+        if let Some(required) = T::REQUIRED {
+            unsafe {
+                ((required.write)(writer));
+            }
         }
     }
 }
@@ -134,6 +136,7 @@ macro_rules! impl_bundle_for_tuple {
     };
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 15 items long.")]
         unsafe impl<$name: Bundle> Bundle for ($name,) {
             unsafe fn collect_components(collector: &mut ComponentCollector) {
                 unsafe { <$name>::collect_components(collector) }
@@ -145,7 +148,6 @@ macro_rules! impl_bundle_for_tuple {
             }
 
             unsafe fn write_required(writer: &mut ComponentWriter) {
-                const { assert!(::core::mem::offset_of!(Self, 0) == 0); }
                 unsafe { <$name>::write_required(writer); }
             }
         }

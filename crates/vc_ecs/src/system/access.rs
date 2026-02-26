@@ -4,18 +4,15 @@ use fixedbitset::FixedBitSet;
 use vc_utils::hash::NoOpHashMap;
 
 use super::{FilterData, FilterParam};
-use crate::component::ComponentId;
 use crate::resource::ResourceId;
 
 #[derive(Default)]
 pub struct AccessTable {
-    pub(crate) world_mut: bool,          // holding `&mut world`
-    pub(crate) world_ref: bool,          // holding `&world`
-    pub(crate) may_reading: FixedBitSet, // combined components reading
-    pub(crate) may_writing: FixedBitSet, // combined components writing
-    pub(crate) res_reading: FixedBitSet, // resource reading
-    pub(crate) res_writing: FixedBitSet, // resource writing
-    pub(crate) filter: NoOpHashMap<FilterParam, FilterData>,
+    world_mut: bool,          // holding `&mut world`
+    world_ref: bool,          // holding `&world`
+    res_reading: FixedBitSet, // resource reading
+    res_writing: FixedBitSet, // resource writing
+    filter: NoOpHashMap<FilterParam, FilterData>,
 }
 
 // `#[derive(Clone)]` does not generate optimized `clone_from`.
@@ -24,8 +21,6 @@ impl Clone for AccessTable {
         Self {
             world_mut: self.world_mut,
             world_ref: self.world_ref,
-            may_reading: self.may_reading.clone(),
-            may_writing: self.may_writing.clone(),
             res_reading: self.res_reading.clone(),
             res_writing: self.res_writing.clone(),
             filter: self.filter.clone(),
@@ -35,8 +30,6 @@ impl Clone for AccessTable {
     fn clone_from(&mut self, source: &Self) {
         self.world_mut = source.world_mut;
         self.world_ref = source.world_ref;
-        self.may_reading.clone_from(&source.may_reading);
-        self.may_writing.clone_from(&source.may_writing);
         self.res_reading.clone_from(&source.res_reading);
         self.res_writing.clone_from(&source.res_writing);
         self.filter.clone_from(&source.filter);
@@ -55,8 +48,6 @@ impl Debug for AccessTable {
         f.debug_struct("AccessTable")
             .field("world_mut", &self.world_mut)
             .field("world_ref", &self.world_ref)
-            .field("may_reading", &FormattedBitSet(&self.may_reading))
-            .field("may_writing", &FormattedBitSet(&self.may_writing))
             .field("res_reading", &FormattedBitSet(&self.res_reading))
             .field("res_writing", &FormattedBitSet(&self.res_writing))
             .finish()
@@ -69,8 +60,6 @@ impl AccessTable {
         Self {
             world_mut: false,
             world_ref: false,
-            may_reading: FixedBitSet::new(),
-            may_writing: FixedBitSet::new(),
             res_reading: FixedBitSet::new(),
             res_writing: FixedBitSet::new(),
             filter: NoOpHashMap::new(),
@@ -80,15 +69,16 @@ impl AccessTable {
     pub fn can_world_mut(&self) -> bool {
         !self.world_mut
             && !self.world_ref
-            && self.may_reading.is_clear()
-            && self.may_writing.is_clear()
             && self.res_reading.is_clear()
             && self.res_writing.is_clear()
+            && self.filter.is_empty()
     }
 
     pub fn can_world_ref(&self) -> bool {
         self.world_ref
-            || (!self.world_mut && self.may_writing.is_clear() && self.res_writing.is_clear())
+            || (!self.world_mut
+                && self.res_writing.is_clear()
+                && self.filter.values().all(FilterData::is_read_only))
     }
 
     pub fn set_world_mut(&mut self) {
@@ -121,62 +111,35 @@ impl AccessTable {
         self.res_writing.grow_and_insert(index);
     }
 
-    pub fn can_reading_in(&self, id: ComponentId, filter: &FilterParam) -> bool {
-        if self.world_mut || self.world_ref {
-            return self.world_ref;
-        }
-        if !self.may_writing.contains(id.index()) {
-            return true;
-        }
-        self.filter.iter().all(|(k, v)| {
-            if k.is_disjoint(filter) {
-                true
-            } else {
-                v.can_reading(id)
-            }
-        })
-    }
-
-    pub fn can_writing_in(&self, id: ComponentId, filter: &FilterParam) -> bool {
-        if self.world_mut || self.world_ref {
+    pub fn can_query(&self, data: &FilterData, params: &[FilterParam]) -> bool {
+        if self.world_mut {
             return false;
         }
-        if !self.may_reading.contains(id.index()) {
-            return true;
+        if self.world_ref {
+            return data.is_read_only();
         }
-        self.filter.iter().any(|(k, v)| {
-            if k.is_disjoint(filter) {
-                true
-            } else {
-                v.can_writing(id)
-            }
+        params.iter().all(|param| {
+            self.filter.iter().all(|(k, v)| {
+                if k.is_disjoint(param) {
+                    true
+                } else {
+                    data.parallelizable(v)
+                }
+            })
         })
     }
 
-    pub fn set_reading_in(&mut self, id: ComponentId, filter: &FilterParam) {
+    pub fn set_query(&mut self, data: &FilterData, params: &[FilterParam]) {
         if self.world_ref {
             return;
         }
-        self.may_reading.grow_and_insert(id.index());
-        if let Some(v) = self.filter.get_mut(filter) {
-            v.set_reading(id);
-        } else {
-            let mut data = FilterData::new();
-            data.set_reading(id);
-            self.filter.insert(filter.clone(), data);
-        }
-    }
-
-    pub fn set_writing_in(&mut self, id: ComponentId, filter: &FilterParam) {
-        self.may_reading.grow_and_insert(id.index());
-        self.may_writing.grow_and_insert(id.index());
-        if let Some(v) = self.filter.get_mut(filter) {
-            v.set_writing(id);
-        } else {
-            let mut data = FilterData::new();
-            data.set_writing(id);
-            self.filter.insert(filter.clone(), data);
-        }
+        params.iter().for_each(|param| {
+            if let Some(item) = self.filter.get_mut(param) {
+                item.merge(data);
+            } else {
+                self.filter.insert(param.clone(), data.clone());
+            }
+        });
     }
 
     pub fn parallelizable(&self, other: &Self) -> bool {
@@ -186,21 +149,10 @@ impl AccessTable {
         if self.world_ref && other.world_ref {
             return true;
         }
-        if self.world_ref {
-            return other.res_writing.is_empty() && other.may_writing.is_clear();
-        }
-        if other.world_ref {
-            return self.res_writing.is_empty() && self.may_writing.is_clear();
-        }
         if !self.res_writing.is_disjoint(&other.res_reading)
             || !other.res_writing.is_disjoint(&self.res_reading)
         {
             return false;
-        }
-        if self.may_writing.is_disjoint(&other.may_reading)
-            && other.may_writing.is_disjoint(&self.may_reading)
-        {
-            return true;
         }
         self.filter.iter().all(|(k, v)| {
             other.filter.iter().all(|(x, y)| {
@@ -222,8 +174,6 @@ impl AccessTable {
             return;
         }
 
-        self.may_reading.union_with(&other.may_reading);
-        self.may_writing.union_with(&other.may_writing);
         self.res_reading.union_with(&other.res_reading);
         self.res_writing.union_with(&other.res_writing);
 

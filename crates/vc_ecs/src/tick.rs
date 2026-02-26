@@ -28,7 +28,7 @@ pub const MAX_TICK_AGE: u32 = u32::MAX - (CHECK_CYCLE << 1) - 1;
 /// Primarily used for change detection mechanisms. Not suitable for timeline
 /// synchronization across different clients, as Tick progression rates cannot
 /// be guaranteed to match between different instances.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct Tick(u32);
 

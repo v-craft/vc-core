@@ -11,12 +11,22 @@ use crate::tick::{DetectChanges, Tick, TicksMut, TicksRef};
 use crate::tick::{TicksSliceMut, TicksSliceRef};
 
 // -----------------------------------------------------------------------------
-// Res
+// ResRef
 
-/// A shared reference to a resource.
+/// A thin shared reference to a Sync resource.
+///
+/// Provides read-only access to a resource **without** change detection.
+pub struct Res<'w, T: Resource + Sync> {
+    pub(crate) value: &'w T,
+}
+
+// -----------------------------------------------------------------------------
+// ResRef
+
+/// A shared reference to a Sync resource.
 ///
 /// Provides read-only access to a resource with change detection.
-pub struct Res<'w, T: Resource> {
+pub struct ResRef<'w, T: Resource + Sync> {
     pub(crate) value: &'w T,
     pub(crate) ticks: TicksRef<'w>,
 }
@@ -24,10 +34,42 @@ pub struct Res<'w, T: Resource> {
 // -----------------------------------------------------------------------------
 // ResMut
 
-/// An exclusive reference to a resource.
+/// An exclusive reference to a Sync resource.
 ///
 /// Provides mutable access to a resource with change detection.
-pub struct ResMut<'w, T: Resource> {
+pub struct ResMut<'w, T: Resource + Sync> {
+    pub(crate) value: &'w mut T,
+    pub(crate) ticks: TicksMut<'w>,
+}
+
+// -----------------------------------------------------------------------------
+// NonSync
+
+/// A shared reference to a !Sync resource.
+///
+/// Provides read-only access to a resource without change detection.
+pub struct NonSync<'w, T: Resource> {
+    pub(crate) value: &'w T,
+}
+
+// -----------------------------------------------------------------------------
+// NonSyncRef
+
+/// A shared reference to a !Sync resource.
+///
+/// Provides read-only access to a resource with change detection.
+pub struct NonSyncRef<'w, T: Resource> {
+    pub(crate) value: &'w T,
+    pub(crate) ticks: TicksRef<'w>,
+}
+
+// -----------------------------------------------------------------------------
+// NonSyncMut
+
+/// An exclusive reference to a !Sync resource.
+///
+/// Provides mutable access to a resource with change detection.
+pub struct NonSyncMut<'w, T: Resource> {
     pub(crate) value: &'w mut T,
     pub(crate) ticks: TicksMut<'w>,
 }
@@ -123,7 +165,7 @@ pub struct UntypedSliceMut<'w> {
 // -----------------------------------------------------------------------------
 // From
 
-impl<'w, T: Resource> From<ResMut<'w, T>> for Mut<'w, T> {
+impl<'w, T: Resource + Sync> From<ResMut<'w, T>> for Mut<'w, T> {
     #[inline]
     fn from(other: ResMut<'w, T>) -> Mut<'w, T> {
         Mut {
@@ -133,7 +175,7 @@ impl<'w, T: Resource> From<ResMut<'w, T>> for Mut<'w, T> {
     }
 }
 
-impl<'w, T: Resource> From<ResMut<'w, T>> for Res<'w, T> {
+impl<'w, T: Resource + Sync> From<ResMut<'w, T>> for ResRef<'w, T> {
     #[inline]
     fn from(other: ResMut<'w, T>) -> Self {
         Self {
@@ -143,9 +185,39 @@ impl<'w, T: Resource> From<ResMut<'w, T>> for Res<'w, T> {
     }
 }
 
-impl<'w, T: Resource> From<Res<'w, T>> for Ref<'w, T> {
+impl<'w, T: Resource + Sync> From<ResRef<'w, T>> for Ref<'w, T> {
     #[inline]
-    fn from(other: Res<'w, T>) -> Self {
+    fn from(other: ResRef<'w, T>) -> Self {
+        Self {
+            value: other.value,
+            ticks: other.ticks,
+        }
+    }
+}
+
+impl<'w, T: Resource> From<NonSyncMut<'w, T>> for Mut<'w, T> {
+    #[inline]
+    fn from(other: NonSyncMut<'w, T>) -> Mut<'w, T> {
+        Mut {
+            value: other.value,
+            ticks: other.ticks,
+        }
+    }
+}
+
+impl<'w, T: Resource> From<NonSyncMut<'w, T>> for NonSyncRef<'w, T> {
+    #[inline]
+    fn from(other: NonSyncMut<'w, T>) -> Self {
+        Self {
+            value: other.value,
+            ticks: other.ticks.into(),
+        }
+    }
+}
+
+impl<'w, T: Resource> From<NonSyncRef<'w, T>> for Ref<'w, T> {
+    #[inline]
+    fn from(other: NonSyncRef<'w, T>) -> Self {
         Self {
             value: other.value,
             ticks: other.ticks,
@@ -216,7 +288,7 @@ impl<'w> From<UntypedSliceMut<'w>> for UntypedSliceRef<'w> {
 // -----------------------------------------------------------------------------
 // IntoIterator
 
-impl<'w, 'a, T: Resource> IntoIterator for &'a mut ResMut<'w, T>
+impl<'w, 'a, T: Resource + Sync> IntoIterator for &'a mut ResMut<'w, T>
 where
     &'a mut T: IntoIterator,
 {
@@ -230,7 +302,7 @@ where
     }
 }
 
-impl<'w, 'a, T: Resource> IntoIterator for &'a ResMut<'w, T>
+impl<'w, 'a, T: Resource + Sync> IntoIterator for &'a ResMut<'w, T>
 where
     &'a T: IntoIterator,
 {
@@ -243,7 +315,73 @@ where
     }
 }
 
-impl<'w, 'a, T: Resource> IntoIterator for &'a Res<'w, T>
+impl<'w, 'a, T: Resource + Sync> IntoIterator for &'a ResRef<'w, T>
+where
+    &'a T: IntoIterator,
+{
+    type Item = <&'a T as IntoIterator>::Item;
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.value.into_iter()
+    }
+}
+
+impl<'w, 'a, T: Resource + Sync> IntoIterator for &'a Res<'w, T>
+where
+    &'a T: IntoIterator,
+{
+    type Item = <&'a T as IntoIterator>::Item;
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.value.into_iter()
+    }
+}
+
+impl<'w, 'a, T: Resource> IntoIterator for &'a mut NonSyncMut<'w, T>
+where
+    &'a mut T: IntoIterator,
+{
+    type Item = <&'a mut T as IntoIterator>::Item;
+    type IntoIter = <&'a mut T as IntoIterator>::IntoIter;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        *self.ticks.changed = self.ticks.this_run;
+        self.value.into_iter()
+    }
+}
+
+impl<'w, 'a, T: Resource> IntoIterator for &'a NonSyncMut<'w, T>
+where
+    &'a T: IntoIterator,
+{
+    type Item = <&'a T as IntoIterator>::Item;
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.value.into_iter()
+    }
+}
+
+impl<'w, 'a, T: Resource> IntoIterator for &'a NonSyncRef<'w, T>
+where
+    &'a T: IntoIterator,
+{
+    type Item = <&'a T as IntoIterator>::Item;
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.value.into_iter()
+    }
+}
+
+impl<'w, 'a, T: Resource> IntoIterator for &'a NonSync<'w, T>
 where
     &'a T: IntoIterator,
 {
@@ -298,8 +436,8 @@ where
 // impl_debug
 
 macro_rules! impl_debug {
-    ($name:ident < $( $generics:tt ),+ > $($traits:ident)?) => {
-        impl<$($generics),* : ?Sized $(+ $traits)?> Debug for $name<$($generics),*>
+    ($name:ident < $( $generics:tt ),+ > $($traits:ident)*) => {
+        impl<$($generics),* : ?Sized $(+ $traits)*> Debug for $name<$($generics),*>
             where T: Debug
         {
             fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
@@ -311,8 +449,12 @@ macro_rules! impl_debug {
     };
 }
 
-impl_debug!(ResMut<'w, T> Resource);
-impl_debug!(Res<'w, T> Resource);
+impl_debug!(ResMut<'w, T> Resource Sync);
+impl_debug!(ResRef<'w, T> Resource Sync);
+impl_debug!(Res<'w, T> Resource Sync);
+impl_debug!(NonSyncMut<'w, T> Resource);
+impl_debug!(NonSyncRef<'w, T> Resource);
+impl_debug!(NonSync<'w, T> Resource);
 impl_debug!(Mut<'w, T>);
 impl_debug!(Ref<'w, T>);
 
@@ -320,8 +462,8 @@ impl_debug!(Ref<'w, T>);
 // impl_ref_methods
 
 macro_rules! impl_ref_methods {
-    ($name:ident < $( $generics:tt ),+ >, $target:ty, $($traits:ident)?) => {
-        impl<$($generics),* : ?Sized $(+ $traits)?> $name<$($generics),*> {
+    ($name:ident < $( $generics:tt ),+ >, $target:ty, $($traits:ident)*) => {
+        impl<$($generics),* : ?Sized $(+ $traits)*> $name<$($generics),*> {
             /// Consumes self and returns the inner reference `&T` with the same lifetime.
             #[inline(always)]
             pub fn into_inner(self) -> &'w $target {
@@ -379,15 +521,44 @@ macro_rules! impl_ref_methods {
     };
 }
 
-impl_ref_methods!(Res<'w, T>, T, Resource);
+impl_ref_methods!(NonSyncRef<'w, T>, T, Resource);
+impl_ref_methods!(ResRef<'w, T>, T, Resource Sync);
 impl_ref_methods!(Ref<'w, T>, T,);
+
+impl<'w, T: Resource + Sync> Res<'w, T> {
+    /// Returns the inner reference `&T` with the same lifetime.
+    #[inline(always)]
+    pub fn into_inner(self) -> &'w T {
+        self.value
+    }
+
+    /// Creates a copy with the same lifetime.
+    #[inline]
+    pub fn reborrow(&self) -> Self {
+        Self { value: self.value }
+    }
+}
+
+impl<'w, T: Resource> NonSync<'w, T> {
+    /// Returns the inner reference `&T` with the same lifetime.
+    #[inline(always)]
+    pub fn into_inner(self) -> &'w T {
+        self.value
+    }
+
+    /// Creates a copy with the same lifetime.
+    #[inline]
+    pub fn reborrow(&self) -> Self {
+        Self { value: self.value }
+    }
+}
 
 // -----------------------------------------------------------------------------
 // impl_mut_methods
 
 macro_rules! impl_mut_methods {
-    ($name:ident < $( $generics:tt ),+ >, $target:ty, $($traits:ident)?) => {
-        impl<$($generics),* : ?Sized $(+ $traits)?> $name<$($generics),*> {
+    ($name:ident < $( $generics:tt ),+ >, $target:ty, $($traits:ident)*) => {
+        impl<$($generics),* : ?Sized $(+ $traits)*> $name<$($generics),*> {
             /// Consumes self and returns the inner reference `&mut T` with the
             /// same lifetime, marking the target as changed.
             #[inline]
@@ -463,15 +634,16 @@ macro_rules! impl_mut_methods {
     };
 }
 
-impl_mut_methods!(ResMut<'w, T>, T, Resource);
+impl_mut_methods!(ResMut<'w, T>, T, Resource Sync);
+impl_mut_methods!(NonSyncMut<'w, T>, T, Resource);
 impl_mut_methods!(Mut<'w, T>, T,);
 
 // -----------------------------------------------------------------------------
 // impl_change_detection
 
 macro_rules! impl_change_detection {
-    ($name:ident < $( $generics:tt ),+ >, $target:ty, $($traits:ident)?) => {
-        impl<$($generics),* : ?Sized $(+ $traits)?> DetectChanges for $name<$($generics),*> {
+    ($name:ident < $( $generics:tt ),+ >, $target:ty, $($traits:ident)*) => {
+        impl<$($generics),* : ?Sized $(+ $traits)*> DetectChanges for $name<$($generics),*> {
             #[inline]
             fn is_added(&self) -> bool {
                 self.ticks.added
@@ -498,8 +670,10 @@ macro_rules! impl_change_detection {
     }
 }
 
-impl_change_detection!(Res<'w, T>, T, Resource);
-impl_change_detection!(ResMut<'w, T>, T, Resource);
+impl_change_detection!(ResRef<'w, T>, T, Resource Sync);
+impl_change_detection!(ResMut<'w, T>, T, Resource Sync);
+impl_change_detection!(NonSyncRef<'w, T>, T, Resource);
+impl_change_detection!(NonSyncMut<'w, T>, T, Resource);
 impl_change_detection!(Ref<'w, T>, T,);
 impl_change_detection!(Mut<'w, T>, T,);
 
@@ -507,8 +681,8 @@ impl_change_detection!(Mut<'w, T>, T,);
 // impl_deref
 
 macro_rules! impl_deref {
-    ($name:ident < $( $generics:tt ),+ >, $target:ty, $($traits:ident)?) => {
-        impl<$($generics),*: ?Sized $(+ $traits)?> Deref for $name<$($generics),*> {
+    ($name:ident < $( $generics:tt ),+ >, $target:ty, $($traits:ident)*) => {
+        impl<$($generics),* : ?Sized $(+ $traits)*> Deref for $name<$($generics),*> {
             type Target = $target;
 
             #[inline(always)]
@@ -517,7 +691,7 @@ macro_rules! impl_deref {
             }
         }
 
-        impl<$($generics),* $(: $traits)?> AsRef<$target> for $name<$($generics),*> {
+        impl<$($generics),* : ?Sized $(+ $traits)*> AsRef<$target> for $name<$($generics),*> {
             #[inline(always)]
             fn as_ref(&self) -> &$target {
                 self.value
@@ -526,8 +700,12 @@ macro_rules! impl_deref {
     }
 }
 
-impl_deref!(Res<'w, T>, T, Resource);
-impl_deref!(ResMut<'w, T>, T, Resource);
+impl_deref!(ResRef<'w, T>, T, Resource Sync);
+impl_deref!(ResMut<'w, T>, T, Resource Sync);
+impl_deref!(Res<'w, T>, T, Resource Sync);
+impl_deref!(NonSyncRef<'w, T>, T, Resource);
+impl_deref!(NonSyncMut<'w, T>, T, Resource);
+impl_deref!(NonSync<'w, T>, T, Resource);
 impl_deref!(Ref<'w, T>, T,);
 impl_deref!(Mut<'w, T>, T,);
 
@@ -535,15 +713,15 @@ impl_deref!(Mut<'w, T>, T,);
 // impl_deref_mut
 
 macro_rules! impl_deref_mut {
-    ($name:ident < $( $generics:tt ),+ >, $target:ty, $($traits:ident)?) => {
-        impl<$($generics),*: ?Sized $(+ $traits)?> DerefMut for $name<$($generics),*> {
+    ($name:ident < $( $generics:tt ),+ >, $target:ty, $($traits:ident)*) => {
+        impl<$($generics),* : ?Sized $(+ $traits)*> DerefMut for $name<$($generics),*> {
             #[inline(always)]
             fn deref_mut(&mut self) -> &mut Self::Target {
                 self.value
             }
         }
 
-        impl<$($generics),* $(: $traits)?> AsMut<$target> for $name<$($generics),*> {
+        impl<$($generics),* : ?Sized $(+ $traits)*> AsMut<$target> for $name<$($generics),*> {
             #[inline(always)]
             fn as_mut(&mut self) -> &mut $target {
                 self.value
@@ -552,7 +730,8 @@ macro_rules! impl_deref_mut {
     }
 }
 
-impl_deref_mut!(ResMut<'w, T>, T, Resource);
+impl_deref_mut!(ResMut<'w, T>, T, Resource Sync);
+impl_deref_mut!(NonSyncMut<'w, T>, T, Resource);
 impl_deref_mut!(Mut<'w, T>, T,);
 
 // -----------------------------------------------------------------------------
@@ -843,9 +1022,22 @@ impl<'w> UntypedRef<'w> {
     /// # Safety
     /// `T` must be the erased pointee type for this [`UntypedRef`].
     #[inline(always)]
-    pub unsafe fn into_res<T: Resource>(self) -> Res<'w, T> {
+    pub unsafe fn into_res<T: Resource + Sync>(self) -> ResRef<'w, T> {
         self.value.debug_assert_aligned::<T>();
-        Res {
+        ResRef {
+            value: unsafe { self.value.as_ref() },
+            ticks: self.ticks,
+        }
+    }
+
+    /// Specifies the reference type and converts self to a [`NonSync`].
+    ///
+    /// # Safety
+    /// `T` must be the erased pointee type for this [`UntypedRef`].
+    #[inline(always)]
+    pub unsafe fn into_non_sync<T: Resource>(self) -> NonSyncRef<'w, T> {
+        self.value.debug_assert_aligned::<T>();
+        NonSyncRef {
             value: unsafe { self.value.as_ref() },
             ticks: self.ticks,
         }
@@ -907,9 +1099,22 @@ impl<'w> UntypedMut<'w> {
     /// # Safety
     /// `T` must be the erased pointee type for this [`UntypedMut`].
     #[inline(always)]
-    pub unsafe fn into_res<T: Resource>(self) -> ResMut<'w, T> {
+    pub unsafe fn into_res<T: Resource + Sync>(self) -> ResMut<'w, T> {
         self.value.debug_assert_aligned::<T>();
         ResMut {
+            value: unsafe { self.value.consume() },
+            ticks: self.ticks,
+        }
+    }
+
+    /// Specifies the reference type and converts self to a [`NonSyncMut`].
+    ///
+    /// # Safety
+    /// `T` must be the erased pointee type for this [`UntypedRef`].
+    #[inline(always)]
+    pub unsafe fn into_non_sync<T: Resource>(self) -> NonSyncMut<'w, T> {
+        self.value.debug_assert_aligned::<T>();
+        NonSyncMut {
             value: unsafe { self.value.consume() },
             ticks: self.ticks,
         }

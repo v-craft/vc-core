@@ -14,6 +14,7 @@ use crate::world::WorldId;
 
 pub struct World {
     id: WorldId,
+    pub(crate) thread_hash: u64,
     pub entities: Entities,
     pub allocator: EntityAllocator,
     pub components: Components,
@@ -29,6 +30,7 @@ impl Debug for World {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("World")
             .field("id", &self.id)
+            .field("thread_hash", &self.thread_hash)
             .field("entities", &self.entities)
             .field("allocator", &self.allocator)
             .field("components", &self.components)
@@ -44,6 +46,7 @@ impl World {
     pub fn new(id: WorldId) -> Box<World> {
         Box::new(Self {
             id,
+            thread_hash: crate::utils::thread_hash(),
             entities: Entities::new(),
             allocator: EntityAllocator::new(),
             components: Components::new(),

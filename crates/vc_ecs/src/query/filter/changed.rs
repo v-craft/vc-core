@@ -74,8 +74,8 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
         outer.push(builder);
     }
 
-    unsafe fn set_for_arche<'w, 's>(
-        state: &'s Self::State,
+    unsafe fn set_for_arche<'w>(
+        state: &Self::State,
         cache: &mut Self::Cache<'w>,
         arche: &'w Archetype,
     ) {
@@ -91,8 +91,8 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
         }
     }
 
-    unsafe fn set_for_table<'w, 's>(
-        state: &'s Self::State,
+    unsafe fn set_for_table<'w>(
+        state: &Self::State,
         cache: &mut Self::Cache<'w>,
         table: &'w Table,
     ) {
@@ -106,8 +106,8 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
         }
     }
 
-    unsafe fn filter<'w, 's>(
-        _state: &'s Self::State,
+    unsafe fn filter<'w>(
+        _state: &Self::State,
         cache: &mut Self::Cache<'w>,
         entity: Entity,
         table_row: TableRow,

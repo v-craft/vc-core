@@ -1,5 +1,6 @@
 #![allow(clippy::len_without_is_empty, reason = "internal type")]
 
+use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
@@ -154,16 +155,6 @@ impl Archetypes {
 }
 
 impl Archetypes {
-    /// Returns the current version (number of archetypes).
-    ///
-    /// The version increments each time a new archetype is created,
-    /// making it useful for change detection and cache invalidation.
-    #[inline]
-    pub fn version(&self) -> u32 {
-        // See `ArcheId::new`, arches.len is <= u32::MAX.
-        self.arches.len() as u32
-    }
-
     /// Returns the number of registered archetypes.
     ///
     /// Similar to [`Archetypes::version`] .
@@ -291,6 +282,21 @@ impl ArcheFilter<'_> {
                 .map(|idx| unsafe { ArcheId::new_unchecked(idx as u32) })
                 .filter(|id| !self.without.contains(id))
                 .collect()
+        }
+    }
+
+    pub fn collect_to(self, set: &mut BTreeSet<ArcheId>) {
+        if let Some(with) = self.with {
+            with.into_iter().for_each(|item| {
+                set.insert(item);
+            });
+        } else {
+            (0..self.arches.arches.len())
+                .map(|idx| unsafe { ArcheId::new_unchecked(idx as u32) })
+                .filter(|id| !self.without.contains(id))
+                .for_each(|item| {
+                    set.insert(item);
+                });
         }
     }
 }

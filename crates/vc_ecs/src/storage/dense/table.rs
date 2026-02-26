@@ -19,6 +19,7 @@ use crate::entity::MovedEntity;
 use crate::storage::{AbortOnPanic, Column, VecRemoveExt};
 use crate::tick::CheckTicks;
 use crate::tick::Tick;
+use crate::utils::Dropper;
 
 // -----------------------------------------------------------------------------
 // TableBuilder
@@ -48,11 +49,11 @@ impl TableBuilder {
         &mut self,
         id: ComponentId,
         layout: Layout,
-        drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
+        dropper: Option<Dropper>,
     ) -> TableCol {
         // `0 < ComponentId < u32::MAX`, so `location < u32::MAX`
         let index = self.columns.len() as u32;
-        self.columns.push(unsafe { Column::new(layout, drop_fn) });
+        self.columns.push(unsafe { Column::new(layout, dropper) });
         self.idents.push(id);
 
         TableCol(index)
@@ -125,6 +126,11 @@ impl Table {
     #[inline(always)]
     fn entity_count(&self) -> usize {
         self.entities.len()
+    }
+
+    #[inline(always)]
+    pub fn entities(&self) -> &[Entity] {
+        &self.entities
     }
 
     /// Allocates space for a new entity and returns its row index.

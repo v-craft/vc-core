@@ -5,6 +5,8 @@ use core::ptr::{self, NonNull};
 
 use vc_ptr::{OwningPtr, Ptr, PtrMut};
 
+use crate::utils::Dropper;
+
 // -----------------------------------------------------------------------------
 // DropGuard
 
@@ -40,7 +42,7 @@ impl Drop for AbortOnDropFail {
 pub(super) struct BlobArray {
     item_layout: Layout,
     data: NonNull<u8>,
-    drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
+    dropper: Option<Dropper>,
 }
 
 impl BlobArray {
@@ -58,8 +60,8 @@ impl BlobArray {
 
     /// Returns the drop function for items, if any.
     #[inline(always)]
-    pub const fn drop_fn(&self) -> Option<unsafe fn(OwningPtr<'_>)> {
-        self.drop_fn
+    pub const fn dropper(&self) -> Option<Dropper> {
+        self.dropper
     }
 
     /// Creates a new uninitialized `BlobArray`.
@@ -68,15 +70,12 @@ impl BlobArray {
     /// - `item_layout` must correctly represent the type that will be stored
     /// - If provided, `drop_fn` must correctly drop an item of the stored type
     #[inline(always)]
-    pub const unsafe fn new(
-        item_layout: Layout,
-        drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
-    ) -> Self {
+    pub const unsafe fn new(item_layout: Layout, dropper: Option<Dropper>) -> Self {
         let align = unsafe { NonZeroUsize::new_unchecked(item_layout.align()) };
 
         Self {
             item_layout,
-            drop_fn,
+            dropper,
             data: NonNull::without_provenance(align),
         }
     }
@@ -182,9 +181,11 @@ impl BlobArray {
         let size = self.item_layout.size();
         unsafe {
             let dst = self.data.byte_add(index * size);
-            if let Some(drop_fn) = self.drop_fn {
+            if let Some(dropper) = self.dropper {
                 let drop_guard = AbortOnDropFail;
-                drop_fn(OwningPtr::new(dst));
+
+                dropper.call(OwningPtr::new(dst));
+
                 ::core::mem::forget(drop_guard);
             }
             ptr::copy_nonoverlapping::<u8>(value.as_ptr(), dst.as_ptr(), size);
@@ -224,9 +225,11 @@ impl BlobArray {
     /// - The item at `index` must be properly initialized
     #[inline]
     pub unsafe fn drop_item(&mut self, index: usize) {
-        if let Some(drop_fn) = self.drop_fn {
+        if let Some(dropper) = self.dropper {
             let drop_guard = AbortOnDropFail;
-            unsafe { drop_fn(self.get_mut(index).promote()) }
+
+            unsafe { dropper.call(self.get_mut(index).promote()) }
+
             ::core::mem::forget(drop_guard);
         }
     }
@@ -238,9 +241,9 @@ impl BlobArray {
     /// - All items from `0..len` must be properly initialized
     #[inline]
     pub unsafe fn drop_slice(&mut self, len: usize) {
-        if let Some(drop_fn) = self.drop_fn {
+        if let Some(dropper) = self.dropper {
             let drop_guard = AbortOnDropFail;
-            (0..len).for_each(|index| unsafe { drop_fn(self.get_mut(index).promote()) });
+            (0..len).for_each(|index| unsafe { dropper.call(self.get_mut(index).promote()) });
             ::core::mem::forget(drop_guard);
         }
     }
@@ -292,12 +295,12 @@ impl BlobArray {
     /// - Both items must be properly initialized
     #[inline]
     pub unsafe fn swap_drop_not_last(&mut self, index: usize, last_index: usize) {
-        let drop_fn = self.drop_fn;
+        let dropper = self.dropper;
 
         unsafe {
             let value = self.swap_remove_not_last(index, last_index);
-            if let Some(drop_fn) = drop_fn {
-                drop_fn(value);
+            if let Some(dropper) = dropper {
+                dropper.call(value);
             }
         }
     }

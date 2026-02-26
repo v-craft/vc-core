@@ -24,12 +24,6 @@ impl ResourceId {
         Self(NonMaxU32::new(id).expect("too many resources"))
     }
 
-    /// Convert `ResourceId` to u32.
-    #[inline(always)]
-    pub const fn index_u32(self) -> u32 {
-        self.0.get()
-    }
-
     /// Convert `ResourceId` to usize.
     #[inline(always)]
     pub const fn index(self) -> usize {
@@ -58,13 +52,13 @@ impl Hash for ResourceId {
 impl Debug for ResourceId {
     #[inline(always)]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        Debug::fmt(&self.index_u32(), f)
+        Debug::fmt(&self.0.get(), f)
     }
 }
 
 impl Display for ResourceId {
     #[inline(always)]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        Display::fmt(&self.index_u32(), f)
+        Display::fmt(&self.0.get(), f)
     }
 }

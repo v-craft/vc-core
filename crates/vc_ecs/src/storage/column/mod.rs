@@ -12,6 +12,7 @@ use vc_ptr::{OwningPtr, Ptr, PtrMut, ThinSlice};
 use crate::borrow::{UntypedMut, UntypedRef, UntypedSliceMut, UntypedSliceRef};
 use crate::tick::{CheckTicks, Tick, TicksMut, TicksRef};
 use crate::tick::{TicksSliceMut, TicksSliceRef};
+use crate::utils::Dropper;
 
 // -----------------------------------------------------------------------------
 // Column
@@ -41,8 +42,8 @@ impl Column {
 
     /// Returns the drop function for items in this column, if any.
     #[inline(always)]
-    pub const fn drop_fn(&self) -> Option<unsafe fn(OwningPtr<'_>)> {
-        self.data.drop_fn()
+    pub const fn dropper(&self) -> Option<Dropper> {
+        self.data.dropper()
     }
 
     /// Creates a new empty column.
@@ -51,12 +52,9 @@ impl Column {
     /// - `item_layout` must correctly represent the type that will be stored
     /// - If provided, `drop_fn` must correctly drop an item of the stored type
     #[inline(always)]
-    pub const unsafe fn new(
-        item_layout: Layout,
-        drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
-    ) -> Self {
+    pub const unsafe fn new(item_layout: Layout, dropper: Option<Dropper>) -> Self {
         Self {
-            data: unsafe { BlobArray::new(item_layout, drop_fn) },
+            data: unsafe { BlobArray::new(item_layout, dropper) },
             added: TickArray::new(),
             changed: TickArray::new(),
         }

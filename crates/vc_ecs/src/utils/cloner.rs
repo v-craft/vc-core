@@ -1,34 +1,15 @@
 use vc_ptr::{OwningPtr, Ptr};
 
 // -----------------------------------------------------------------------------
-// CloneBehavior
+// Cloner
 
-/// Defines how a type should behave when cloned within a generic context.
-///
-/// This enum provides fine-grained control over cloning behavior, allowing types to
-/// specify whether they support cloning, should be ignored, or require custom cloning logic.
-/// It's particularly useful in systems that need to clone data without knowing the concrete
-/// type at compile time, such as ECS implementations or type-erased containers.
-///
-/// # Variants
-///
-/// - `Ignore` - Indicates that cloning should be skipped or is not supported.
-///   Useful for types that cannot be cloned or where cloning would be undesirable.
-///
-/// - `Refuse` - Explicitly refuses cloning operations. This can be used to prevent
-///   accidental cloning or to enforce that certain types must be moved rather than cloned.
-///
-/// - `Custom` - Provides a custom cloning function for types that implement specific
-///   cloning semantics. The function takes a source pointer and a destination owning pointer,
-///   and performs the actual cloning operation.
 #[derive(Debug, Clone, Copy)]
-pub enum CloneBehavior {
-    Ignore,
-    Refuse,
-    Custom(unsafe fn(Ptr<'_>, OwningPtr<'_>)),
+#[repr(transparent)]
+pub struct Cloner {
+    func: unsafe fn(Ptr<'_>, OwningPtr<'_>),
 }
 
-impl CloneBehavior {
+impl Cloner {
     /// # Safety
     /// - `src` and`dst` point to valid data.
     /// - the data of `dst` is uninit, so it's no need to drop.
@@ -54,20 +35,24 @@ impl CloneBehavior {
         }
     }
 
-    /// Creates a clone behavior that uses the [`Clone`] trait to duplicate the value.
+    /// Creates a cloner that uses the [`Clone`] trait to duplicate the value.
     ///
     /// This is the standard cloning behavior for types that implement [`Clone`].
     /// It will call `clone()` on the source value and write the result to the destination.
     pub const fn clonable<T: Clone>() -> Self {
-        Self::Custom(Self::clone_via_clone::<T>)
+        Self {
+            func: Self::clone_via_clone::<T>,
+        }
     }
 
-    /// Creates a clone behavior that uses a simple memory copy for [`Copy`] types.
+    /// Creates a cloner that uses a simple memory copy for [`Copy`] types.
     ///
     /// For types that implement [`Copy`], cloning is equivalent to a bitwise copy.
     /// This is more efficient than calling `clone()` as it bypasses the trait method
     /// and performs a direct memory copy.
     pub const fn copyable<T: Copy>() -> Self {
-        Self::Custom(Self::clone_via_copy::<T>)
+        Self {
+            func: Self::clone_via_copy::<T>,
+        }
     }
 }

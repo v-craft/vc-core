@@ -26,10 +26,8 @@ extern crate alloc;
 
 pub mod borrow;
 pub mod bundle;
-pub mod clone;
 pub mod tick;
 pub mod utils;
-pub mod marker;
 
 pub mod component;
 pub mod resource;

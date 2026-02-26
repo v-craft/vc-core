@@ -10,6 +10,7 @@ use crate::borrow::{UntypedMut, UntypedRef};
 use crate::entity::Entity;
 use crate::storage::{AbortOnPanic, Column, MapRow};
 use crate::tick::{CheckTicks, Tick};
+use crate::utils::Dropper;
 
 /// A mapping table from entities to component data.
 ///
@@ -25,7 +26,7 @@ pub struct Map {
     column: Column,
     free: Vec<MapRow>,
     capacity: usize,
-    pub(crate) mapper: SparseHashMap<Entity, MapRow>,
+    mapper: SparseHashMap<Entity, MapRow>,
 }
 
 unsafe impl Sync for Map {}
@@ -52,9 +53,9 @@ impl Drop for Map {
 
 impl Map {
     /// Creates a new `Map` with the specified component layout and drop function.
-    pub(crate) fn new(layout: Layout, drop_fn: Option<unsafe fn(OwningPtr<'_>)>) -> Self {
+    pub(crate) fn new(layout: Layout, dropper: Option<Dropper>) -> Self {
         Self {
-            column: unsafe { Column::new(layout, drop_fn) },
+            column: unsafe { Column::new(layout, dropper) },
             free: Vec::new(),
             capacity: 0,
             mapper: SparseHashMap::new(),
@@ -69,13 +70,13 @@ impl Map {
     /// - The entity must not already exist in the map
     /// - The returned `MapRow` is valid until explicitly removed
     #[inline]
-    pub unsafe fn allocate(&mut self, entity: Entity) -> MapRow {
+    pub unsafe fn alloc(&mut self, entity: Entity) -> MapRow {
         #[cold]
         #[inline(never)]
         fn reserve_many(this: &mut Map) -> MapRow {
             let guard = AbortOnPanic;
 
-            let new_cap = (this.capacity << 1).min(4);
+            let new_cap = (this.capacity << 1).max(4);
             debug_assert!(new_cap <= u32::MAX as usize);
 
             let row = MapRow(this.capacity as u32);
@@ -106,6 +107,25 @@ impl Map {
         let row = self.free.pop().unwrap_or_else(|| reserve_many(self));
         self.mapper.insert(entity, row);
         row
+    }
+
+    /// Frees the storage row associated with an entity.
+    ///
+    /// This function:
+    /// 1. Removes the entity from the mapping
+    /// 2. Returns the associated row to the free pool for reuse
+    /// 3. Does **not** drop or modify the component data
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure:
+    /// - The component data at that row has been properly handled
+    /// - The row will not be used after this call
+    #[inline]
+    pub unsafe fn free(&mut self, entity: Entity) -> Option<MapRow> {
+        let map_row = self.mapper.remove(&entity)?;
+        self.free.push(map_row);
+        Some(map_row)
     }
 
     /// Gets the storage row for the given entity, if it exists.
@@ -207,29 +227,25 @@ impl Map {
 
     /// Removes and returns the component data at the specified row.
     ///
-    /// The storage row is marked as free for future reuse.
-    ///
     /// # Safety
     /// - `map_row` must be valid and initialized
     /// - The caller is responsible for properly dropping the returned pointer
+    /// - Call [`Map::free`] before this function if the entity is removed.
     #[inline]
     #[must_use = "The returned pointer should be used."]
     pub unsafe fn remove_item(&mut self, map_row: MapRow) -> OwningPtr<'_> {
         debug_assert!((map_row.0 as usize) < self.capacity);
-        self.free.push(map_row);
         unsafe { self.column.remove_item(map_row.0 as usize) }
     }
 
     /// Drops the component data at the specified row without returning it.
     ///
-    /// The storage row is marked as free for future reuse.
-    ///
     /// # Safety
     /// - `map_row` must be valid and initialized
+    /// - Call [`Map::free`] before this function if the entity is removed.
     #[inline]
     pub unsafe fn drop_item(&mut self, map_row: MapRow) {
         debug_assert!((map_row.0 as usize) < self.capacity);
-        self.free.push(map_row);
         unsafe { self.column.drop_item(map_row.0 as usize) }
     }
 

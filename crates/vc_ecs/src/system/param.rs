@@ -1,9 +1,7 @@
 #![allow(clippy::missing_safety_doc, reason = "todo")]
 
-use core::marker::PhantomData;
-
 use super::AccessTable;
-use crate::borrow::{Res, ResMut};
+use crate::borrow::{ResMut, ResRef};
 use crate::resource::{Resource, ResourceId};
 use crate::tick::Tick;
 use crate::utils::DebugName;
@@ -15,11 +13,10 @@ use crate::world::{UnsafeWorld, World, WorldMode};
 pub unsafe trait SystemParam: Sized {
     type State: Send + Sync + 'static;
     type Item<'world, 'state>: SystemParam<State = Self::State>;
-    const MODE: WorldMode;
-    const IS_SEND: bool;
+    const WORLD_MODE: WorldMode;
+    const MAIN_THREAD: bool;
 
     unsafe fn init_state(world: &mut World) -> Self::State;
-
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool;
 
     unsafe fn get_param<'w, 's>(
@@ -39,8 +36,8 @@ pub unsafe trait SystemParam: Sized {
 unsafe impl SystemParam for &World {
     type State = ();
     type Item<'world, 'state> = &'world World;
-    const MODE: WorldMode = WorldMode::ReadOnly;
-    const IS_SEND: bool = true;
+    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
+    const MAIN_THREAD: bool = false;
 
     unsafe fn init_state(_world: &mut World) -> Self::State {}
 
@@ -66,8 +63,8 @@ unsafe impl SystemParam for &World {
 unsafe impl SystemParam for &mut World {
     type State = ();
     type Item<'world, 'state> = &'world mut World;
-    const MODE: WorldMode = WorldMode::FullMut;
-    const IS_SEND: bool = true;
+    const WORLD_MODE: WorldMode = WorldMode::FullMut;
+    const MAIN_THREAD: bool = false;
 
     unsafe fn init_state(_world: &mut World) -> Self::State {}
 
@@ -99,11 +96,11 @@ fn uninit_resource(name: DebugName) -> ! {
     panic!("Resource {name} is uninitialzed before system run.")
 }
 
-unsafe impl<T: Resource> SystemParam for Res<'_, T> {
+unsafe impl<T: Resource + Sync> SystemParam for ResRef<'_, T> {
     type State = ResourceId;
-    type Item<'world, 'state> = Res<'world, T>;
-    const MODE: WorldMode = WorldMode::ReadOnly;
-    const IS_SEND: bool = T::IS_SEND;
+    type Item<'world, 'state> = ResRef<'world, T>;
+    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
+    const MAIN_THREAD: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
@@ -128,7 +125,7 @@ unsafe impl<T: Resource> SystemParam for Res<'_, T> {
     ) -> Self::Item<'w, 's> {
         unsafe {
             let world = world.read_only();
-            let Some(data) = world.storages.res_set.get(*state) else {
+            let Some(data) = world.storages.res.get(*state) else {
                 uninit_resource(DebugName::type_name::<T>());
             };
             data.assert_get_ref(last_run, this_run).into_res::<T>()
@@ -136,11 +133,11 @@ unsafe impl<T: Resource> SystemParam for Res<'_, T> {
     }
 }
 
-unsafe impl<T: Resource> SystemParam for ResMut<'_, T> {
+unsafe impl<T: Resource + Sync> SystemParam for ResMut<'_, T> {
     type State = ResourceId;
     type Item<'world, 'state> = ResMut<'world, T>;
-    const MODE: WorldMode = WorldMode::DataMut;
-    const IS_SEND: bool = T::IS_SEND;
+    const WORLD_MODE: WorldMode = WorldMode::DataMut;
+    const MAIN_THREAD: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
@@ -165,7 +162,7 @@ unsafe impl<T: Resource> SystemParam for ResMut<'_, T> {
     ) -> Self::Item<'w, 's> {
         unsafe {
             let world = world.data_mut();
-            let Some(data) = world.storages.res_set.get_mut(*state) else {
+            let Some(data) = world.storages.res.get_mut(*state) else {
                 uninit_resource(DebugName::type_name::<T>());
             };
             data.assert_get_mut(last_run, this_run).into_res::<T>()
@@ -173,11 +170,11 @@ unsafe impl<T: Resource> SystemParam for ResMut<'_, T> {
     }
 }
 
-unsafe impl<T: Resource> SystemParam for Option<Res<'_, T>> {
+unsafe impl<T: Resource + Sync> SystemParam for Option<ResRef<'_, T>> {
     type State = ResourceId;
-    type Item<'world, 'state> = Option<Res<'world, T>>;
-    const MODE: WorldMode = WorldMode::ReadOnly;
-    const IS_SEND: bool = T::IS_SEND;
+    type Item<'world, 'state> = Option<ResRef<'world, T>>;
+    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
+    const MAIN_THREAD: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
@@ -202,17 +199,17 @@ unsafe impl<T: Resource> SystemParam for Option<Res<'_, T>> {
     ) -> Self::Item<'w, 's> {
         unsafe {
             let world = world.read_only();
-            let data = world.storages.res_set.get(*state)?;
+            let data = world.storages.res.get(*state)?;
             Some(data.get_ref(last_run, this_run)?.into_res::<T>())
         }
     }
 }
 
-unsafe impl<T: Resource> SystemParam for Option<ResMut<'_, T>> {
+unsafe impl<T: Resource + Sync> SystemParam for Option<ResMut<'_, T>> {
     type State = ResourceId;
     type Item<'world, 'state> = Option<ResMut<'world, T>>;
-    const MODE: WorldMode = WorldMode::DataMut;
-    const IS_SEND: bool = T::IS_SEND;
+    const WORLD_MODE: WorldMode = WorldMode::DataMut;
+    const MAIN_THREAD: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
@@ -235,7 +232,7 @@ unsafe impl<T: Resource> SystemParam for Option<ResMut<'_, T>> {
     ) -> Self::Item<'w, 's> {
         unsafe {
             let world = world.data_mut();
-            let data = world.storages.res_set.get_mut(*state)?;
+            let data = world.storages.res.get_mut(*state)?;
             Some(data.get_mut(last_run, this_run)?.into_res::<T>())
         }
     }
@@ -244,15 +241,17 @@ unsafe impl<T: Resource> SystemParam for Option<ResMut<'_, T>> {
 // ---------------------------------------------------------
 // PhantomData
 
-unsafe impl<T: SystemParam> SystemParam for PhantomData<T> {
+pub struct MainThread;
+
+unsafe impl SystemParam for MainThread {
     type State = ();
-    type Item<'world, 'state> = PhantomData<T>;
-    const MODE: WorldMode = T::MODE;
-    const IS_SEND: bool = T::IS_SEND;
+    type Item<'world, 'state> = MainThread;
+    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
+    const MAIN_THREAD: bool = true;
 
-    unsafe fn init_state(_world: &mut World) -> Self::State {}
+    unsafe fn init_state(_: &mut World) -> Self::State {}
 
-    unsafe fn mark_access(_table: &mut AccessTable, _state: &Self::State) -> bool {
+    unsafe fn mark_access(_: &mut AccessTable, _: &Self::State) -> bool {
         true
     }
 
@@ -262,6 +261,6 @@ unsafe impl<T: SystemParam> SystemParam for PhantomData<T> {
         _last_run: Tick,
         _this_run: Tick,
     ) -> Self::Item<'w, 's> {
-        PhantomData
+        MainThread
     }
 }

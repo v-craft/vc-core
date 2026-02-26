@@ -93,7 +93,7 @@ impl Maps {
         debug_assert!(info.storage().is_sparse());
         if !self.mapper.contains_key(&info.id()) {
             let id = MapId::new(self.maps.len() as u32);
-            let map = Map::new(info.layout(), info.drop_fn());
+            let map = Map::new(info.layout(), info.dropper());
             self.maps.push(map);
             self.mapper.insert(info.id(), id);
         }

@@ -109,7 +109,7 @@ impl Tables {
 
                 idents.iter().for_each(|&id| unsafe {
                     let info = components.get_unchecked(id);
-                    builder.insert(id, info.layout(), info.drop_fn());
+                    builder.insert(id, info.layout(), info.dropper());
                 });
 
                 self.tables.push(builder.build());

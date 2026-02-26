@@ -2,11 +2,8 @@ use core::alloc::Layout;
 use core::any::TypeId;
 use core::fmt::Debug;
 
-use vc_ptr::OwningPtr;
-
 use super::{Resource, ResourceId};
-use crate::clone::CloneBehavior;
-use crate::utils::DebugName;
+use crate::utils::{Cloner, DebugName, Dropper};
 
 // -----------------------------------------------------------------------------
 // ResourceDescriptor
@@ -21,9 +18,8 @@ pub struct ResourceDescriptor {
     pub type_id: TypeId,
     pub layout: Layout,
     pub mutable: bool,
-    pub is_send: bool,
-    pub drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
-    pub clone_behavior: CloneBehavior,
+    pub dropper: Option<Dropper>,
+    pub cloner: Option<Cloner>,
 }
 
 impl ResourceDescriptor {
@@ -35,9 +31,8 @@ impl ResourceDescriptor {
                 type_id: TypeId::of::<T>(),
                 layout: Layout::new::<T>(),
                 mutable: T::MUTABLE,
-                is_send: T::IS_SEND,
-                clone_behavior: T::CLONE_BEHAVIOR,
-                drop_fn: OwningPtr::drop_fn_of::<T>(),
+                cloner: T::CLONER,
+                dropper: T::DROPPER,
             }
         }
     }
@@ -59,7 +54,6 @@ impl Debug for ResourceInfo {
         f.debug_struct("Resource")
             .field("id", &self.id)
             .field("name", &self.descriptor.name)
-            .field("is_send", &self.descriptor.is_send)
             .field("mutable", &self.descriptor.mutable)
             .finish()
     }
@@ -102,21 +96,15 @@ impl ResourceInfo {
         self.descriptor.mutable
     }
 
-    /// Returns the resource's storage strategy.
-    #[inline(always)]
-    pub fn is_send(&self) -> bool {
-        self.descriptor.is_send
-    }
-
     /// Returns the function that drops this resource, if any.
     #[inline(always)]
-    pub fn drop_fn(&self) -> Option<unsafe fn(OwningPtr<'_>)> {
-        self.descriptor.drop_fn
+    pub fn dropper(&self) -> Option<Dropper> {
+        self.descriptor.dropper
     }
 
-    /// Returns the resource's cloning behavior.
+    /// Returns the component's clone function.
     #[inline(always)]
-    pub fn clone_behavior(&self) -> CloneBehavior {
-        self.descriptor.clone_behavior
+    pub fn cloner(&self) -> Option<Cloner> {
+        self.descriptor.cloner
     }
 }

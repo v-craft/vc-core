@@ -50,8 +50,8 @@ impl Display for ArcheId {
 impl Hash for ArcheId {
     #[inline(always)]
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        // we do not use underlying value here,
-        // then `SparseHash` is faster.
+        // Sparse hashing is optimized for smaller values.
+        // So we use represented values, rather than the underlying bits
         state.write_u32(self.0.get());
     }
 }

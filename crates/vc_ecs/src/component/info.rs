@@ -2,12 +2,8 @@ use core::alloc::Layout;
 use core::any::TypeId;
 use core::fmt::Debug;
 
-use vc_ptr::OwningPtr;
-
-use super::{Component, ComponentId, ComponentStorage};
-use super::{ComponentCollector, ComponentWriter};
-use crate::clone::CloneBehavior;
-use crate::utils::DebugName;
+use super::{Component, ComponentId, ComponentStorage, Required};
+use crate::utils::{Cloner, DebugName, Dropper};
 
 // -----------------------------------------------------------------------------
 // ComponentDescriptor
@@ -23,10 +19,9 @@ pub struct ComponentDescriptor {
     pub layout: Layout,
     pub mutable: bool,
     pub storage: ComponentStorage,
-    pub drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
-    pub clone_behavior: CloneBehavior,
-    pub collect_required: unsafe fn(&mut ComponentCollector),
-    pub write_required: unsafe fn(&mut ComponentWriter),
+    pub dropper: Option<Dropper>,
+    pub cloner: Option<Cloner>,
+    pub required: Option<Required>,
 }
 
 impl ComponentDescriptor {
@@ -37,12 +32,11 @@ impl ComponentDescriptor {
                 name: DebugName::type_name::<T>(),
                 type_id: TypeId::of::<T>(),
                 layout: Layout::new::<T>(),
-                mutable: T::MUTABLE,
                 storage: T::STORAGE,
-                clone_behavior: T::CLONE_BEHAVIOR,
-                drop_fn: OwningPtr::drop_fn_of::<T>(),
-                collect_required: T::collect_required,
-                write_required: T::write_required,
+                mutable: T::MUTABLE,
+                dropper: T::DROPPER,
+                cloner: T::CLONER,
+                required: T::REQUIRED,
             }
         }
     }
@@ -115,21 +109,19 @@ impl ComponentInfo {
 
     /// Returns the function that drops this resource, if any.
     #[inline(always)]
-    pub fn drop_fn(&self) -> Option<unsafe fn(OwningPtr<'_>)> {
-        self.descriptor.drop_fn
+    pub fn dropper(&self) -> Option<Dropper> {
+        self.descriptor.dropper
     }
 
-    /// Returns the resource's cloning behavior.
+    /// Returns the component's clone function.
     #[inline(always)]
-    pub fn clone_behavior(&self) -> CloneBehavior {
-        self.descriptor.clone_behavior
+    pub fn cloner(&self) -> Option<Cloner> {
+        self.descriptor.cloner
     }
 
-    pub fn collect_required(&self) -> unsafe fn(&mut ComponentCollector) {
-        self.descriptor.collect_required
-    }
-
-    pub fn write_required(&self) -> unsafe fn(&mut ComponentWriter) {
-        self.descriptor.write_required
+    /// Returns the component's required implementation.
+    #[inline(always)]
+    pub fn required(&self) -> Option<Required> {
+        self.descriptor.required
     }
 }

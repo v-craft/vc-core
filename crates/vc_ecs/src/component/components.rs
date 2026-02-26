@@ -6,10 +6,8 @@ use core::fmt::Debug;
 
 use vc_utils::extra::TypeIdMap;
 
-use crate::component::ComponentRegistrar;
-
-use super::{Component, ComponentDescriptor};
-use super::{ComponentId, ComponentInfo};
+use super::{Component, ComponentId, ComponentInfo};
+use super::{ComponentDescriptor, ComponentRegistrar};
 
 // -----------------------------------------------------------------------------
 // Components
@@ -89,29 +87,26 @@ impl Components {
     pub fn register<T: Component>(&mut self) -> ComponentId {
         #[cold]
         #[inline(never)]
-        fn register_internal(
-            this: &mut Components,
-            required: unsafe fn(&mut ComponentRegistrar),
-            descriptor: fn() -> ComponentDescriptor,
-        ) -> ComponentId {
-            let id = ComponentId::new(this.infos.len() as u32);
-            let descriptor = descriptor();
-            let type_id = descriptor.type_id;
+        fn register_internal<T: Component>(this: &mut Components) -> ComponentId {
+            let type_id = TypeId::of::<T>();
+            let descriptor = ComponentDescriptor::new::<T>();
+            let component_id = ComponentId::new(this.infos.len() as u32);
 
-            this.infos.push(ComponentInfo::new(id, descriptor));
-            this.mapper.insert(type_id, id);
+            this.infos
+                .push(ComponentInfo::new(component_id, descriptor));
+            this.mapper.insert(type_id, component_id);
 
-            unsafe {
-                required(&mut ComponentRegistrar { components: this });
+            if let Some(required) = T::REQUIRED {
+                (required.register)(&mut ComponentRegistrar::new(this));
             }
 
-            id
+            component_id
         }
 
         if let Some(id) = self.get_id(TypeId::of::<T>()) {
             id
         } else {
-            register_internal(self, T::register_required, ComponentDescriptor::new::<T>)
+            register_internal::<T>(self)
         }
     }
 }

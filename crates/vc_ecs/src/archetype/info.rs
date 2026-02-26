@@ -145,7 +145,7 @@ impl Archetype {
     /// contiguous storage layout. The slice is guaranteed to be sorted.
     #[inline(always)]
     pub fn dense_components(&self) -> &[ComponentId] {
-        &self.components[0..self.dense_len]
+        &self.components[..self.dense_len]
     }
 
     /// Returns the list of sparse component types stored in maps.
@@ -365,18 +365,17 @@ impl Archetype {
 
         let last = self.entities.len() - 1;
         let dst = row.0 as usize;
-        if dst == last {
-            unsafe {
+
+        unsafe {
+            if dst == last {
                 self.entities.set_len(last);
-            }
-            None
-        } else {
-            let entity = unsafe { *self.entities.get_unchecked(last) };
-            unsafe {
+                None
+            } else {
+                let entity = *self.entities.get_unchecked(last);
                 *self.entities.get_unchecked_mut(dst) = entity;
                 self.entities.set_len(last);
+                Some(MovedEntity::in_arche(entity, row))
             }
-            Some(MovedEntity::in_arche(entity, row))
         }
     }
 

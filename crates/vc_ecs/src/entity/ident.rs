@@ -192,6 +192,7 @@ pub struct Entity {
 
 impl Entity {
     const _STATIC_ASSERT_: () = const {
+        // Ensure `EntityId` is storaged in lower bits.
         assert!(Entity::from_bits(20260101).id.index_u32() == 20260101);
     };
 

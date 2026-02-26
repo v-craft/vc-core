@@ -51,11 +51,11 @@ impl World {
             register_fn(&mut collector);
         }
 
-        let CollectResult{
+        let CollectResult {
             mut dense,
             mut sparse,
         } = collector.sorted();
-        
+
         // 0 <= ComponentId < u32::MAX, so dense_len < u32::MAX.
         let dense_len = dense.len() as u32;
 

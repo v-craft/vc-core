@@ -27,7 +27,7 @@ pub struct BundleInfo {
     id: BundleId,
     // Use u32 to reduce the size of the struct.
     dense_len: u32,
-    // - `[0..dense_len]` are stored in Tables, sorted.
+    // - `[..dense_len]` are stored in Tables, sorted.
     // - `[dense_len..]` sare stored in Maps, sorted.
     // We use Arc to reduce memory allocation overhead.
     components: Arc<[ComponentId]>,
@@ -58,7 +58,7 @@ impl BundleInfo {
 
     /// Returns the list of dense component types in this bundle.
     pub fn dense_components(&self) -> &[ComponentId] {
-        &self.components[0..self.dense_len as usize]
+        &self.components[..self.dense_len as usize]
     }
 
     /// Returns the list of sparse component types in this bundle.

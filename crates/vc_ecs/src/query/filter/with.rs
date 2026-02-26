@@ -12,6 +12,11 @@ use crate::world::{UnsafeWorld, World};
 // -----------------------------------------------------------------------------
 // InWith
 
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be used in `With<..>`",
+    label = "Expected a component or a tuple of 1-12 elements, each implementing `QueryFilter`",
+    note = "If there are more than 12 elements, use `And<..>` instead."
+)]
 pub trait InWith {}
 
 // -----------------------------------------------------------------------------
@@ -56,8 +61,8 @@ unsafe impl<T: Component> QueryFilter for With<T> {
         outer.push(builder);
     }
 
-    unsafe fn set_for_arche<'w, 's>(
-        state: &'s Self::State,
+    unsafe fn set_for_arche<'w>(
+        state: &Self::State,
         cache: &mut Self::Cache<'w>,
         arche: &'w Archetype,
     ) {
@@ -71,8 +76,8 @@ unsafe impl<T: Component> QueryFilter for With<T> {
         }
     }
 
-    unsafe fn set_for_table<'w, 's>(
-        state: &'s Self::State,
+    unsafe fn set_for_table<'w>(
+        state: &Self::State,
         cache: &mut Self::Cache<'w>,
         table: &'w Table,
     ) {
@@ -87,8 +92,8 @@ unsafe impl<T: Component> QueryFilter for With<T> {
         }
     }
 
-    unsafe fn filter<'w, 's>(
-        _state: &'s Self::State,
+    unsafe fn filter<'w>(
+        _state: &Self::State,
         cache: &mut Self::Cache<'w>,
         _entity: Entity,
         _table_row: TableRow,
@@ -110,9 +115,11 @@ macro_rules! impl_tuple {
     (0: []) => {};
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         impl<$name: Component> InWith for ($name,) {}
 
         #[cfg_attr(docsrs, doc(fake_variadic))]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         unsafe impl<$name: Component> QueryFilter for With<($name,)> {
             type State = ComponentId;
             type Cache<'world> = bool;
@@ -144,8 +151,8 @@ macro_rules! impl_tuple {
                 outer.push(builder);
             }
 
-            unsafe fn set_for_arche<'w, 's>(
-                state: &'s Self::State,
+            unsafe fn set_for_arche<'w>(
+                state: &Self::State,
                 cache: &mut Self::Cache<'w>,
                 arche: &'w Archetype,
             ) {
@@ -159,8 +166,8 @@ macro_rules! impl_tuple {
                 }
             }
 
-            unsafe fn set_for_table<'w, 's>(
-                state: &'s Self::State,
+            unsafe fn set_for_table<'w>(
+                state: &Self::State,
                 cache: &mut Self::Cache<'w>,
                 table: &'w Table,
             ) {
@@ -175,8 +182,8 @@ macro_rules! impl_tuple {
                 }
             }
 
-            unsafe fn filter<'w, 's>(
-                _state: &'s Self::State,
+            unsafe fn filter<'w>(
+                _state: &Self::State,
                 cache: &mut Self::Cache<'w>,
                 _entity: Entity,
                 _table_row: TableRow,
@@ -221,8 +228,8 @@ macro_rules! impl_tuple {
                 outer.push(builder);
             }
 
-            unsafe fn set_for_arche<'w, 's>(
-                state: &'s Self::State,
+            unsafe fn set_for_arche<'w>(
+                state: &Self::State,
                 cache: &mut Self::Cache<'w>,
                 arche: &'w Archetype,
             ) {
@@ -239,8 +246,8 @@ macro_rules! impl_tuple {
                 )*
             }
 
-            unsafe fn set_for_table<'w, 's>(
-                state: &'s Self::State,
+            unsafe fn set_for_table<'w>(
+                state: &Self::State,
                 cache: &mut Self::Cache<'w>,
                 table: &'w Table,
             ) {
@@ -258,8 +265,8 @@ macro_rules! impl_tuple {
                 )*
             }
 
-            unsafe fn filter<'w, 's>(
-                _state: &'s Self::State,
+            unsafe fn filter<'w>(
+                _state: &Self::State,
                 cache: &mut Self::Cache<'w>,
                 _entity: Entity,
                 _table_row: TableRow,

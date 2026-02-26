@@ -11,4 +11,4 @@ mod param;
 pub use filter::{FilterData, FilterParam, FilterParamBuilder};
 
 pub use access::AccessTable;
-pub use param::SystemParam;
+pub use param::{MainThread, SystemParam};

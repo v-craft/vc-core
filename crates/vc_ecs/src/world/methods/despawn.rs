@@ -23,7 +23,7 @@ impl World {
             .for_each(|&cid| unsafe {
                 let map_id = maps.get_id(cid).debug_checked_unwrap();
                 let map = maps.get_unchecked_mut(map_id);
-                let map_row = map.get_map_row(entity).debug_checked_unwrap();
+                let map_row = map.free(entity).debug_checked_unwrap();
                 map.drop_item(map_row);
             });
 

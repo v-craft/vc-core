@@ -116,7 +116,6 @@ impl Hash for FilterParam {
 
 #[derive(Default, Clone)]
 pub struct FilterData {
-    nothing: bool,
     entity_mut: bool, // holding `EntityMut`
     entity_ref: bool, // holding `EntityRef`
     reading: SparseHashSet<ComponentId>,
@@ -126,7 +125,6 @@ pub struct FilterData {
 impl FilterData {
     pub const fn new() -> Self {
         Self {
-            nothing: true,
             entity_mut: false,
             entity_ref: false,
             reading: SparseHashSet::new(),
@@ -151,13 +149,11 @@ impl FilterData {
     }
 
     pub fn set_entity_ref(&mut self) {
-        self.nothing = false;
         self.entity_ref = true;
         self.reading = SparseHashSet::new();
     }
 
     pub fn set_entity_mut(&mut self) {
-        self.nothing = false;
         self.entity_mut = true;
         // ↓ useless, see `can_entity_mut` .
         // self.reading = SparseHashSet::new();
@@ -165,24 +161,23 @@ impl FilterData {
     }
 
     pub fn set_reading(&mut self, id: ComponentId) {
-        self.nothing = false;
         if !self.entity_ref {
             self.reading.insert(id);
         }
     }
 
     pub fn set_writing(&mut self, id: ComponentId) {
-        self.nothing = false;
         self.reading.insert(id);
         self.writing.insert(id);
     }
 
+    pub fn is_read_only(&self) -> bool {
+        self.entity_ref || (!self.entity_mut && self.writing.is_empty())
+    }
+
     pub fn parallelizable(&self, other: &Self) -> bool {
-        if self.entity_mut {
-            return other.nothing;
-        }
-        if other.entity_mut {
-            return self.nothing;
+        if self.entity_mut || other.entity_mut {
+            return false;
         }
         if self.entity_ref {
             return other.writing.is_empty();
@@ -194,10 +189,9 @@ impl FilterData {
     }
 
     pub fn merge(&mut self, other: &Self) {
-        self.nothing &= other.nothing;
-        self.entity_mut |= other.entity_mut;
+        // self.entity_mut |= other.entity_mut;
         self.entity_ref |= other.entity_ref;
-        if self.entity_mut || self.entity_ref {
+        if self.entity_ref {
             self.reading = SparseHashSet::new();
             // self.writing = BTreeSet::new();
         } else {

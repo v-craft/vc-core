@@ -9,7 +9,7 @@ use vc_ptr::{OwningPtr, Ptr, PtrMut};
 use crate::borrow::{UntypedMut, UntypedRef};
 use crate::resource::ResourceInfo;
 use crate::tick::{Tick, TicksMut, TicksRef};
-use crate::utils::DebugName;
+use crate::utils::{DebugName, Dropper};
 
 // -----------------------------------------------------------------------------
 // Drop Guard
@@ -41,18 +41,18 @@ impl Drop for AbortOnDropFail {
 pub struct ResData {
     name: DebugName,
     layout: Layout,
-    drop_fn: Option<unsafe fn(OwningPtr<'_>)>,
+    dropper: Option<Dropper>,
     data: NonNull<u8>,
     added: Tick,
     changed: Tick,
-    is_valid: bool,
+    is_active: bool,
 }
 
 impl Debug for ResData {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("ResData")
+        f.debug_struct("Res")
             .field("name", &self.name)
-            .field("is_valid", &self.is_valid)
+            .field("is_active", &self.is_active)
             .finish()
     }
 }
@@ -79,7 +79,7 @@ impl ResData {
     /// - The memory layout must be valid for allocation
     pub(crate) unsafe fn new(info: &ResourceInfo) -> Self {
         let layout = info.layout();
-        let drop_fn = info.drop_fn();
+        let dropper = info.dropper();
         let name = info.debug_name();
         let data = if layout.size() == 0 {
             let align = NonZeroUsize::new(layout.align()).unwrap();
@@ -92,18 +92,18 @@ impl ResData {
         Self {
             name,
             layout,
-            drop_fn,
+            dropper,
             data,
             added: Tick::new(0),
             changed: Tick::new(0),
-            is_valid: false,
+            is_active: false,
         }
     }
 
     /// Returns whether the resource is currently initialized.
     #[inline(always)]
-    pub const fn is_valid(&self) -> bool {
-        self.is_valid
+    pub const fn is_active(&self) -> bool {
+        self.is_active
     }
 
     /// Returns the debug name of the resource type.
@@ -115,8 +115,18 @@ impl ResData {
     /// Returns a pointer to the resource data if initialized.
     #[inline]
     pub fn get_data(&self) -> Option<Ptr<'_>> {
-        if self.is_valid {
+        if self.is_active {
             Some(unsafe { Ptr::new(self.data) })
+        } else {
+            None
+        }
+    }
+
+    /// Returns a pointer to the resource data if initialized.
+    #[inline]
+    pub fn get_data_mut(&mut self) -> Option<PtrMut<'_>> {
+        if self.is_active {
+            Some(unsafe { PtrMut::new(self.data) })
         } else {
             None
         }
@@ -125,7 +135,7 @@ impl ResData {
     /// Returns the added tick if the resource is initialized.
     #[inline]
     pub fn get_added(&self) -> Option<Tick> {
-        if self.is_valid {
+        if self.is_active {
             Some(self.added)
         } else {
             None
@@ -135,7 +145,7 @@ impl ResData {
     /// Returns the changed tick if the resource is initialized.
     #[inline]
     pub fn get_changed(&self) -> Option<Tick> {
-        if self.is_valid {
+        if self.is_active {
             Some(self.changed)
         } else {
             None
@@ -150,8 +160,8 @@ impl ResData {
     #[inline]
     #[must_use = "The returned ptr should be used."]
     pub unsafe fn remove(&mut self) -> Option<OwningPtr<'_>> {
-        if self.is_valid {
-            self.is_valid = false;
+        if self.is_active {
+            self.is_active = false;
             unsafe { Some(OwningPtr::new(self.data)) }
         } else {
             None
@@ -165,13 +175,13 @@ impl ResData {
     /// - Aborts if the drop implementation panics
     /// - If the data is NonSend, the function must be call in correct thread.
     pub unsafe fn clear(&mut self) {
-        if self.is_valid
-            && let Some(drop_fn) = self.drop_fn
+        if self.is_active
+            && let Some(dropper) = self.dropper
         {
             let guard = AbortOnDropFail;
-            self.is_valid = false;
+            self.is_active = false;
             unsafe {
-                drop_fn(OwningPtr::new(self.data));
+                dropper.call(OwningPtr::new(self.data));
             }
             ::core::mem::forget(guard);
         }
@@ -185,16 +195,16 @@ impl ResData {
     /// - Previous resource value (if any) is properly dropped
     /// - If the data is NonSend, the function must be call in correct thread.
     pub unsafe fn insert(&mut self, value: OwningPtr<'_>, tick: Tick) {
-        if self.is_valid {
-            if let Some(drop_fn) = self.drop_fn {
+        if self.is_active {
+            if let Some(dropper) = self.dropper {
                 let guard = AbortOnDropFail;
                 unsafe {
-                    drop_fn(OwningPtr::new(self.data));
+                    dropper.call(OwningPtr::new(self.data));
                 }
                 ::core::mem::forget(guard);
             }
         } else {
-            self.is_valid = true;
+            self.is_active = true;
             self.added = tick;
         }
         self.changed = tick;
@@ -210,7 +220,7 @@ impl ResData {
     /// Returns an untyped reference to the resource if initialized.
     #[inline]
     pub fn get_ref(&self, last_run: Tick, this_run: Tick) -> Option<UntypedRef<'_>> {
-        if self.is_valid {
+        if self.is_active {
             unsafe { Some(self.untyped_ref(last_run, this_run)) }
         } else {
             None
@@ -220,7 +230,7 @@ impl ResData {
     /// Returns an untyped mutable reference to the resource if initialized.
     #[inline]
     pub fn get_mut(&mut self, last_run: Tick, this_run: Tick) -> Option<UntypedMut<'_>> {
-        if self.is_valid {
+        if self.is_active {
             unsafe { Some(self.untyped_mut(last_run, this_run)) }
         } else {
             None
@@ -237,7 +247,7 @@ impl ResData {
     /// Returns an untyped reference, panicking if the resource is uninitialized.
     #[inline]
     pub(crate) fn assert_get_ref(&self, last_run: Tick, this_run: Tick) -> UntypedRef<'_> {
-        if self.is_valid {
+        if self.is_active {
             unsafe { self.untyped_ref(last_run, this_run) }
         } else {
             self.handle_error()
@@ -247,7 +257,7 @@ impl ResData {
     /// Returns an untyped mutable reference, panicking if the resource is uninitialized.
     #[inline]
     pub(crate) fn assert_get_mut(&mut self, last_run: Tick, this_run: Tick) -> UntypedMut<'_> {
-        if self.is_valid {
+        if self.is_active {
             unsafe { self.untyped_mut(last_run, this_run) }
         } else {
             self.handle_error()

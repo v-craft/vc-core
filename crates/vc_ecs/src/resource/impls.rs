@@ -1,11 +1,9 @@
 #![allow(clippy::missing_safety_doc, reason = "todo")]
 
-use crate::clone::CloneBehavior;
+use crate::utils::{Cloner, Dropper};
 
 pub unsafe trait Resource: Sized + 'static {
-    const IS_SEND: bool;
-    const MUTABLE: bool;
-    const CLONE_BEHAVIOR: CloneBehavior = CloneBehavior::Refuse;
+    const MUTABLE: bool = true;
+    const CLONER: Option<Cloner> = None;
+    const DROPPER: Option<Dropper> = None;
 }
-
-

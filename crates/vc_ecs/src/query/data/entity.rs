@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use crate::archetype::Archetype;
-use crate::entity::Entity;
+use crate::entity::{Entity, EntityError};
 use crate::query::QueryData;
 use crate::storage::{Table, TableRow};
 use crate::system::{FilterData, FilterParamBuilder};
@@ -17,7 +17,7 @@ unsafe impl QueryData for Entity {
     type Item<'world> = Entity;
 
     const COMPONENTS_ARE_DENSE: bool = true;
-    const MODE: WorldMode = WorldMode::ReadOnly;
+    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
 
     unsafe fn build_state(_world: &mut World) -> Self::State {}
 
@@ -29,10 +29,10 @@ unsafe impl QueryData for Entity {
     ) -> Self::Cache<'w> {
     }
 
-    unsafe fn filter_param(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
+    unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
 
-    unsafe fn filter_data(_state: &Self::State, _out: &mut FilterData) -> bool {
-        true
+    unsafe fn build_target(_state: &Self::State, _out: &mut FilterData) -> bool {
+        true // We did not access any components
     }
 
     unsafe fn set_for_arche<'w, 's>(
@@ -75,7 +75,7 @@ unsafe impl QueryData for EntityRef<'_> {
     type Item<'world> = EntityRef<'world>;
 
     const COMPONENTS_ARE_DENSE: bool = true;
-    const MODE: WorldMode = WorldMode::ReadOnly;
+    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
 
     unsafe fn build_state(_world: &mut World) -> Self::State {}
 
@@ -92,9 +92,9 @@ unsafe impl QueryData for EntityRef<'_> {
         }
     }
 
-    unsafe fn filter_param(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
+    unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
 
-    unsafe fn filter_data(_state: &Self::State, out: &mut FilterData) -> bool {
+    unsafe fn build_target(_state: &Self::State, out: &mut FilterData) -> bool {
         if out.can_entity_ref() {
             out.set_entity_ref();
             true
@@ -124,14 +124,20 @@ unsafe impl QueryData for EntityRef<'_> {
         _table_row: TableRow,
     ) -> Option<Self::Item<'w>> {
         let world = unsafe { cache.world.read_only() };
-        let location = world.entities.get_spawned(entity).ok()?;
-        Some(EntityRef {
-            world,
-            entity,
-            location,
-            last_run: cache.last_run,
-            this_run: cache.this_run,
-        })
+
+        match world.entities.get_spawned(entity) {
+            Ok(location) => Some(EntityRef {
+                world,
+                entity,
+                location,
+                last_run: cache.last_run,
+                this_run: cache.this_run,
+            }),
+            Err(e) => {
+                handle_entity_error(&e);
+                None
+            }
+        }
     }
 }
 
@@ -141,7 +147,7 @@ unsafe impl QueryData for EntityMut<'_> {
     type Item<'world> = EntityMut<'world>;
 
     const COMPONENTS_ARE_DENSE: bool = true;
-    const MODE: WorldMode = WorldMode::DataMut;
+    const WORLD_MODE: WorldMode = WorldMode::DataMut;
 
     unsafe fn build_state(_world: &mut World) -> Self::State {}
 
@@ -158,9 +164,9 @@ unsafe impl QueryData for EntityMut<'_> {
         }
     }
 
-    unsafe fn filter_param(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
+    unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
 
-    unsafe fn filter_data(_state: &Self::State, out: &mut FilterData) -> bool {
+    unsafe fn build_target(_state: &Self::State, out: &mut FilterData) -> bool {
         if out.can_entity_mut() {
             out.set_entity_mut();
             true
@@ -190,13 +196,29 @@ unsafe impl QueryData for EntityMut<'_> {
         _table_row: TableRow,
     ) -> Option<Self::Item<'w>> {
         let world = unsafe { cache.world.data_mut() };
-        let location = world.entities.get_spawned(entity).ok()?;
-        Some(EntityMut {
-            world,
-            entity,
-            location,
-            last_run: cache.last_run,
-            this_run: cache.this_run,
-        })
+
+        match world.entities.get_spawned(entity) {
+            Ok(location) => Some(EntityMut {
+                world,
+                entity,
+                location,
+                last_run: cache.last_run,
+                this_run: cache.this_run,
+            }),
+            Err(e) => {
+                handle_entity_error(&e);
+                None
+            }
+        }
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn handle_entity_error(e: &EntityError) {
+    if cfg!(debug_assertions) {
+        panic!("QueryData::fetch -> {e}");
+    } else {
+        log::error!("QueryData::fetch -> {e}");
     }
 }

@@ -54,22 +54,14 @@ impl World {
             .for_each(|&cid| unsafe {
                 let map_id = maps.get_id(cid).debug_checked_unwrap();
                 let map = maps.get_unchecked_mut(map_id);
-                let _ = map.allocate(entity);
+                let _ = map.alloc(entity);
             });
         let table_row = unsafe { table.allocate(entity) };
         let arche_row = unsafe { archetype.insert_entity(entity) };
 
         unsafe {
-            let mut writer = ComponentWriter {
-                data,
-                components,
-                maps,
-                table,
-                entity,
-                table_row,
-                tick,
-                writed: Default::default(),
-            };
+            let mut writer =
+                ComponentWriter::new(data, entity, table_row, tick, maps, table, components);
 
             write_explicit(&mut writer, 0);
             write_required(&mut writer);
