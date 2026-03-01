@@ -6,6 +6,7 @@ mod error;
 mod ident;
 mod info;
 mod mapper;
+mod storage;
 
 // -----------------------------------------------------------------------------
 // Exports
@@ -15,3 +16,4 @@ pub use error::*;
 pub use ident::{Entity, EntityGeneration, EntityId};
 pub use info::{Entities, EntityLocation, MovedEntity};
 pub use mapper::{EntityHashMap, EntityMapper};
+pub use storage::StorageId;

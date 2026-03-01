@@ -244,32 +244,6 @@ impl ResData {
         self.changed.quick_check(now, fall_back);
     }
 
-    /// Returns an untyped reference, panicking if the resource is uninitialized.
-    #[inline]
-    pub(crate) fn assert_get_ref(&self, last_run: Tick, this_run: Tick) -> UntypedRef<'_> {
-        if self.is_active {
-            unsafe { self.untyped_ref(last_run, this_run) }
-        } else {
-            self.handle_error()
-        }
-    }
-
-    /// Returns an untyped mutable reference, panicking if the resource is uninitialized.
-    #[inline]
-    pub(crate) fn assert_get_mut(&mut self, last_run: Tick, this_run: Tick) -> UntypedMut<'_> {
-        if self.is_active {
-            unsafe { self.untyped_mut(last_run, this_run) }
-        } else {
-            self.handle_error()
-        }
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn handle_error(&self) -> ! {
-        panic!("Resource '{}' was uninitialized.", self.name);
-    }
-
     /// Creates an untyped reference without checking initialization.
     ///
     /// # Safety

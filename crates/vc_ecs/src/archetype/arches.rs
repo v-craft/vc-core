@@ -10,6 +10,7 @@ use vc_utils::hash::{HashMap, SparseHashSet};
 use crate::archetype::{ArcheId, Archetype};
 use crate::bundle::BundleId;
 use crate::component::ComponentId;
+use crate::entity::StorageId;
 use crate::storage::TableId;
 
 // -----------------------------------------------------------------------------
@@ -269,33 +270,39 @@ impl ArcheFilter<'_> {
         }
     }
 
-    /// Adds a requirement that archetypes must NOT contain the specified component.
-    ///
-    /// This excludes all archetypes that include this component from the results.
-    pub fn collect(self) -> Vec<ArcheId> {
-        if let Some(with) = self.with {
-            let mut ret: Vec<ArcheId> = with.into_iter().collect();
-            ret.sort();
-            ret
-        } else {
-            (0..self.arches.arches.len())
-                .map(|idx| unsafe { ArcheId::new_unchecked(idx as u32) })
-                .filter(|id| !self.without.contains(id))
-                .collect()
-        }
-    }
-
-    pub fn collect_to(self, set: &mut BTreeSet<ArcheId>) {
+    pub fn collect_arche(self, set: &mut BTreeSet<StorageId>) {
         if let Some(with) = self.with {
             with.into_iter().for_each(|item| {
-                set.insert(item);
+                set.insert(StorageId { arche_id: item });
             });
         } else {
             (0..self.arches.arches.len())
                 .map(|idx| unsafe { ArcheId::new_unchecked(idx as u32) })
                 .filter(|id| !self.without.contains(id))
                 .for_each(|item| {
-                    set.insert(item);
+                    set.insert(StorageId { arche_id: item });
+                });
+        }
+    }
+
+    pub fn collect_table(self, set: &mut BTreeSet<StorageId>) {
+        let arches = self.arches;
+        if let Some(with) = self.with {
+            with.into_iter().for_each(|item| {
+                let arche = unsafe { arches.get_unchecked(item) };
+                set.insert(StorageId {
+                    table_id: arche.table_id(),
+                });
+            });
+        } else {
+            arches
+                .arches
+                .iter()
+                .filter(|arche| !self.without.contains(&arche.id()))
+                .for_each(|arche| {
+                    set.insert(StorageId {
+                        table_id: arche.table_id(),
+                    });
                 });
         }
     }

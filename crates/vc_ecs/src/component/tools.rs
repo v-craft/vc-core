@@ -169,6 +169,7 @@ pub struct ComponentWriter<'a> {
 impl ComponentWriter<'_> {
     /// # Safety
     /// Ensure by caller.
+    #[inline]
     pub unsafe fn new<'a>(
         data: OwningPtr<'a>,
         entity: Entity,

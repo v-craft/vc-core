@@ -40,9 +40,6 @@ macro_rules! impl_tuple {
             type Cache<'world> = <$name>::Cache<'world>;
 
             const COMPONENTS_ARE_DENSE: bool = <$name>::COMPONENTS_ARE_DENSE;
-
-            // The use of 'Or' may lead to incomplete archetype-based
-            // filtering, thus entity filtering must be enabled.
             const ENABLE_ENTITY_FILTER: bool = <$name>::ENABLE_ENTITY_FILTER;
 
             unsafe fn build_state(
@@ -77,9 +74,10 @@ macro_rules! impl_tuple {
                 state: &Self::State,
                 cache: &mut Self::Cache<'w>,
                 arche: &'w Archetype,
+                table: &'w Table,
             ) {
                 unsafe {
-                    <$name>::set_for_arche(state, cache, arche);
+                    <$name>::set_for_arche(state, cache, arche, table);
                 }
             }
 
@@ -117,6 +115,7 @@ macro_rules! impl_tuple {
             const COMPONENTS_ARE_DENSE: bool = {
                 true $( && <$name>::COMPONENTS_ARE_DENSE )*
             };
+
             // The use of 'Or' may lead to incomplete archetype-based
             // filtering, thus entity filtering must be enabled.
             const ENABLE_ENTITY_FILTER: bool = true;
@@ -156,9 +155,10 @@ macro_rules! impl_tuple {
                 state: &Self::State,
                 cache: &mut Self::Cache<'w>,
                 arche: &'w Archetype,
+                table: &'w Table,
             ) {
                 unsafe {
-                    $( <$name>::set_for_arche(&state.$index, &mut cache.$index, arche); )*
+                    $( <$name>::set_for_arche(&state.$index, &mut cache.$index, arche, table); )*
                 }
             }
 

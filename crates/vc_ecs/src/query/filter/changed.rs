@@ -5,7 +5,7 @@ use super::QueryFilter;
 use crate::archetype::Archetype;
 use crate::component::{Component, ComponentId, ComponentStorage};
 use crate::entity::Entity;
-use crate::storage::{Map, Storages, Table, TableRow};
+use crate::storage::{Map, Table, TableRow};
 use crate::system::FilterParamBuilder;
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
@@ -13,15 +13,12 @@ use crate::world::{UnsafeWorld, World};
 // -----------------------------------------------------------------------------
 // Changed
 
-#[derive(Clone, Copy)]
 union StorageSwitch<'w> {
     dense: Option<ThinSlice<'w, Tick>>,
     sparse: Option<&'w Map>,
 }
 
-#[derive(Clone)]
 pub struct ChangedView<'w> {
-    storages: &'w Storages,
     ticks: StorageSwitch<'w>,
     last_run: Tick,
     this_run: Tick,
@@ -46,25 +43,30 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
         last_run: Tick,
         this_run: Tick,
     ) -> Self::Cache<'w> {
-        let storages = unsafe { &world.read_only().storages };
-        let ticks = match T::STORAGE {
-            ComponentStorage::Dense => StorageSwitch { dense: None },
+        match T::STORAGE {
+            ComponentStorage::Dense => ChangedView {
+                ticks: StorageSwitch { dense: None },
+                last_run,
+                this_run,
+            },
             ComponentStorage::Sparse => {
-                if let Some(map_id) = storages.maps.get_id(*state) {
-                    StorageSwitch {
-                        sparse: storages.maps.get(map_id),
+                let maps = unsafe { &world.read_only().storages.maps };
+                if let Some(map_id) = maps.get_id(*state) {
+                    ChangedView {
+                        ticks: StorageSwitch {
+                            sparse: maps.get(map_id),
+                        },
+                        last_run,
+                        this_run,
                     }
                 } else {
-                    StorageSwitch { sparse: None }
+                    ChangedView {
+                        ticks: StorageSwitch { sparse: None },
+                        last_run,
+                        this_run,
+                    }
                 }
             }
-        };
-
-        ChangedView {
-            storages,
-            ticks,
-            last_run,
-            this_run,
         }
     }
 
@@ -77,18 +79,10 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
     unsafe fn set_for_arche<'w>(
         state: &Self::State,
         cache: &mut Self::Cache<'w>,
-        arche: &'w Archetype,
+        _arche: &'w Archetype,
+        table: &'w Table,
     ) {
-        if T::STORAGE.is_dense() {
-            let table_id = arche.table_id();
-            let table = unsafe { cache.storages.tables.get_unchecked(table_id) };
-            let Some(table_col) = table.get_table_col(*state) else {
-                cache.ticks = StorageSwitch { dense: None };
-                return;
-            };
-            let slice = unsafe { ThinSlice::from_ref(table.get_changed_slice(table_col)) };
-            cache.ticks = StorageSwitch { dense: Some(slice) };
-        }
+        unsafe { Self::set_for_table(state, cache, table) };
     }
 
     unsafe fn set_for_table<'w>(

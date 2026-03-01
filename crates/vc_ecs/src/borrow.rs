@@ -165,16 +165,6 @@ pub struct UntypedSliceMut<'w> {
 // -----------------------------------------------------------------------------
 // From
 
-impl<'w, T: Resource + Sync> From<ResMut<'w, T>> for Mut<'w, T> {
-    #[inline]
-    fn from(other: ResMut<'w, T>) -> Mut<'w, T> {
-        Mut {
-            value: other.value,
-            ticks: other.ticks,
-        }
-    }
-}
-
 impl<'w, T: Resource + Sync> From<ResMut<'w, T>> for ResRef<'w, T> {
     #[inline]
     fn from(other: ResMut<'w, T>) -> Self {
@@ -185,20 +175,20 @@ impl<'w, T: Resource + Sync> From<ResMut<'w, T>> for ResRef<'w, T> {
     }
 }
 
-impl<'w, T: Resource + Sync> From<ResRef<'w, T>> for Ref<'w, T> {
+impl<'w, T: Resource + Sync> From<ResMut<'w, T>> for Mut<'w, T> {
     #[inline]
-    fn from(other: ResRef<'w, T>) -> Self {
-        Self {
+    fn from(other: ResMut<'w, T>) -> Mut<'w, T> {
+        Mut {
             value: other.value,
             ticks: other.ticks,
         }
     }
 }
 
-impl<'w, T: Resource> From<NonSyncMut<'w, T>> for Mut<'w, T> {
+impl<'w, T: Resource + Sync> From<ResRef<'w, T>> for Ref<'w, T> {
     #[inline]
-    fn from(other: NonSyncMut<'w, T>) -> Mut<'w, T> {
-        Mut {
+    fn from(other: ResRef<'w, T>) -> Self {
+        Self {
             value: other.value,
             ticks: other.ticks,
         }
@@ -215,21 +205,21 @@ impl<'w, T: Resource> From<NonSyncMut<'w, T>> for NonSyncRef<'w, T> {
     }
 }
 
-impl<'w, T: Resource> From<NonSyncRef<'w, T>> for Ref<'w, T> {
+impl<'w, T: Resource> From<NonSyncMut<'w, T>> for Mut<'w, T> {
     #[inline]
-    fn from(other: NonSyncRef<'w, T>) -> Self {
-        Self {
+    fn from(other: NonSyncMut<'w, T>) -> Mut<'w, T> {
+        Mut {
             value: other.value,
             ticks: other.ticks,
         }
     }
 }
 
-impl<'w, T: ?Sized> From<Ref<'w, T>> for UntypedRef<'w> {
+impl<'w, T: Resource> From<NonSyncRef<'w, T>> for Ref<'w, T> {
     #[inline]
-    fn from(other: Ref<'w, T>) -> Self {
-        UntypedRef {
-            value: other.value.into(),
+    fn from(other: NonSyncRef<'w, T>) -> Self {
+        Self {
+            value: other.value,
             ticks: other.ticks,
         }
     }
@@ -241,6 +231,16 @@ impl<'w, T: ?Sized> From<Mut<'w, T>> for Ref<'w, T> {
         Self {
             value: other.value,
             ticks: other.ticks.into(),
+        }
+    }
+}
+
+impl<'w, T: ?Sized> From<Ref<'w, T>> for UntypedRef<'w> {
+    #[inline]
+    fn from(other: Ref<'w, T>) -> Self {
+        UntypedRef {
+            value: other.value.into(),
+            ticks: other.ticks,
         }
     }
 }
@@ -515,7 +515,10 @@ macro_rules! impl_ref_methods {
             pub fn into_deref(self) -> Ref<'w, <$target as Deref>::Target>
                 where $target: Deref
             {
-                self.map_type(|v| v.deref())
+                Ref {
+                    value: Deref::deref(self.value),
+                    ticks: self.ticks,
+                }
             }
         }
     };
@@ -628,7 +631,10 @@ macro_rules! impl_mut_methods {
             pub fn into_deref(self) -> Mut<'w, <$target as Deref>::Target>
                 where $target: DerefMut
             {
-                self.map_type(|v| v.deref_mut())
+                Mut {
+                    value: DerefMut::deref_mut(self.value),
+                    ticks: self.ticks,
+                }
             }
         }
     };
@@ -646,14 +652,12 @@ macro_rules! impl_change_detection {
         impl<$($generics),* : ?Sized $(+ $traits)*> DetectChanges for $name<$($generics),*> {
             #[inline]
             fn is_added(&self) -> bool {
-                self.ticks.added
-                    .is_newer_than(self.ticks.last_run, self.ticks.this_run)
+                self.ticks.added.is_newer_than(self.ticks.last_run, self.ticks.this_run)
             }
 
             #[inline]
             fn is_changed(&self) -> bool {
-                self.ticks.changed
-                    .is_newer_than(self.ticks.last_run, self.ticks.this_run)
+                self.ticks.changed.is_newer_than(self.ticks.last_run, self.ticks.this_run)
             }
 
             #[inline(always)]

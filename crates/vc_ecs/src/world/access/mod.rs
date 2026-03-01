@@ -1,15 +1,13 @@
 // -----------------------------------------------------------------------------
 // Modules
 
-mod component;
 mod entity;
-mod entity_world;
+mod get_component;
 mod unsafe_world;
 
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use component::FetchComponent;
-pub use entity::{EntityMut, EntityRef};
-pub use entity_world::WorldEntityMut;
+pub use entity::{EntityMut, EntityOwned, EntityRef};
+pub use get_component::GetComponent;
 pub use unsafe_world::{UnsafeWorld, WorldMode};

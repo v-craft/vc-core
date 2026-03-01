@@ -1,8 +1,8 @@
 use alloc::vec::Vec;
 
+use super::{QueryData, ReadOnlyQuery};
 use crate::archetype::Archetype;
-use crate::entity::{Entity, EntityError};
-use crate::query::QueryData;
+use crate::entity::Entity;
 use crate::storage::{Table, TableRow};
 use crate::system::{FilterData, FilterParamBuilder};
 use crate::tick::Tick;
@@ -10,6 +10,8 @@ use crate::world::{EntityMut, EntityRef, UnsafeWorld, World, WorldMode};
 
 // -----------------------------------------------------------------------------
 // Entity
+
+unsafe impl ReadOnlyQuery for Entity {}
 
 unsafe impl QueryData for Entity {
     type State = ();
@@ -35,22 +37,23 @@ unsafe impl QueryData for Entity {
         true // We did not access any components
     }
 
-    unsafe fn set_for_arche<'w, 's>(
-        _state: &'s Self::State,
+    unsafe fn set_for_arche<'w>(
+        _state: &Self::State,
         _cache: &mut Self::Cache<'w>,
         _arche: &'w Archetype,
+        _table: &'w Table,
     ) {
     }
 
-    unsafe fn set_for_table<'w, 's>(
-        _state: &'s Self::State,
+    unsafe fn set_for_table<'w>(
+        _state: &Self::State,
         _cache: &mut Self::Cache<'w>,
         _table: &'w Table,
     ) {
     }
 
-    unsafe fn fetch<'w, 's>(
-        _state: &'s Self::State,
+    unsafe fn fetch<'w>(
+        _state: &Self::State,
         _cache: &mut Self::Cache<'w>,
         entity: Entity,
         _table_row: TableRow,
@@ -62,12 +65,13 @@ unsafe impl QueryData for Entity {
 // -----------------------------------------------------------------------------
 // EntityRef & EntityMut
 
-#[derive(Clone, Copy)]
 pub struct EntityView<'w> {
     world: UnsafeWorld<'w>,
     last_run: Tick,
     this_run: Tick,
 }
+
+unsafe impl ReadOnlyQuery for EntityRef<'_> {}
 
 unsafe impl QueryData for EntityRef<'_> {
     type State = ();
@@ -103,41 +107,36 @@ unsafe impl QueryData for EntityRef<'_> {
         }
     }
 
-    unsafe fn set_for_arche<'w, 's>(
-        _state: &'s Self::State,
+    unsafe fn set_for_arche<'w>(
+        _state: &Self::State,
         _cache: &mut Self::Cache<'w>,
         _arche: &'w Archetype,
+        _table: &'w Table,
     ) {
     }
 
-    unsafe fn set_for_table<'w, 's>(
-        _state: &'s Self::State,
+    unsafe fn set_for_table<'w>(
+        _state: &Self::State,
         _cache: &mut Self::Cache<'w>,
         _table: &'w Table,
     ) {
     }
 
-    unsafe fn fetch<'w, 's>(
-        _state: &'s Self::State,
+    unsafe fn fetch<'w>(
+        _state: &Self::State,
         cache: &mut Self::Cache<'w>,
         entity: Entity,
         _table_row: TableRow,
     ) -> Option<Self::Item<'w>> {
         let world = unsafe { cache.world.read_only() };
-
-        match world.entities.get_spawned(entity) {
-            Ok(location) => Some(EntityRef {
-                world,
-                entity,
-                location,
-                last_run: cache.last_run,
-                this_run: cache.this_run,
-            }),
-            Err(e) => {
-                handle_entity_error(&e);
-                None
-            }
-        }
+        let location = world.entities.get_spawned(entity).unwrap();
+        Some(EntityRef {
+            world,
+            entity,
+            location,
+            last_run: cache.last_run,
+            this_run: cache.this_run,
+        })
     }
 }
 
@@ -175,50 +174,35 @@ unsafe impl QueryData for EntityMut<'_> {
         }
     }
 
-    unsafe fn set_for_arche<'w, 's>(
-        _state: &'s Self::State,
+    unsafe fn set_for_arche<'w>(
+        _state: &Self::State,
         _cache: &mut Self::Cache<'w>,
         _arche: &'w Archetype,
+        _table: &'w Table,
     ) {
     }
 
-    unsafe fn set_for_table<'w, 's>(
-        _state: &'s Self::State,
+    unsafe fn set_for_table<'w>(
+        _state: &Self::State,
         _cache: &mut Self::Cache<'w>,
         _table: &'w Table,
     ) {
     }
 
-    unsafe fn fetch<'w, 's>(
-        _state: &'s Self::State,
+    unsafe fn fetch<'w>(
+        _state: &Self::State,
         cache: &mut Self::Cache<'w>,
         entity: Entity,
         _table_row: TableRow,
     ) -> Option<Self::Item<'w>> {
         let world = unsafe { cache.world.data_mut() };
-
-        match world.entities.get_spawned(entity) {
-            Ok(location) => Some(EntityMut {
-                world,
-                entity,
-                location,
-                last_run: cache.last_run,
-                this_run: cache.this_run,
-            }),
-            Err(e) => {
-                handle_entity_error(&e);
-                None
-            }
-        }
-    }
-}
-
-#[cold]
-#[inline(never)]
-fn handle_entity_error(e: &EntityError) {
-    if cfg!(debug_assertions) {
-        panic!("QueryData::fetch -> {e}");
-    } else {
-        log::error!("QueryData::fetch -> {e}");
+        let location = world.entities.get_spawned(entity).unwrap();
+        Some(EntityMut {
+            world,
+            entity,
+            location,
+            last_run: cache.last_run,
+            this_run: cache.this_run,
+        })
     }
 }

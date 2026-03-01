@@ -14,7 +14,7 @@ use crate::world::{UnsafeWorld, World};
 
 #[diagnostic::on_unimplemented(
     message = "`{Self}` cannot be used in `With<..>`",
-    label = "Expected a component or a tuple of 1-12 elements, each implementing `QueryFilter`",
+    label = "Expected a Component or a tuple of 1-12 Components",
     note = "If there are more than 12 elements, use `And<..>` instead."
 )]
 pub trait InWith {}
@@ -65,6 +65,7 @@ unsafe impl<T: Component> QueryFilter for With<T> {
         state: &Self::State,
         cache: &mut Self::Cache<'w>,
         arche: &'w Archetype,
+        _table: &'w Table,
     ) {
         match T::STORAGE {
             ComponentStorage::Dense => {
@@ -155,6 +156,7 @@ macro_rules! impl_tuple {
                 state: &Self::State,
                 cache: &mut Self::Cache<'w>,
                 arche: &'w Archetype,
+                _table: &'w Table,
             ) {
                 match <$name>::STORAGE {
                     ComponentStorage::Dense => {
@@ -232,6 +234,7 @@ macro_rules! impl_tuple {
                 state: &Self::State,
                 cache: &mut Self::Cache<'w>,
                 arche: &'w Archetype,
+                _table: &'w Table,
             ) {
                 *cache = true;
                 $(

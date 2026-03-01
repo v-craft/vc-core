@@ -1,9 +1,17 @@
+// -----------------------------------------------------------------------------
+// Modules
+
 mod data;
 mod filter;
-mod impls;
+mod iter;
+mod query;
 mod state;
 
-pub use data::*;
-pub use filter::*;
-pub use impls::Query;
+// -----------------------------------------------------------------------------
+// Exports
+
+pub use data::{QueryData, ReadOnlyQuery};
+pub use filter::{And, Changed, Or, QueryFilter, With, Without};
+pub use iter::QueryIter;
+pub use query::Query;
 pub use state::QueryState;

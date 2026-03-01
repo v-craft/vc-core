@@ -230,6 +230,18 @@ impl Table {
         }
     }
 
+    /// Returns a pointer to component data at the specified column.
+    ///
+    /// # Safety
+    /// - `table_col` must be a valid column index
+    #[inline(always)]
+    pub unsafe fn get_data_ptr(&self, table_col: TableCol) -> Ptr<'_> {
+        unsafe {
+            let col = self.get_column(table_col);
+            col.get_data(0)
+        }
+    }
+
     /// Returns the added tick for a component at the specified row and column.
     ///
     /// # Safety

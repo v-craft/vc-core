@@ -6,12 +6,12 @@ use crate::component::ComponentWriter;
 use crate::entity::{EntityLocation, SpawnError};
 use crate::tick::Tick;
 use crate::utils::DebugCheckedUnwrap;
-use crate::world::{World, WorldEntityMut};
+use crate::world::{EntityOwned, World};
 
 impl World {
     // We enable inlining to avoid copying data
     #[inline(always)]
-    pub fn spawn<B: Bundle>(&mut self, bundle: B) -> WorldEntityMut<'_> {
+    pub fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityOwned<'_> {
         let bundle_id = self.register_bundle::<B>();
 
         vc_ptr::into_owning!(bundle);
@@ -26,7 +26,7 @@ impl World {
         bundle_id: BundleId,
         write_explicit: unsafe fn(&mut ComponentWriter, usize),
         write_required: unsafe fn(&mut ComponentWriter),
-    ) -> WorldEntityMut<'_> {
+    ) -> EntityOwned<'_> {
         let tick = Tick::new(*self.this_run.get_mut());
 
         let arche_id = self.register_archetype_by_bundle(bundle_id);
@@ -54,7 +54,7 @@ impl World {
             .for_each(|&cid| unsafe {
                 let map_id = maps.get_id(cid).debug_checked_unwrap();
                 let map = maps.get_unchecked_mut(map_id);
-                let _ = map.alloc(entity);
+                let _ = map.alloc(entity); // `MapRow` may be cached in the future.
             });
         let table_row = unsafe { table.allocate(entity) };
         let arche_row = unsafe { archetype.insert_entity(entity) };
@@ -78,8 +78,8 @@ impl World {
             self.entities.set_spawned(entity, location).unwrap();
         }
 
-        WorldEntityMut {
-            world: self,
+        EntityOwned {
+            world: self.unsafe_world(),
             entity,
             location,
         }
@@ -124,8 +124,9 @@ impl World {
 
 #[cfg(test)]
 mod tests {
-    use crate::component::Component;
+    use crate::component::{Component, ComponentStorage};
     use crate::world::{World, WorldIdAllocator};
+    use alloc::string::String;
 
     #[derive(Debug, PartialEq, Eq)]
     struct Foo;
@@ -133,20 +134,29 @@ mod tests {
     #[derive(Debug, PartialEq, Eq)]
     struct Bar(u64);
 
+    #[derive(Debug, PartialEq, Eq)]
+    struct Baz(String);
+
     unsafe impl Component for Foo {}
     unsafe impl Component for Bar {}
+    unsafe impl Component for Baz {
+        const STORAGE: ComponentStorage = ComponentStorage::Sparse;
+    }
 
     #[test]
     fn spawn_basic() {
         let allocator = WorldIdAllocator::new();
         let mut world = World::new(allocator.alloc());
 
-        let mut entity = world.spawn((Foo, Bar(123)));
+        let mut entity = world.spawn((Foo, Bar(123), Baz(String::from("hello"))));
         assert_eq!(entity.get::<Foo>().unwrap(), &Foo);
         assert_eq!(entity.get::<Bar>().unwrap(), &Bar(123));
 
         entity.get_mut::<Bar>().unwrap().0 = 321;
         assert_eq!(entity.get::<(Foo, Bar)>().unwrap(), (&Foo, &Bar(321)));
+
+        let baz = entity.get::<Baz>().unwrap();
+        assert_eq!(&baz.0, "hello");
 
         // std::eprintln!("{world:?}");
 

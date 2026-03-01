@@ -27,11 +27,21 @@ pub struct UnsafeWorld<'a> {
     _marker: PhantomData<&'a UnsafeCell<World>>,
 }
 
+impl World {
+    pub const fn unsafe_world(&self) -> UnsafeWorld<'_> {
+        UnsafeWorld {
+            world: NonNull::from_ref(self),
+            _marker: PhantomData,
+        }
+    }
+}
+
 impl<'a> UnsafeWorld<'a> {
     /// # Safety
     /// - Read only.
     /// - The caller ensures concurrency safety
-    pub unsafe fn read_only(self) -> &'a World {
+    #[inline(always)]
+    pub const unsafe fn read_only(self) -> &'a World {
         unsafe { &*self.world.as_ptr() }
     }
 
@@ -40,13 +50,20 @@ impl<'a> UnsafeWorld<'a> {
     /// - Only the data can be changed:
     ///   - entities/resources cannot be added or deleted
     ///   - Cannot register a new type or allocate any ID.
-    pub unsafe fn data_mut(self) -> &'a mut World {
+    #[inline(always)]
+    pub const unsafe fn data_mut(self) -> &'a mut World {
         unsafe { &mut *self.world.as_ptr() }
     }
 
     /// # Safety
     /// - There are no other borrowings.
-    pub unsafe fn full_mut(self) -> &'a mut World {
+    #[inline(always)]
+    pub const unsafe fn full_mut(self) -> &'a mut World {
         unsafe { &mut *self.world.as_ptr() }
+    }
+
+    #[inline(always)]
+    pub const fn into_inner(self) -> NonNull<World> {
+        self.world
     }
 }

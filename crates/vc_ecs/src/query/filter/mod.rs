@@ -39,7 +39,7 @@ pub unsafe trait QueryFilter {
     ///
     /// This cache is rebuilt each time the query is executed and may contain
     /// world-specific data like component pointers or pre-computed lookup tables.
-    type Cache<'world>: Clone;
+    type Cache<'world>;
 
     /// Indicates whether all components accessed by this filter use dense storage.
     ///
@@ -100,6 +100,7 @@ pub unsafe trait QueryFilter {
         state: &Self::State,
         cache: &mut Self::Cache<'w>,
         arche: &'w Archetype,
+        table: &'w Table,
     );
 
     /// Updates the cache for a specific table.
@@ -157,6 +158,7 @@ unsafe impl QueryFilter for () {
         _state: &Self::State,
         _cache: &mut Self::Cache<'w>,
         _arche: &'w Archetype,
+        _table: &'w Table,
     ) {
     }
 

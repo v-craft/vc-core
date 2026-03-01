@@ -1,9 +1,17 @@
 use core::fmt::Debug;
-use core::ptr::NonNull;
 
-use crate::entity::{Entity, EntityLocation};
+use crate::entity::{Entity, EntityError, EntityLocation};
 use crate::tick::Tick;
-use crate::world::{FetchComponent, World};
+use crate::world::{GetComponent, UnsafeWorld, World};
+
+pub struct EntityOwned<'a> {
+    pub(crate) world: UnsafeWorld<'a>,
+    pub(crate) entity: Entity,
+    pub(crate) location: EntityLocation,
+    // We have World's exclusive borrowing.
+    // pub(crate) last_run: Tick,
+    // pub(crate) this_run: Tick,
+}
 
 pub struct EntityMut<'a> {
     pub(crate) world: &'a mut World,
@@ -21,6 +29,30 @@ pub struct EntityRef<'a> {
     pub(crate) this_run: Tick,
 }
 
+impl<'a> From<EntityOwned<'a>> for EntityMut<'a> {
+    fn from(value: EntityOwned<'a>) -> Self {
+        EntityMut {
+            last_run: value.last_run(),
+            this_run: value.this_run(),
+            world: unsafe { value.world.data_mut() },
+            entity: value.entity,
+            location: value.location,
+        }
+    }
+}
+
+impl<'a> From<EntityOwned<'a>> for EntityRef<'a> {
+    fn from(value: EntityOwned<'a>) -> Self {
+        EntityRef {
+            last_run: value.last_run(),
+            this_run: value.this_run(),
+            world: unsafe { value.world.read_only() },
+            entity: value.entity,
+            location: value.location,
+        }
+    }
+}
+
 impl<'a> From<EntityMut<'a>> for EntityRef<'a> {
     fn from(value: EntityMut<'a>) -> Self {
         EntityRef {
@@ -33,33 +65,32 @@ impl<'a> From<EntityMut<'a>> for EntityRef<'a> {
     }
 }
 
-impl Debug for EntityMut<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("EntityMut")
-            .field("entity", &self.entity)
-            .field("location", &self.location)
-            .finish()
-    }
+macro_rules! impl_debug {
+    ($name:ident) => {
+        impl Debug for $name<'_> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.debug_struct(stringify!($name))
+                    .field("entity", &self.entity)
+                    .field("location", &self.location)
+                    .finish()
+            }
+        }
+    };
 }
 
-impl Debug for EntityRef<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("EntityRef")
-            .field("entity", &self.entity)
-            .field("location", &self.location)
-            .finish()
-    }
-}
+impl_debug!(EntityOwned);
+impl_debug!(EntityMut);
+impl_debug!(EntityRef);
 
 impl<'a> EntityMut<'a> {
     pub fn entity(&self) -> Entity {
         self.entity
     }
 
-    pub fn get<T: FetchComponent>(&self) -> Option<T::Raw<'_>> {
+    pub fn get<T: GetComponent>(&self) -> Option<T::Raw<'_>> {
         unsafe {
             T::get(
-                NonNull::from_ref(self.world),
+                self.world.unsafe_world(),
                 self.entity,
                 self.location.table_id,
                 self.location.table_row,
@@ -67,10 +98,10 @@ impl<'a> EntityMut<'a> {
         }
     }
 
-    pub fn get_ref<T: FetchComponent>(&self) -> Option<T::Ref<'_>> {
+    pub fn get_ref<T: GetComponent>(&self) -> Option<T::Ref<'_>> {
         unsafe {
             T::get_ref(
-                NonNull::from_ref(self.world),
+                self.world.unsafe_world(),
                 self.entity,
                 self.location.table_id,
                 self.location.table_row,
@@ -80,10 +111,10 @@ impl<'a> EntityMut<'a> {
         }
     }
 
-    pub fn get_mut<T: FetchComponent>(&mut self) -> Option<T::Mut<'_>> {
+    pub fn get_mut<T: GetComponent>(&mut self) -> Option<T::Mut<'_>> {
         unsafe {
             T::get_mut(
-                NonNull::from_mut(self.world),
+                self.world.unsafe_world(),
                 self.entity,
                 self.location.table_id,
                 self.location.table_row,
@@ -99,10 +130,10 @@ impl<'a> EntityRef<'a> {
         self.entity
     }
 
-    pub fn get<T: FetchComponent>(&self) -> Option<T::Raw<'_>> {
+    pub fn get<T: GetComponent>(&self) -> Option<T::Raw<'_>> {
         unsafe {
             T::get(
-                NonNull::from_ref(self.world),
+                self.world.unsafe_world(),
                 self.entity,
                 self.location.table_id,
                 self.location.table_row,
@@ -110,10 +141,10 @@ impl<'a> EntityRef<'a> {
         }
     }
 
-    pub fn get_ref<T: FetchComponent>(&self) -> Option<T::Ref<'_>> {
+    pub fn get_ref<T: GetComponent>(&self) -> Option<T::Ref<'_>> {
         unsafe {
             T::get_ref(
-                NonNull::from_ref(self.world),
+                self.world.unsafe_world(),
                 self.entity,
                 self.location.table_id,
                 self.location.table_row,
@@ -121,5 +152,65 @@ impl<'a> EntityRef<'a> {
                 self.this_run,
             )
         }
+    }
+}
+
+impl<'a> EntityOwned<'a> {
+    #[inline(always)]
+    fn this_run(&self) -> Tick {
+        let world = unsafe { self.world.data_mut() };
+        Tick::new(*world.this_run.get_mut())
+    }
+
+    #[inline(always)]
+    fn last_run(&self) -> Tick {
+        let world = unsafe { self.world.data_mut() };
+        Tick::new(*world.this_run.get_mut())
+    }
+
+    pub fn entity(&self) -> Entity {
+        self.entity
+    }
+
+    pub fn get<T: GetComponent>(&self) -> Option<T::Raw<'_>> {
+        unsafe {
+            T::get(
+                self.world,
+                self.entity,
+                self.location.table_id,
+                self.location.table_row,
+            )
+        }
+    }
+
+    pub fn get_ref<T: GetComponent>(&self) -> Option<T::Ref<'_>> {
+        unsafe {
+            T::get_ref(
+                self.world,
+                self.entity,
+                self.location.table_id,
+                self.location.table_row,
+                self.last_run(),
+                self.this_run(),
+            )
+        }
+    }
+
+    pub fn get_mut<T: GetComponent>(&mut self) -> Option<T::Mut<'_>> {
+        unsafe {
+            T::get_mut(
+                self.world,
+                self.entity,
+                self.location.table_id,
+                self.location.table_row,
+                self.last_run(),
+                self.this_run(),
+            )
+        }
+    }
+
+    pub fn despawn(self) -> Result<(), EntityError> {
+        let world = unsafe { self.world.full_mut() };
+        world.despawn(self.entity)
     }
 }

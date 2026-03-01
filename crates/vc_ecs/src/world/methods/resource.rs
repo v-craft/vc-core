@@ -48,10 +48,9 @@ impl World {
     }
 
     pub fn get_resource<T: Resource + Sync>(&self) -> Option<&T> {
-        if let Some(id) = self.resources.get_id(TypeId::of::<T>()) // registered
-            && let Some(data) = self.storages.res.get(id) // prepared
+        if let Some(id) = self.resources.get_id(TypeId::of::<T>())
+            && let Some(data) = self.storages.res.get(id)
             && let Some(ptr) = data.get_data()
-        // valid
         {
             ptr.debug_assert_aligned::<T>();
             Some(unsafe { ptr.as_ref::<T>() })
@@ -61,13 +60,12 @@ impl World {
     }
 
     pub fn get_resource_ref<T: Resource + Sync>(&self) -> Option<ResRef<'_, T>> {
-        if let Some(id) = self.resources.get_id(TypeId::of::<T>()) // registered
+        if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get(id)
-        // prepared
         {
             let last_run = self.last_run;
             let this_run = Tick::new(self.this_run.load(Ordering::Relaxed));
-            let ptr = data.get_ref(last_run, this_run)?; // valid
+            let ptr = data.get_ref(last_run, this_run)?;
             Some(unsafe { ptr.into_res::<T>() })
         } else {
             None
@@ -75,13 +73,12 @@ impl World {
     }
 
     pub fn get_resource_mut<T: Resource + Sync>(&mut self) -> Option<ResMut<'_, T>> {
-        if let Some(id) = self.resources.get_id(TypeId::of::<T>()) // registered
+        if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get_mut(id)
-        // prepared
         {
             let last_run = self.last_run;
             let this_run = Tick::new(*self.this_run.get_mut());
-            let ptr = data.get_mut(last_run, this_run)?; // valid
+            let ptr = data.get_mut(last_run, this_run)?;
             Some(unsafe { ptr.into_res::<T>() })
         } else {
             None
@@ -127,10 +124,9 @@ impl World {
             "!Sync Resource can only be borrowed on the main thread.",
         }
 
-        if let Some(id) = self.resources.get_id(TypeId::of::<T>()) // registered
-            && let Some(data) = self.storages.res.get(id) // prepared
+        if let Some(id) = self.resources.get_id(TypeId::of::<T>())
+            && let Some(data) = self.storages.res.get(id)
             && let Some(ptr) = data.get_data()
-        // valid
         {
             ptr.debug_assert_aligned::<T>();
             Some(unsafe { ptr.as_ref::<T>() })
@@ -145,13 +141,12 @@ impl World {
             "!Sync Resource can only be borrowed on the main thread.",
         }
 
-        if let Some(id) = self.resources.get_id(TypeId::of::<T>()) // registered
+        if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get(id)
-        // prepared
         {
             let last_run = self.last_run;
             let this_run = Tick::new(self.this_run.load(Ordering::Relaxed));
-            let ptr = data.get_ref(last_run, this_run)?; // valid
+            let ptr = data.get_ref(last_run, this_run)?;
             Some(unsafe { ptr.into_non_sync::<T>() })
         } else {
             None
@@ -164,13 +159,12 @@ impl World {
             "!Sync Resource can only be borrowed on the main thread.",
         }
 
-        if let Some(id) = self.resources.get_id(TypeId::of::<T>()) // registered
+        if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get_mut(id)
-        // prepared
         {
             let last_run = self.last_run;
             let this_run = Tick::new(*self.this_run.get_mut());
-            let ptr = data.get_mut(last_run, this_run)?; // valid
+            let ptr = data.get_mut(last_run, this_run)?;
             Some(unsafe { ptr.into_non_sync::<T>() })
         } else {
             None
