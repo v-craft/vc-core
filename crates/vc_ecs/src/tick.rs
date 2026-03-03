@@ -98,14 +98,16 @@ impl Tick {
     }
 
     pub(crate) fn slice_check(this: &mut [Tick], now: Tick) {
+        // `u32` is more easily optimized by compiler.
         let arr: &mut [u32] = unsafe { core::mem::transmute(this) };
         let now: u32 = unsafe { core::mem::transmute(now) };
 
         let fall_back = now.wrapping_sub(MAX_TICK_AGE);
 
         // `for_each` can generate better code than explicit `for` loops.
+        // At present, it's guaranteed that `wrapping_sub` and `>` are SIMD.
         arr.iter_mut().for_each(|x| {
-            let age: u32 = now.wrapping_sub(*x);
+            let age = now.wrapping_sub(*x);
             if age > MAX_TICK_AGE {
                 *x = fall_back;
             }
@@ -176,6 +178,10 @@ use vc_ptr::{ThinSlice, ThinSliceMut};
 
 #[derive(Debug, Clone)]
 pub struct TicksRef<'w> {
+    // Perhaps we can directly store the value instead of referencing,
+    // then we can reduce 8 Bytes per struct.
+    // But the reference is just a pointer, there is no need to access
+    // its value, which may be faster during iteration.
     pub added: &'w Tick,
     pub changed: &'w Tick,
     pub last_run: Tick,

@@ -876,8 +876,23 @@ impl EntityAllocator {
     ///
     /// More efficient than individual [`free`](Self::free) calls for batches.
     pub fn free_many(&mut self, entities: &[Entity]) {
-        unsafe {
-            self.shared.free.free(entities);
+        let local_free = &mut self.local.free;
+        if LOCAL_CAP - local_free.len() >= entities.len() {
+            let old_len = local_free.len();
+            let append = entities.len();
+            let new_len = old_len + append;
+            unsafe {
+                ptr::copy_nonoverlapping::<Entity>(
+                    entities.as_ptr(),
+                    local_free.as_mut_ptr().add(old_len),
+                    append,
+                );
+                local_free.set_len(new_len);
+            }
+        } else {
+            unsafe {
+                self.shared.free.free(entities);
+            }
         }
     }
 

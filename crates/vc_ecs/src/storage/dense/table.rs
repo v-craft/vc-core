@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use core::alloc::Layout;
 use core::fmt::Debug;
 use core::num::NonZeroUsize;
-use core::slice;
+use vc_ptr::PtrMut;
 
 use vc_ptr::OwningPtr;
 use vc_ptr::Ptr;
@@ -230,15 +230,17 @@ impl Table {
         }
     }
 
-    /// Returns a pointer to component data at the specified column.
+    /// Returns a pointer to component data at the specified row and column.
     ///
     /// # Safety
+    /// - `table_row` must be a valid row index
     /// - `table_col` must be a valid column index
     #[inline(always)]
-    pub unsafe fn get_data_ptr(&self, table_col: TableCol) -> Ptr<'_> {
+    pub unsafe fn get_data_mut(&mut self, table_row: TableRow, table_col: TableCol) -> PtrMut<'_> {
+        debug_assert!((table_row.0 as usize) < self.entity_count());
         unsafe {
-            let col = self.get_column(table_col);
-            col.get_data(0)
+            let col = self.get_column_mut(table_col);
+            col.get_data_mut(table_row.0 as usize)
         }
     }
 
@@ -270,21 +272,35 @@ impl Table {
         }
     }
 
-    /// Returns a slice of component data for the entire column.
+    /// Returns the added tick for a component at the specified row and column.
     ///
     /// # Safety
+    /// - `table_row` must be a valid row index
     /// - `table_col` must be a valid column index
-    /// - The component type `T` must match the actual stored type
-    /// - The returned slice is only valid while the table is not mutated
     #[inline(always)]
-    pub unsafe fn get_data_slice<T>(&self, table_col: TableCol) -> &[T] {
+    pub unsafe fn get_added_mut(&mut self, table_row: TableRow, table_col: TableCol) -> &mut Tick {
+        debug_assert!((table_row.0 as usize) < self.entity_count());
         unsafe {
-            let col = self.get_column(table_col);
-            let ptr = col.get_data(0);
-            ptr.debug_assert_aligned::<T>();
-            let len = self.entity_count();
-            let data = ptr.as_ptr() as *const T;
-            slice::from_raw_parts(data, len)
+            let col = self.get_column_mut(table_col);
+            col.get_added_mut(table_row.0 as usize)
+        }
+    }
+
+    /// Returns the changed tick for a component at the specified row and column.
+    ///
+    /// # Safety
+    /// - `table_row` must be a valid row index
+    /// - `table_col` must be a valid column index
+    #[inline(always)]
+    pub unsafe fn get_changed_mut(
+        &mut self,
+        table_row: TableRow,
+        table_col: TableCol,
+    ) -> &mut Tick {
+        debug_assert!((table_row.0 as usize) < self.entity_count());
+        unsafe {
+            let col = self.get_column_mut(table_col);
+            col.get_changed_mut(table_row.0 as usize)
         }
     }
 

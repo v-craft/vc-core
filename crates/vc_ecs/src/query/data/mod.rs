@@ -1,6 +1,5 @@
 #![allow(clippy::missing_safety_doc, reason = "todo")]
 
-mod comp_mut;
 mod comp_raw;
 mod comp_ref;
 mod entity;

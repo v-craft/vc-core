@@ -4,6 +4,7 @@ use core::any::TypeId;
 
 use vc_utils::range_invoke;
 
+use crate::archetype::ArcheId;
 use crate::borrow::{Mut, Ref};
 use crate::component::{Component, ComponentStorage};
 use crate::entity::Entity;
@@ -15,6 +16,8 @@ pub unsafe trait GetComponent {
     type Raw<'a>;
     type Ref<'a>;
     type Mut<'a>;
+
+    unsafe fn contains(world: UnsafeWorld, arche_id: ArcheId) -> bool;
 
     /// # Safety
     /// The caller guarantees the correctness of the lifecycle
@@ -52,6 +55,18 @@ unsafe impl<T: Component> GetComponent for T {
     type Raw<'a> = &'a T;
     type Ref<'a> = Ref<'a, T>;
     type Mut<'a> = Mut<'a, T>;
+
+    unsafe fn contains(world: UnsafeWorld, arche_id: ArcheId) -> bool {
+        let world = unsafe { world.read_only() };
+        let Some(id) = world.components.get_id(TypeId::of::<T>()) else {
+            return false;
+        };
+        let arche = unsafe { world.archetypes.get_unchecked(arche_id) };
+        match T::STORAGE {
+            ComponentStorage::Dense => arche.contains_dense_component(id),
+            ComponentStorage::Sparse => arche.contains_sparse_component(id),
+        }
+    }
 
     unsafe fn get<'a>(
         world: UnsafeWorld<'a>,
@@ -154,6 +169,13 @@ macro_rules! impl_bundle_for_tuple {
             type Ref<'a> = (<$name>::Ref<'a>,);
             type Mut<'a> = (<$name>::Mut<'a>,);
 
+            unsafe fn contains(
+                world: UnsafeWorld,
+                arche_id: ArcheId,
+            ) -> bool {
+                unsafe { <$name>::contains(world, arche_id) }
+            }
+
             unsafe fn get<'a>(
                 world: UnsafeWorld<'a>,
                 entity: Entity,
@@ -205,6 +227,16 @@ macro_rules! impl_bundle_for_tuple {
             type Raw<'a> = ( $( <$name>::Raw<'a>, )* );
             type Ref<'a> = ( $( <$name>::Ref<'a>, )* );
             type Mut<'a> = ( $( <$name>::Mut<'a>, )* );
+
+            unsafe fn contains(
+                world: UnsafeWorld,
+                arche_id: ArcheId,
+            ) -> bool {
+                unsafe {
+                    true
+                    $( && <$name>::contains(world, arche_id) )*
+                }
+            }
 
             unsafe fn get<'a>(
                 world: UnsafeWorld<'a>,

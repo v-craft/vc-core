@@ -99,7 +99,7 @@ impl<'a> ComponentCollector<'a> {
                 }
             }
             if let Some(required) = T::REQUIRED {
-                (required.collect)(self);
+                required.collect(self);
             }
         }
     }
@@ -121,6 +121,8 @@ impl<'a> ComponentCollector<'a> {
 
     /// Returns the collected components without sorting.
     ///
+    /// The ComponentIds may be duplicated in the result.
+    ///
     /// This preserves the original collection order, which may be
     /// more efficient when order is not important.
     #[inline]
@@ -139,7 +141,7 @@ impl<'a> ComponentCollector<'a> {
 ///
 /// This distinction is important for understanding component origin
 /// and handling write conflicts appropriately.
-pub enum WritedState {
+enum WritedState {
     Required,
     Explicit,
 }
@@ -189,6 +191,22 @@ impl ComponentWriter<'_> {
             tick,
             writed: SparseHashMap::new(),
         }
+    }
+
+    /// Mark a component as having been written explicitly.
+    ///
+    /// If `write_required/write_explicit` has already been called,
+    /// there is no need to call this function.
+    ///
+    /// This function usually be used for component inserting,
+    /// then we need to mask all component that already existing.
+    ///
+    /// # Safety
+    /// - Component T must be registered and prepared.
+    /// - Component T must be writed properly.
+    #[inline]
+    pub unsafe fn set_writed(&mut self, component: ComponentId) {
+        self.writed.insert(component, WritedState::Explicit);
     }
 
     /// Writes a required component using a constructor function.

@@ -55,4 +55,12 @@ impl Cloner {
             func: Self::clone_via_copy::<T>,
         }
     }
+    /// # Safety
+    /// Ensure by caller.
+    #[inline(always)]
+    pub unsafe fn call(self, src: Ptr<'_>, dst: OwningPtr<'_>) {
+        unsafe {
+            (self.func)(src, dst);
+        }
+    }
 }

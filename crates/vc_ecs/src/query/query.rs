@@ -1,7 +1,7 @@
 #![expect(clippy::module_inception, reason = "For better structure.")]
 
-use super::{QueryData, QueryFilter, QueryIter, QueryState};
-use crate::entity::Entity;
+use super::{QueryData, QueryFilter, QueryState};
+use crate::query::ReadOnlyQuery;
 use crate::system::{AccessTable, SystemParam};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World, WorldMode};
@@ -34,7 +34,7 @@ unsafe impl<D: QueryData + 'static, F: QueryFilter + 'static> SystemParam for Qu
         last_run: Tick,
         this_run: Tick,
     ) -> Self::Item<'w, 's> {
-        state.updata(unsafe { world.read_only() });
+        state.update(unsafe { world.read_only() });
         Query {
             world,
             state,
@@ -44,27 +44,9 @@ unsafe impl<D: QueryData + 'static, F: QueryFilter + 'static> SystemParam for Qu
     }
 }
 
-const EMPTY_ENTITIES: &[Entity] = &[];
-
-impl<'w, 's, D: QueryData, F: QueryFilter> IntoIterator for Query<'w, 's, D, F> {
-    type Item = D::Item<'w>;
-    type IntoIter = QueryIter<'w, 's, D, F>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        let last_run = self.last_run;
-        let this_run = self.this_run;
-        let world = self.world;
-        let state = self.state;
-        unsafe {
-            QueryIter {
-                world,
-                state,
-                d_cache: D::build_cache(&state.d_state, world, last_run, this_run),
-                f_cache: F::build_cache(&state.f_state, world, last_run, this_run),
-                storages: state.storages.iter(),
-                entities: EMPTY_ENTITIES,
-                row: 0,
-            }
-        }
+impl<D: ReadOnlyQuery, F: QueryFilter> Copy for Query<'_, '_, D, F> {}
+impl<D: ReadOnlyQuery, F: QueryFilter> Clone for Query<'_, '_, D, F> {
+    fn clone(&self) -> Self {
+        *self
     }
 }

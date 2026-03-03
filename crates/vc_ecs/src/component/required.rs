@@ -16,19 +16,41 @@ use crate::component::{ComponentCollector, ComponentRegistrar};
 /// A v-table that stores the function pointers for RequiredComponents.
 #[derive(Debug, Clone, Copy)]
 pub struct Required {
-    pub(crate) register: fn(&mut ComponentRegistrar),
-    pub(crate) collect: fn(&mut ComponentCollector),
-    pub(crate) write: unsafe fn(&mut ComponentWriter),
+    register: fn(&mut ComponentRegistrar),
+    collect: fn(&mut ComponentCollector),
+    write: unsafe fn(&mut ComponentWriter),
 }
 
 impl Required {
     /// Create A `Required` from specific params.
+    #[inline(always)]
     pub const fn from<T: RequiredComponents>() -> Self {
         Self {
             register: T::required_register,
             collect: T::required_collect,
             write: T::required_write,
         }
+    }
+
+    /// Registers all required components with the given registrar.
+    #[inline(always)]
+    pub fn register(&self, param: &mut ComponentRegistrar) {
+        (self.register)(param)
+    }
+
+    /// Collects all required components using the given collector.
+    #[inline(always)]
+    pub fn collect(&self, param: &mut ComponentCollector) {
+        (self.collect)(param)
+    }
+
+    /// Writes all required components using the given writer.
+    ///
+    /// # Safety
+    /// See [`RequiredComponents`]
+    #[inline(always)]
+    pub unsafe fn write(&self, param: &mut ComponentWriter) {
+        unsafe { (self.write)(param) }
     }
 }
 
@@ -94,7 +116,7 @@ macro_rules! impl_required_for_tuple {
     (0: []) => {};
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
-        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 15 items long.")]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         unsafe impl<$name: RequiredComponents> RequiredComponents for ($name,) {
             fn required_register(registrar: &mut ComponentRegistrar) {
                 <$name>::required_register(registrar);
@@ -127,4 +149,4 @@ macro_rules! impl_required_for_tuple {
     };
 }
 
-range_invoke!(impl_required_for_tuple,  15: P);
+range_invoke!(impl_required_for_tuple,  12: P);

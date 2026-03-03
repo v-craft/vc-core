@@ -1,13 +1,9 @@
-//! 基于实体原型的过滤器以及访问标记器
-//!
-//! 仅基于实体原型，因此只能通过是否存在指定的组件进行过滤。
-
-use alloc::boxed::Box;
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 use core::hash::{Hash, Hasher};
 use core::{fmt::Debug, hash::BuildHasher};
 
+use vc_os::sync::Arc;
 use vc_utils::hash::{FixedHashState, SparseHashSet};
 
 use crate::component::ComponentId;
@@ -58,7 +54,7 @@ impl FilterParamBuilder {
             let mut vec = Vec::with_capacity(with_len + without_len);
             vec.extend(self.with);
             vec.extend(self.without);
-            let params = vec.into_boxed_slice();
+            let params: Arc<[ComponentId]> = Arc::from(vec);
 
             let mut hasher = FixedHashState.build_hasher();
             with_len.hash(&mut hasher);
@@ -80,7 +76,7 @@ impl FilterParamBuilder {
 pub struct FilterParam {
     hash: u64,
     with_len: usize,
-    params: Box<[ComponentId]>,
+    params: Arc<[ComponentId]>,
 }
 
 impl FilterParam {
@@ -114,12 +110,37 @@ impl Hash for FilterParam {
     }
 }
 
+impl Debug for FilterParam {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("FilterParam")
+            .field("with", &&self.params[..self.with_len])
+            .field("without", &&self.params[self.with_len..])
+            .finish()
+    }
+}
+
 #[derive(Default, Clone)]
 pub struct FilterData {
     entity_mut: bool, // holding `EntityMut`
     entity_ref: bool, // holding `EntityRef`
     reading: SparseHashSet<ComponentId>,
     writing: SparseHashSet<ComponentId>,
+}
+
+impl Debug for FilterData {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if self.entity_mut || self.entity_ref {
+            f.debug_struct("FilterData")
+                .field("entity_mut", &self.entity_mut)
+                .field("entity_ref", &self.entity_ref)
+                .finish()
+        } else {
+            f.debug_struct("FilterData")
+                .field("reading", &self.reading)
+                .field("writing", &self.writing)
+                .finish()
+        }
+    }
 }
 
 impl FilterData {

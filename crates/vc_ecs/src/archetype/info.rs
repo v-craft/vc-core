@@ -23,7 +23,7 @@ use crate::storage::TableId;
 ///
 /// # Storage Strategy
 /// ComponentIds are split into two categories for performance optimization:
-/// - **Dense components** (`[0..dense_len]`): Stored in contiguous tables for
+/// - **Dense components** (`[..dense_len]`): Stored in contiguous tables for
 ///   cache-efficient iteration
 /// - **Sparse components** (`[dense_len..]`): Stored in maps for memory efficiency
 ///   when components are rarely present
@@ -99,7 +99,7 @@ impl Archetype {
     /// # Safety
     /// - valid arche_id
     /// - table_id matched components
-    /// - `components[0..dense_len]` are stored in Tables, sorted.
+    /// - `components[..dense_len]` are stored in Tables, sorted.
     /// - `components[dense_len..]` are stored in Maps, sorted.
     pub(super) unsafe fn new(
         arche_id: ArcheId,
@@ -113,8 +113,8 @@ impl Archetype {
             dense_len,
             components,
             entities: Vec::new(),
-            after_insert: Default::default(),
-            after_remove: Default::default(),
+            after_insert: SparseHashMap::new(),
+            after_remove: SparseHashMap::new(),
         }
     }
 

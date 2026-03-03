@@ -6,7 +6,7 @@ use vc_ptr::OwningPtr;
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
 pub struct Dropper {
-    pub(crate) func: unsafe fn(OwningPtr<'_>),
+    func: unsafe fn(OwningPtr<'_>),
 }
 
 impl Dropper {
@@ -29,8 +29,12 @@ impl Dropper {
         }
     }
 
+    /// # Safety
+    /// Ensure by caller.
     #[inline(always)]
-    pub(crate) unsafe fn call(self, ptr: OwningPtr<'_>) {
-        unsafe { (self.func)(ptr) }
+    pub unsafe fn call(self, ptr: OwningPtr<'_>) {
+        unsafe {
+            (self.func)(ptr);
+        }
     }
 }

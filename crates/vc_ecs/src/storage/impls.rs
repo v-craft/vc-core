@@ -109,9 +109,9 @@ impl Storages {
     ///
     /// # Parallelism
     /// When a compute task pool is available, this method spawns separate tasks for:
-    /// * Resource set tick updates
-    /// * Each individual table's tick updates  
-    /// * Each individual map's tick updates
+    /// - Resource set tick updates
+    /// - Each individual table's tick updates  
+    /// - Each individual map's tick updates
     ///
     /// This provides near-optimal parallel utilization for large worlds with
     /// many tables and maps.

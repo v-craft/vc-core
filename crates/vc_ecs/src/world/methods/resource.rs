@@ -16,9 +16,10 @@ fn insert_internal<'a, 'b>(
     id: ResourceId,
 ) -> PtrMut<'a> {
     unsafe {
+        this.prepare_resource(id);
         let data = this.storages.res.get_unchecked_mut(id);
         let tick = Tick::new(*this.this_run.get_mut());
-        data.insert(value, tick);
+        data.insert_untyped(value, tick);
         data.get_data_mut().debug_checked_unwrap()
     }
 }
@@ -27,10 +28,6 @@ impl World {
     pub fn insert_resource<T: Resource + Send>(&mut self, value: T) -> &mut T {
         // let id = self.register_resource::<T>();
         let id = self.resources.register::<T>();
-        // self.prepare_resource(id);
-        let info = unsafe { self.resources.get_unchecked(id) };
-        self.storages.prepare_resource(info);
-
         vc_ptr::into_owning!(value);
         unsafe { insert_internal(self, value, id).consume::<T>() }
     }
@@ -38,10 +35,8 @@ impl World {
     pub fn remove_resource<T: Resource + Send>(&mut self) -> Option<T> {
         if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get_mut(id)
-            && let Some(ptr) = unsafe { data.remove() }
         {
-            ptr.debug_assert_aligned::<T>();
-            Some(unsafe { ptr.read::<T>() })
+            unsafe { data.remove() }
         } else {
             None
         }
@@ -93,9 +88,6 @@ impl World {
 
         // let id = self.register_resource::<T>();
         let id = self.resources.register::<T>();
-        // self.prepare_resource(id);
-        let info = unsafe { self.resources.get_unchecked(id) };
-        self.storages.prepare_resource(info);
 
         vc_ptr::into_owning!(value);
         unsafe { insert_internal(self, value, id).consume::<T>() }
@@ -109,10 +101,8 @@ impl World {
 
         if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get_mut(id)
-            && let Some(ptr) = unsafe { data.remove() }
         {
-            ptr.debug_assert_aligned::<T>();
-            Some(unsafe { ptr.read::<T>() })
+            unsafe { data.remove() }
         } else {
             None
         }

@@ -120,7 +120,7 @@ unsafe impl<T: Component> Bundle for T {
     unsafe fn write_required(writer: &mut ComponentWriter) {
         if let Some(required) = T::REQUIRED {
             unsafe {
-                ((required.write)(writer));
+                required.write(writer);
             }
         }
     }

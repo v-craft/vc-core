@@ -1,29 +1,84 @@
+use core::ptr::NonNull;
+
 use alloc::vec::Vec;
-use vc_ptr::Ptr;
 
 use super::{QueryData, ReadOnlyQuery};
 use crate::archetype::Archetype;
 use crate::component::{Component, ComponentId, ComponentStorage};
 use crate::entity::Entity;
-use crate::storage::{Map, Table, TableRow};
+use crate::storage::{Column, Map, Table, TableRow};
 use crate::system::{FilterData, FilterParamBuilder};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World, WorldMode};
 
 // -----------------------------------------------------------------------------
-// &T
+// DataView / ComponentView
 
-// We do not use A and hope to slightly reduce compilation time.
-pub union ComponentView<'w> {
-    dense: Option<Ptr<'w>>,
-    sparse: Option<&'w Map>,
+pub union DataView {
+    dense: Option<NonNull<Column>>,
+    sparse: Option<NonNull<Map>>,
 }
+
+impl DataView {
+    const fn build_dense() -> Self {
+        DataView { dense: None }
+    }
+
+    fn build_sparse(component: ComponentId, world: UnsafeWorld) -> Self {
+        let world_ref = unsafe { world.read_only() };
+        let maps = &world_ref.storages.maps;
+        let Some(map_id) = maps.get_id(component) else {
+            return DataView { sparse: None };
+        };
+        let map = unsafe { maps.get_unchecked(map_id) };
+        DataView {
+            sparse: Some(NonNull::from_ref(map)),
+        }
+    }
+
+    fn update_dense(&mut self, component: ComponentId, table: &Table) {
+        if let Some(table_col) = table.get_table_col(component) {
+            let column = unsafe { table.get_column(table_col) };
+            self.dense = Some(NonNull::from_ref(column));
+        } else {
+            self.dense = None;
+        };
+    }
+}
+
+pub struct ComponentView {
+    data: DataView,
+    this_run: Tick,
+}
+
+impl ComponentView {
+    fn build_dense(this_run: Tick) -> Self {
+        ComponentView {
+            this_run,
+            data: DataView { dense: None },
+        }
+    }
+
+    fn build_sparse(component: ComponentId, world: UnsafeWorld, this_run: Tick) -> Self {
+        ComponentView {
+            this_run,
+            data: DataView::build_sparse(component, world),
+        }
+    }
+
+    fn update_dense(&mut self, component: ComponentId, table: &Table) {
+        self.data.update_dense(component, table);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// &T
 
 unsafe impl<T: Component> ReadOnlyQuery for &T {}
 
 unsafe impl<T: Component> QueryData for &T {
     type State = ComponentId;
-    type Cache<'world> = ComponentView<'world>;
+    type Cache<'world> = DataView;
     type Item<'world> = &'world T;
 
     const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
@@ -40,16 +95,8 @@ unsafe impl<T: Component> QueryData for &T {
         _this_run: Tick,
     ) -> Self::Cache<'w> {
         match T::STORAGE {
-            ComponentStorage::Dense => ComponentView { dense: None },
-            ComponentStorage::Sparse => {
-                let world_ref = unsafe { world.read_only() };
-                let maps = &world_ref.storages.maps;
-                let Some(map_id) = maps.get_id(*state) else {
-                    return ComponentView { sparse: None };
-                };
-                let map = unsafe { maps.get_unchecked(map_id) };
-                ComponentView { sparse: Some(map) }
-            }
+            ComponentStorage::Dense => DataView::build_dense(),
+            ComponentStorage::Sparse => DataView::build_sparse(*state, world),
         }
     }
 
@@ -74,8 +121,8 @@ unsafe impl<T: Component> QueryData for &T {
         _arche: &'w Archetype,
         table: &'w Table,
     ) {
-        unsafe {
-            Self::set_for_table(state, cache, table);
+        if T::STORAGE.is_dense() {
+            cache.update_dense(*state, table);
         }
     }
 
@@ -85,11 +132,7 @@ unsafe impl<T: Component> QueryData for &T {
         table: &'w Table,
     ) {
         if T::STORAGE.is_dense() {
-            let Some(table_col) = table.get_table_col(*state) else {
-                cache.dense = None;
-                return;
-            };
-            cache.dense = Some(unsafe { table.get_data_ptr(table_col) });
+            cache.update_dense(*state, table);
         }
     }
 
@@ -102,15 +145,17 @@ unsafe impl<T: Component> QueryData for &T {
         match T::STORAGE {
             ComponentStorage::Dense => {
                 let ptr = unsafe { cache.dense }?;
-                let size = size_of::<T>();
-                let data = unsafe { ptr.byte_add(size * table_row.0 as usize) };
+                let column = unsafe { &*ptr.as_ptr() };
+                let row = table_row.0 as usize;
+                let data = unsafe { column.get_data(row) };
                 data.debug_assert_aligned::<T>();
                 Some(unsafe { data.as_ref::<T>() })
             }
             ComponentStorage::Sparse => {
-                let map = unsafe { cache.sparse }?;
-                let map_row = map.get_map_row(entity)?;
-                let ptr = unsafe { map.get_data(map_row) };
+                let ptr = unsafe { cache.sparse }?;
+                let map = unsafe { &*ptr.as_ptr() };
+                let row = map.get_map_row(entity)?;
+                let ptr = unsafe { map.get_data(row) };
                 ptr.debug_assert_aligned::<T>();
                 Some(unsafe { ptr.as_ref::<T>() })
             }
@@ -118,9 +163,14 @@ unsafe impl<T: Component> QueryData for &T {
     }
 }
 
+// -----------------------------------------------------------------------------
+// Option<&T>
+
+unsafe impl<T: Component> ReadOnlyQuery for Option<&T> {}
+
 unsafe impl<T: Component> QueryData for Option<&T> {
     type State = ComponentId;
-    type Cache<'world> = ComponentView<'world>;
+    type Cache<'world> = DataView;
     type Item<'world> = Option<&'world T>;
 
     const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
@@ -133,28 +183,87 @@ unsafe impl<T: Component> QueryData for Option<&T> {
     unsafe fn build_cache<'w>(
         state: &Self::State,
         world: UnsafeWorld<'w>,
-        _last_run: Tick,
-        _this_run: Tick,
+        last_run: Tick,
+        this_run: Tick,
     ) -> Self::Cache<'w> {
-        match T::STORAGE {
-            ComponentStorage::Dense => ComponentView { dense: None },
-            ComponentStorage::Sparse => {
-                let world_ref = unsafe { world.read_only() };
-                let maps = &world_ref.storages.maps;
-                let Some(map_id) = maps.get_id(*state) else {
-                    return ComponentView { sparse: None };
-                };
-                let map = unsafe { maps.get_unchecked(map_id) };
-                ComponentView { sparse: Some(map) }
-            }
+        unsafe { <&T as QueryData>::build_cache(state, world, last_run, this_run) }
+    }
+
+    unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {
+        // Because `Option`, we do not set filter.
+    }
+
+    unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool {
+        unsafe { <&T as QueryData>::build_target(state, out) }
+    }
+
+    unsafe fn set_for_arche<'w>(
+        state: &Self::State,
+        cache: &mut Self::Cache<'w>,
+        arche: &'w Archetype,
+        table: &'w Table,
+    ) {
+        unsafe {
+            <&T as QueryData>::set_for_arche(state, cache, arche, table);
         }
     }
 
-    unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
+    unsafe fn set_for_table<'w>(
+        state: &Self::State,
+        cache: &mut Self::Cache<'w>,
+        table: &'w Table,
+    ) {
+        unsafe {
+            <&T as QueryData>::set_for_table(state, cache, table);
+        }
+    }
+
+    unsafe fn fetch<'w>(
+        state: &Self::State,
+        cache: &mut Self::Cache<'w>,
+        entity: Entity,
+        table_row: TableRow,
+    ) -> Option<Self::Item<'w>> {
+        Some(unsafe { <&T as QueryData>::fetch(state, cache, entity, table_row) })
+    }
+}
+
+// -----------------------------------------------------------------------------
+// &mut T
+
+unsafe impl<T: Component> QueryData for &mut T {
+    type State = ComponentId;
+    type Cache<'world> = ComponentView;
+    type Item<'world> = &'world mut T;
+
+    const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
+    const WORLD_MODE: WorldMode = WorldMode::DataMut;
+
+    unsafe fn build_state(world: &mut World) -> Self::State {
+        world.register_component::<T>()
+    }
+
+    unsafe fn build_cache<'w>(
+        state: &Self::State,
+        world: UnsafeWorld<'w>,
+        _last_run: Tick,
+        this_run: Tick,
+    ) -> Self::Cache<'w> {
+        match T::STORAGE {
+            ComponentStorage::Dense => ComponentView::build_dense(this_run),
+            ComponentStorage::Sparse => ComponentView::build_sparse(*state, world, this_run),
+        }
+    }
+
+    unsafe fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>) {
+        out.iter_mut().for_each(|param| {
+            param.with(*state);
+        });
+    }
 
     unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool {
-        if out.can_reading(*state) {
-            out.set_reading(*state);
+        if out.can_writing(*state) {
+            out.set_writing(*state);
             true
         } else {
             false
@@ -167,8 +276,8 @@ unsafe impl<T: Component> QueryData for Option<&T> {
         _arche: &'w Archetype,
         table: &'w Table,
     ) {
-        unsafe {
-            Self::set_for_table(state, cache, table);
+        if T::STORAGE.is_dense() {
+            cache.update_dense(*state, table);
         }
     }
 
@@ -178,11 +287,7 @@ unsafe impl<T: Component> QueryData for Option<&T> {
         table: &'w Table,
     ) {
         if T::STORAGE.is_dense() {
-            let Some(table_col) = table.get_table_col(*state) else {
-                cache.dense = None;
-                return;
-            };
-            cache.dense = Some(unsafe { table.get_data_ptr(table_col) });
+            cache.update_dense(*state, table);
         }
     }
 
@@ -194,23 +299,90 @@ unsafe impl<T: Component> QueryData for Option<&T> {
     ) -> Option<Self::Item<'w>> {
         match T::STORAGE {
             ComponentStorage::Dense => {
-                let ptr = unsafe { cache.dense };
-                let Some(ptr) = ptr else { return Some(None) };
-                let size = size_of::<T>();
-                let data = unsafe { ptr.byte_add(size * table_row.0 as usize) };
+                let ptr = unsafe { cache.data.dense }?;
+                let column = unsafe { &mut *ptr.as_ptr() };
+                let row = table_row.0 as usize;
+                unsafe {
+                    *column.get_changed_mut(row) = cache.this_run;
+                }
+                let data = unsafe { column.get_data_mut(row) };
                 data.debug_assert_aligned::<T>();
-                Some(Some(unsafe { data.as_ref::<T>() }))
+                Some(unsafe { data.consume::<T>() })
             }
             ComponentStorage::Sparse => {
-                let map = unsafe { cache.sparse };
-                let Some(map) = map else { return Some(None) };
-                let Some(map_row) = map.get_map_row(entity) else {
-                    return Some(None);
-                };
-                let ptr = unsafe { map.get_data(map_row) };
+                let ptr = unsafe { cache.data.sparse }?;
+                let map = unsafe { &mut *ptr.as_ptr() };
+                let row = map.get_map_row(entity)?;
+                unsafe {
+                    *map.get_changed_mut(row) = cache.this_run;
+                }
+                let ptr = unsafe { map.get_data_mut(row) };
                 ptr.debug_assert_aligned::<T>();
-                Some(Some(unsafe { ptr.as_ref::<T>() }))
+                Some(unsafe { ptr.consume::<T>() })
             }
         }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Option<&mut T>
+
+unsafe impl<T: Component> QueryData for Option<&mut T> {
+    type State = ComponentId;
+    type Cache<'world> = ComponentView;
+    type Item<'world> = Option<&'world mut T>;
+
+    const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
+    const WORLD_MODE: WorldMode = WorldMode::DataMut;
+
+    unsafe fn build_state(world: &mut World) -> Self::State {
+        world.register_component::<T>()
+    }
+
+    unsafe fn build_cache<'w>(
+        state: &Self::State,
+        world: UnsafeWorld<'w>,
+        last_run: Tick,
+        this_run: Tick,
+    ) -> Self::Cache<'w> {
+        unsafe { <&mut T as QueryData>::build_cache(state, world, last_run, this_run) }
+    }
+
+    unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {
+        // Because `Option`, we do not set filter.
+    }
+
+    unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool {
+        unsafe { <&mut T as QueryData>::build_target(state, out) }
+    }
+
+    unsafe fn set_for_arche<'w>(
+        state: &Self::State,
+        cache: &mut Self::Cache<'w>,
+        arche: &'w Archetype,
+        table: &'w Table,
+    ) {
+        unsafe {
+            <&mut T as QueryData>::set_for_arche(state, cache, arche, table);
+        }
+    }
+
+    unsafe fn set_for_table<'w>(
+        state: &Self::State,
+        cache: &mut Self::Cache<'w>,
+        table: &'w Table,
+    ) {
+        unsafe {
+            <&mut T as QueryData>::set_for_table(state, cache, table);
+        }
+    }
+
+    unsafe fn fetch<'w>(
+        state: &Self::State,
+        cache: &mut Self::Cache<'w>,
+        entity: Entity,
+        table_row: TableRow,
+    ) -> Option<Self::Item<'w>> {
+        Some(unsafe { <&mut T as QueryData>::fetch(state, cache, entity, table_row) })
     }
 }

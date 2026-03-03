@@ -53,6 +53,8 @@ impl Display for TableId {
 impl Hash for TableId {
     #[inline(always)]
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        // Sparse hashing is optimized for smaller values.
+        // So we use represented values, rather than the underlying bits
         state.write_u32(self.0.get());
     }
 }
@@ -60,7 +62,12 @@ impl Hash for TableId {
 impl PartialEq for TableId {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        use core::mem::transmute_copy;
+        // SAFETY: `TableId` is transparent to `NonMaxU32/u32`
+        unsafe {
+            // `transmute` is faster then `NonMaxU32::get`
+            transmute_copy::<Self, u32>(self) == transmute_copy::<Self, u32>(other)
+        }
     }
 }
 

@@ -11,6 +11,7 @@ use vc_utils::hash::NoOpHashSet;
 use crate::archetype::{ArcheId, Archetypes};
 use crate::entity::StorageId;
 use crate::query::{QueryData, QueryFilter};
+use crate::resource::Resource;
 use crate::storage::TableId;
 use crate::system::{AccessTable, FilterData, FilterParam, FilterParamBuilder};
 use crate::utils::DebugName;
@@ -30,10 +31,16 @@ pub struct QueryState<D: QueryData, F: QueryFilter = ()> {
     pub(crate) f_state: F::State,
 }
 
+unsafe impl<D: QueryData + 'static, F: QueryFilter + 'static> Resource for QueryState<D, F> {}
+
 impl<D: QueryData, F: QueryFilter> Debug for QueryState<D, F> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("QueryState")
             .field("world_id", &self.world_id)
+            .field("storages", &self.storages)
+            .field("is_dense", &Self::IS_DENSE)
+            .field("filter_date", &self.filter_data)
+            .field("filter_params", &self.filter_params)
             .finish_non_exhaustive()
     }
 }
@@ -86,7 +93,7 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
         }
     }
 
-    pub fn updata(&mut self, world: &World) {
+    pub fn update(&mut self, world: &World) {
         assert!(self.world_id == world.id());
 
         let archetypes = &world.archetypes;

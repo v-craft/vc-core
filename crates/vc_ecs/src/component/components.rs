@@ -97,7 +97,7 @@ impl Components {
             this.mapper.insert(type_id, component_id);
 
             if let Some(required) = T::REQUIRED {
-                (required.register)(&mut ComponentRegistrar::new(this));
+                required.register(&mut ComponentRegistrar::new(this));
             }
 
             component_id

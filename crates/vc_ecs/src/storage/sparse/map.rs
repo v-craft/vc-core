@@ -3,7 +3,7 @@ use core::alloc::Layout;
 use core::fmt::Debug;
 use core::num::NonZeroUsize;
 
-use vc_ptr::{OwningPtr, Ptr};
+use vc_ptr::{OwningPtr, Ptr, PtrMut};
 use vc_utils::hash::SparseHashMap;
 
 use crate::borrow::{UntypedMut, UntypedRef};
@@ -91,11 +91,8 @@ impl Map {
             }
             // Reverse order to keep smaller indices near
             // the end for better LIFO performance
-            ((this.capacity as u32 + 1)..(new_cap as u32))
-                .rev()
-                .for_each(|idx| {
-                    this.free.push(MapRow(idx));
-                });
+            let range = (this.capacity as u32 + 1)..(new_cap as u32);
+            this.free.extend(range.rev().map(MapRow));
 
             this.capacity = new_cap;
 
@@ -145,6 +142,17 @@ impl Map {
         unsafe { self.column.get_data(map_row.0 as usize) }
     }
 
+    /// Gets a raw pointer to the component data at the specified row.
+    ///
+    /// # Safety
+    /// - `map_row` must be valid (obtained from `allocate` or `get_map_row`)
+    /// - The caller must ensure proper synchronization when accessing the data
+    #[inline(always)]
+    pub unsafe fn get_data_mut(&mut self, map_row: MapRow) -> PtrMut<'_> {
+        debug_assert!((map_row.0 as usize) < self.capacity);
+        unsafe { self.column.get_data_mut(map_row.0 as usize) }
+    }
+
     /// Gets the tick when the component was added at the specified row.
     ///
     /// # Safety
@@ -163,6 +171,26 @@ impl Map {
     pub unsafe fn get_changed(&self, map_row: MapRow) -> Tick {
         debug_assert!((map_row.0 as usize) < self.capacity);
         unsafe { self.column.get_changed(map_row.0 as usize) }
+    }
+
+    /// Gets the tick when the component was added at the specified row.
+    ///
+    /// # Safety
+    /// - `map_row` must be valid (obtained from `allocate` or `get_map_row`)
+    #[inline(always)]
+    pub unsafe fn get_added_mut(&mut self, map_row: MapRow) -> &mut Tick {
+        debug_assert!((map_row.0 as usize) < self.capacity);
+        unsafe { self.column.get_added_mut(map_row.0 as usize) }
+    }
+
+    /// Gets the tick when the component was last changed at the specified row.
+    ///
+    /// # Safety
+    /// - `map_row` must be valid (obtained from `allocate` or `get_map_row`)
+    #[inline(always)]
+    pub unsafe fn get_changed_mut(&mut self, map_row: MapRow) -> &mut Tick {
+        debug_assert!((map_row.0 as usize) < self.capacity);
+        unsafe { self.column.get_added_mut(map_row.0 as usize) }
     }
 
     /// Gets an immutable reference to the component at the specified row.

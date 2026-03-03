@@ -2,12 +2,12 @@ use alloc::alloc as malloc;
 use core::alloc::Layout;
 use core::fmt::Debug;
 use core::num::NonZeroUsize;
-use core::ptr::NonNull;
+use core::ptr::{self, NonNull};
 
 use vc_ptr::{OwningPtr, Ptr, PtrMut};
 
 use crate::borrow::{UntypedMut, UntypedRef};
-use crate::resource::ResourceInfo;
+use crate::resource::{Resource, ResourceInfo};
 use crate::tick::{Tick, TicksMut, TicksRef};
 use crate::utils::{DebugName, Dropper};
 
@@ -42,17 +42,16 @@ pub struct ResData {
     name: DebugName,
     layout: Layout,
     dropper: Option<Dropper>,
-    data: NonNull<u8>,
+    data: *mut u8,
     added: Tick,
     changed: Tick,
-    is_active: bool,
 }
 
 impl Debug for ResData {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Res")
             .field("name", &self.name)
-            .field("is_active", &self.is_active)
+            .field("is_active", &self.is_active())
             .finish()
     }
 }
@@ -61,12 +60,6 @@ impl Drop for ResData {
     fn drop(&mut self) {
         unsafe {
             self.clear();
-        }
-
-        if self.layout.size() != 0 {
-            unsafe {
-                malloc::dealloc(self.data.as_ptr(), self.layout);
-            }
         }
     }
 }
@@ -78,32 +71,24 @@ impl ResData {
     /// - `info` must correctly describe the resource type
     /// - The memory layout must be valid for allocation
     pub(crate) unsafe fn new(info: &ResourceInfo) -> Self {
-        let layout = info.layout();
-        let dropper = info.dropper();
         let name = info.debug_name();
-        let data = if layout.size() == 0 {
-            let align = NonZeroUsize::new(layout.align()).unwrap();
-            NonNull::without_provenance(align)
-        } else {
-            NonNull::new(unsafe { malloc::alloc(layout) })
-                .unwrap_or_else(|| malloc::handle_alloc_error(layout))
-        };
+        let dropper = info.dropper();
+        let layout = info.layout();
 
         Self {
             name,
             layout,
             dropper,
-            data,
+            data: ptr::null_mut(),
             added: Tick::new(0),
             changed: Tick::new(0),
-            is_active: false,
         }
     }
 
     /// Returns whether the resource is currently initialized.
     #[inline(always)]
     pub const fn is_active(&self) -> bool {
-        self.is_active
+        !self.data.is_null()
     }
 
     /// Returns the debug name of the resource type.
@@ -115,27 +100,19 @@ impl ResData {
     /// Returns a pointer to the resource data if initialized.
     #[inline]
     pub fn get_data(&self) -> Option<Ptr<'_>> {
-        if self.is_active {
-            Some(unsafe { Ptr::new(self.data) })
-        } else {
-            None
-        }
+        unsafe { Some(Ptr::new(NonNull::new(self.data)?)) }
     }
 
     /// Returns a pointer to the resource data if initialized.
     #[inline]
     pub fn get_data_mut(&mut self) -> Option<PtrMut<'_>> {
-        if self.is_active {
-            Some(unsafe { PtrMut::new(self.data) })
-        } else {
-            None
-        }
+        unsafe { Some(PtrMut::new(NonNull::new(self.data)?)) }
     }
 
     /// Returns the added tick if the resource is initialized.
     #[inline]
     pub fn get_added(&self) -> Option<Tick> {
-        if self.is_active {
+        if self.is_active() {
             Some(self.added)
         } else {
             None
@@ -145,24 +122,8 @@ impl ResData {
     /// Returns the changed tick if the resource is initialized.
     #[inline]
     pub fn get_changed(&self) -> Option<Tick> {
-        if self.is_active {
+        if self.is_active() {
             Some(self.changed)
-        } else {
-            None
-        }
-    }
-
-    /// Removes the resource and returns ownership of its data.
-    ///
-    /// # Safety
-    /// - Caller must ensure the returned `OwningPtr` is properly dropped
-    /// - After removal, the resource is marked invalid
-    #[inline]
-    #[must_use = "The returned ptr should be used."]
-    pub unsafe fn remove(&mut self) -> Option<OwningPtr<'_>> {
-        if self.is_active {
-            self.is_active = false;
-            unsafe { Some(OwningPtr::new(self.data)) }
         } else {
             None
         }
@@ -171,20 +132,53 @@ impl ResData {
     /// Drops the resource data if initialized.
     ///
     /// # Safety
-    /// - The drop function must be safe to call with the stored data
-    /// - Aborts if the drop implementation panics
     /// - If the data is NonSend, the function must be call in correct thread.
     pub unsafe fn clear(&mut self) {
-        if self.is_active
-            && let Some(dropper) = self.dropper
-        {
+        if let Some(data) = NonNull::new(self.data) {
             let guard = AbortOnDropFail;
-            self.is_active = false;
             unsafe {
-                dropper.call(OwningPtr::new(self.data));
+                if let Some(dropper) = self.dropper {
+                    dropper.call(OwningPtr::new(data));
+                }
+                if self.layout.size() != 0 {
+                    malloc::dealloc(self.data, self.layout);
+                }
+                self.data = ptr::null_mut();
             }
             ::core::mem::forget(guard);
         }
+    }
+
+    /// Removes the resource and returns ownership of its data.
+    ///
+    /// # Safety
+    /// - `T` must matche the resource's layout
+    /// - If the data is NonSend, the function must be call in correct thread.
+    pub unsafe fn remove<T: Resource>(&mut self) -> Option<T> {
+        if self.data.is_null() {
+            return None;
+        }
+
+        let ret = unsafe { ptr::read::<T>(self.data as *mut T) };
+
+        if self.layout.size() != 0 {
+            unsafe { malloc::dealloc(self.data, self.layout) };
+        }
+        self.data = ptr::null_mut();
+
+        Some(ret)
+    }
+
+    /// Inserts a new resource value.
+    ///
+    /// # Safety
+    /// - `value` must matche the resource's layout
+    /// - `tick` must be a valid system tick
+    /// - If the data is NonSend, the function must be call in correct thread.
+    pub unsafe fn insert<T: Resource>(&mut self, value: T, tick: Tick) {
+        debug_assert_eq!(Layout::new::<T>(), self.layout);
+        vc_ptr::into_owning!(value);
+        unsafe { self.insert_untyped(value, tick) };
     }
 
     /// Inserts a new resource value.
@@ -192,49 +186,62 @@ impl ResData {
     /// # Safety
     /// - `value` must point to valid data matching the resource's layout
     /// - `tick` must be a valid system tick
-    /// - Previous resource value (if any) is properly dropped
     /// - If the data is NonSend, the function must be call in correct thread.
-    pub unsafe fn insert(&mut self, value: OwningPtr<'_>, tick: Tick) {
-        if self.is_active {
+    pub unsafe fn insert_untyped(&mut self, value: OwningPtr<'_>, tick: Tick) {
+        if let Some(data) = NonNull::new(self.data) {
             if let Some(dropper) = self.dropper {
                 let guard = AbortOnDropFail;
                 unsafe {
-                    dropper.call(OwningPtr::new(self.data));
+                    dropper.call(OwningPtr::new(data));
                 }
                 ::core::mem::forget(guard);
             }
         } else {
-            self.is_active = true;
+            let layout = self.layout;
+            if layout.size() == 0 {
+                let align = NonZeroUsize::new(layout.align()).unwrap();
+                self.data = NonNull::without_provenance(align).as_ptr();
+            } else {
+                self.data = NonNull::new(unsafe { malloc::alloc(layout) })
+                    .unwrap_or_else(|| malloc::handle_alloc_error(layout))
+                    .as_ptr();
+            };
             self.added = tick;
         }
-        self.changed = tick;
         unsafe {
-            core::ptr::copy_nonoverlapping::<u8>(
-                value.as_ptr(),
-                self.data.as_ptr(),
-                self.layout.size(),
-            );
+            self.changed = tick;
+            ptr::copy_nonoverlapping::<u8>(value.as_ptr(), self.data, self.layout.size());
         }
     }
 
     /// Returns an untyped reference to the resource if initialized.
     #[inline]
     pub fn get_ref(&self, last_run: Tick, this_run: Tick) -> Option<UntypedRef<'_>> {
-        if self.is_active {
-            unsafe { Some(self.untyped_ref(last_run, this_run)) }
-        } else {
-            None
-        }
+        let data = NonNull::new(self.data)?;
+        Some(UntypedRef {
+            value: unsafe { Ptr::new(data) },
+            ticks: TicksRef {
+                added: &self.added,
+                changed: &self.changed,
+                last_run,
+                this_run,
+            },
+        })
     }
 
     /// Returns an untyped mutable reference to the resource if initialized.
     #[inline]
     pub fn get_mut(&mut self, last_run: Tick, this_run: Tick) -> Option<UntypedMut<'_>> {
-        if self.is_active {
-            unsafe { Some(self.untyped_mut(last_run, this_run)) }
-        } else {
-            None
-        }
+        let data = NonNull::new(self.data)?;
+        Some(UntypedMut {
+            value: unsafe { PtrMut::new(data) },
+            ticks: TicksMut {
+                added: &mut self.added,
+                changed: &mut self.changed,
+                last_run,
+                this_run,
+            },
+        })
     }
 
     /// Updates ticks with quick-check logic.
@@ -242,42 +249,5 @@ impl ResData {
     pub(super) fn quick_check(&mut self, now: Tick, fall_back: Tick) {
         self.added.quick_check(now, fall_back);
         self.changed.quick_check(now, fall_back);
-    }
-
-    /// Creates an untyped reference without checking initialization.
-    ///
-    /// # Safety
-    /// - Resource must be initialized (`is_valid == true`)
-    /// - Pointers must remain valid for the returned reference's lifetime
-    #[inline(always)]
-    unsafe fn untyped_ref(&self, last_run: Tick, this_run: Tick) -> UntypedRef<'_> {
-        UntypedRef {
-            value: unsafe { Ptr::new(self.data) },
-            ticks: TicksRef {
-                added: &self.added,
-                changed: &self.changed,
-                last_run,
-                this_run,
-            },
-        }
-    }
-
-    /// Creates an untyped mutable reference without checking initialization.
-    ///
-    /// # Safety
-    /// - Resource must be initialized (`is_valid == true`)
-    /// - Pointers must remain valid for the returned reference's lifetime
-    /// - No other references to the data may exist
-    #[inline(always)]
-    unsafe fn untyped_mut(&mut self, last_run: Tick, this_run: Tick) -> UntypedMut<'_> {
-        UntypedMut {
-            value: unsafe { PtrMut::new(self.data) },
-            ticks: TicksMut {
-                added: &mut self.added,
-                changed: &mut self.changed,
-                last_run,
-                this_run,
-            },
-        }
     }
 }

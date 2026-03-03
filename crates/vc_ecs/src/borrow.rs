@@ -721,6 +721,7 @@ macro_rules! impl_deref_mut {
         impl<$($generics),* : ?Sized $(+ $traits)*> DerefMut for $name<$($generics),*> {
             #[inline(always)]
             fn deref_mut(&mut self) -> &mut Self::Target {
+                *self.ticks.changed = self.ticks.this_run;
                 self.value
             }
         }
@@ -728,6 +729,7 @@ macro_rules! impl_deref_mut {
         impl<$($generics),* : ?Sized $(+ $traits)*> AsMut<$target> for $name<$($generics),*> {
             #[inline(always)]
             fn as_mut(&mut self) -> &mut $target {
+                *self.ticks.changed = self.ticks.this_run;
                 self.value
             }
         }

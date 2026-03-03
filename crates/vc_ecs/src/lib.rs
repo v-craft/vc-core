@@ -26,6 +26,7 @@ extern crate alloc;
 
 pub mod borrow;
 pub mod bundle;
+pub mod error;
 pub mod tick;
 pub mod utils;
 

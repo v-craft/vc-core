@@ -161,7 +161,7 @@ fn debug_fmt(full_name: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         }
     }
 
-    const SPECIAL_CHARS: [char; 9] = [' ', '<', '>', '(', ')', '[', ']', ',', ';'];
+    const SPECIAL_CHARS: [char; 11] = [' ', '<', '>', '(', ')', '[', ']', ',', ';', '&', '*'];
 
     let mut rest = full_name;
 
@@ -222,5 +222,74 @@ impl fmt::Debug for DebugName {
             if { debug_fmt((self.name)(), f) }
             else { f.write_str(ANONYMOUS_NAME) }
         }
+    }
+}
+
+#[cfg(test)]
+#[cfg(any(debug_assertions, feature = "debug"))]
+mod tests {
+    use super::DebugName;
+    use alloc::vec::Vec;
+
+    pub struct Foo;
+
+    #[test]
+    fn parse() {
+        assert_eq!(DebugName::type_name::<u32>().parse(), "u32");
+        assert_eq!(DebugName::type_name::<bool>().parse(), "bool");
+        assert_eq!(DebugName::type_name::<char>().parse(), "char");
+        assert_eq!(DebugName::type_name::<f32>().parse(), "f32");
+        assert_eq!(DebugName::type_name::<usize>().parse(), "usize");
+        assert_eq!(DebugName::type_name::<&str>().parse(), "&str");
+
+        assert_eq!(DebugName::type_name::<&u32>().parse(), "&u32");
+        assert_eq!(DebugName::type_name::<&mut u32>().parse(), "&mut u32");
+        assert_eq!(DebugName::type_name::<&&u32>().parse(), "&&u32");
+
+        assert_eq!(DebugName::type_name::<*const u32>().parse(), "*const u32");
+        assert_eq!(DebugName::type_name::<*mut u32>().parse(), "*mut u32");
+
+        assert_eq!(DebugName::type_name::<[u32; 5]>().parse(), "[u32; 5]");
+        assert_eq!(DebugName::type_name::<&[u32]>().parse(), "&[u32]");
+        assert_eq!(DebugName::type_name::<&mut [u32]>().parse(), "&mut [u32]");
+        assert_eq!(DebugName::type_name::<[&u32; 3]>().parse(), "[&u32; 3]");
+
+        assert_eq!(DebugName::type_name::<()>().parse(), "()");
+        assert_eq!(DebugName::type_name::<(u32,)>().parse(), "(u32,)");
+        assert_eq!(
+            DebugName::type_name::<(u32, Foo, &str)>().parse(),
+            "(u32, Foo, &str)"
+        );
+        assert_eq!(
+            DebugName::type_name::<(&u32, &mut Foo)>().parse(),
+            "(&u32, &mut Foo)"
+        );
+
+        assert_eq!(DebugName::type_name::<Option<u32>>().parse(), "Option<u32>");
+        assert_eq!(
+            DebugName::type_name::<Option<&u32>>().parse(),
+            "Option<&u32>"
+        );
+        assert_eq!(
+            DebugName::type_name::<Result<u32, ()>>().parse(),
+            "Result<u32, ()>"
+        );
+        assert_eq!(
+            DebugName::type_name::<Result<&Foo, &str>>().parse(),
+            "Result<&Foo, &str>"
+        );
+
+        assert_eq!(
+            DebugName::type_name::<Option<Option<u32>>>().parse(),
+            "Option<Option<u32>>"
+        );
+        assert_eq!(
+            DebugName::type_name::<Result<Option<&u32>, ()>>().parse(),
+            "Result<Option<&u32>, ()>"
+        );
+        assert_eq!(
+            DebugName::type_name::<Vec<Option<&Foo>>>().parse(),
+            "Vec<Option<&Foo>>"
+        );
     }
 }

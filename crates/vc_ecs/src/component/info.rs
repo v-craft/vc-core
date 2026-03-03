@@ -66,7 +66,7 @@ impl Debug for ComponentInfo {
 
 impl ComponentInfo {
     /// Creates a new resource info with given ID and descriptor.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn new(id: ComponentId, descriptor: ComponentDescriptor) -> Self {
         Self { id, descriptor }
     }

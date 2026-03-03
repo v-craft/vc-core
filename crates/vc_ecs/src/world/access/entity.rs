@@ -87,6 +87,10 @@ impl<'a> EntityMut<'a> {
         self.entity
     }
 
+    pub fn contains<T: GetComponent>(&self) -> bool {
+        unsafe { T::contains(self.world.unsafe_world(), self.location.arche_id) }
+    }
+
     pub fn get<T: GetComponent>(&self) -> Option<T::Raw<'_>> {
         unsafe {
             T::get(
@@ -130,6 +134,10 @@ impl<'a> EntityRef<'a> {
         self.entity
     }
 
+    pub fn contains<T: GetComponent>(&self) -> bool {
+        unsafe { T::contains(self.world.unsafe_world(), self.location.arche_id) }
+    }
+
     pub fn get<T: GetComponent>(&self) -> Option<T::Raw<'_>> {
         unsafe {
             T::get(
@@ -170,6 +178,10 @@ impl<'a> EntityOwned<'a> {
 
     pub fn entity(&self) -> Entity {
         self.entity
+    }
+
+    pub fn contains<T: GetComponent>(&self) -> bool {
+        unsafe { T::contains(self.world, self.location.arche_id) }
     }
 
     pub fn get<T: GetComponent>(&self) -> Option<T::Raw<'_>> {

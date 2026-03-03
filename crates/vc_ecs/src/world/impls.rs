@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use core::fmt::Debug;
+use core::sync::atomic::Ordering;
 
 use vc_os::sync::atomic::AtomicU32;
 
@@ -61,5 +62,19 @@ impl World {
 
     pub fn id(&self) -> WorldId {
         self.id
+    }
+
+    pub fn last_run(&self) -> Tick {
+        self.last_run
+    }
+
+    pub fn this_run(&self) -> Tick {
+        Tick::new(self.this_run.load(Ordering::Relaxed))
+    }
+
+    pub fn update_tick(&mut self) {
+        let last = *self.this_run.get_mut();
+        self.last_run = Tick::new(last);
+        *self.this_run.get_mut() = last.wrapping_add(1);
     }
 }
