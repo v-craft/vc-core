@@ -15,7 +15,7 @@ use crate::entity::Entity;
 use crate::storage::{Table, TableRow};
 use crate::system::{FilterData, FilterParamBuilder};
 use crate::tick::Tick;
-use crate::world::{UnsafeWorld, World, WorldMode};
+use crate::world::{UnsafeWorld, World};
 
 /// Core trait for types that can be fetched from entities in a query.
 ///
@@ -55,9 +55,6 @@ pub unsafe trait QueryData {
     /// - If `true`, the query can optimize by assuming components are stored in tables.
     /// - If `false`, the filter may access sparse components requiring map lookups.
     const COMPONENTS_ARE_DENSE: bool;
-
-    /// Specifies the world access mode required by this data.
-    const WORLD_MODE: WorldMode;
 
     /// Builds the static state for this query data.
     ///
@@ -156,4 +153,4 @@ pub unsafe trait QueryData {
     ) -> Option<Self::Item<'w>>;
 }
 
-pub unsafe trait ReadOnlyQuery: QueryData {}
+pub unsafe trait ReadOnlyQueryData: QueryData {}

@@ -12,7 +12,6 @@ use crate::archetype::{ArcheId, Archetypes};
 use crate::entity::StorageId;
 use crate::query::{QueryData, QueryFilter};
 use crate::resource::Resource;
-use crate::storage::TableId;
 use crate::system::{AccessTable, FilterData, FilterParam, FilterParamBuilder};
 use crate::utils::DebugName;
 use crate::world::{World, WorldId};
@@ -116,15 +115,10 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
         }
     }
 
-    pub fn mark_assess(&self, access_table: &mut AccessTable) -> bool {
+    pub(crate) fn mark_assess(&self, access_table: &mut AccessTable) -> bool {
         let data: &FilterData = &self.filter_data;
         let params: &[FilterParam] = &self.filter_params;
-        if access_table.can_query(data, params) {
-            access_table.set_query(data, params);
-            true
-        } else {
-            false
-        }
+        access_table.set_query(data, params)
     }
 }
 
@@ -137,25 +131,21 @@ fn updata_dense_state(
 ) {
     let new_version = archetypes.len();
 
-    let old_tables: &[StorageId] = &storages[..];
-    let old_tables: &[TableId] = unsafe { core::mem::transmute(old_tables) };
-
-    let mut new_tables: Vec<StorageId> = Vec::with_capacity(new_version - *version);
     for arche_id in (*version)..new_version {
         let arche_id = unsafe { ArcheId::new_unchecked(arche_id as u32) };
         let archetype = unsafe { archetypes.get_unchecked(arche_id) };
         let table_id = archetype.table_id();
 
-        if old_tables.binary_search(&table_id).is_err() {
-            let matched = filter_params
-                .iter()
-                .any(|param| archetype.matches_sorted(param.with(), param.without()));
-            if matched {
-                new_tables.push(StorageId { table_id });
-            }
+        let matched = filter_params
+            .iter()
+            .any(|param| archetype.matches_sorted(param.with(), param.without()));
+        if matched {
+            storages.push(StorageId { table_id });
         }
     }
-    storages.append(&mut new_tables);
+
+    // storages is partially sorted,
+    // so we choose `sort` instead of `unstable_sort`. 
     storages.sort();
     storages.dedup();
 
@@ -170,6 +160,7 @@ fn updata_sparse_state(
     archetypes: &Archetypes,
 ) {
     let new_version = archetypes.len();
+
     for arche_id in (*version)..new_version {
         let arche_id = unsafe { ArcheId::new_unchecked(arche_id as u32) };
         let archetype = unsafe { archetypes.get_unchecked(arche_id) };
@@ -180,13 +171,16 @@ fn updata_sparse_state(
             storages.push(StorageId { arche_id });
         }
     }
+
+    // The pushed arche_ids are already sorted.
+
     *version = new_version;
 }
 
 #[inline(never)]
 fn collect_param(builders: Vec<FilterParamBuilder>) -> Box<[FilterParam]> {
     // We use NoOpHash because FilterParam is pre-hased.
-    let mut params: NoOpHashSet<FilterParam> = NoOpHashSet::new();
+    let mut params: NoOpHashSet<FilterParam> = NoOpHashSet::with_capacity(builders.len());
     builders.into_iter().for_each(|builder| {
         if let Some(param) = builder.build() {
             params.insert(param);
@@ -202,15 +196,17 @@ fn collect_arches(params: &[FilterParam], archetypes: &Archetypes) -> Vec<Storag
     // M: the average number of components in an achetype
     // X: the number of filter_params
     // Y: the average number of components in a filter_param
-
-    // Collect From ArcheFilter: X * Y * F(N, M)
-    // Collect From Each Arche : X * Y * M * log N
+    // Then:
+    // Collect From ArcheFilter: X * Y * F(N, M), F == ??
+    // Collect From Each Arche : X * Y * N * log M
     let arche_filter = archetypes.filter();
 
     // We hope the results are in order.
     let mut collector = BTreeSet::<StorageId>::new();
 
     params.iter().for_each(|param| {
+        // default filter without any contents,
+        // so it's Clone is cheap (only stack copy).
         let mut filter = arche_filter.clone();
         param.with().iter().for_each(|id| {
             filter.with(*id);

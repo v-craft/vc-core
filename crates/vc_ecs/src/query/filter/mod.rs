@@ -3,7 +3,9 @@ mod changed;
 mod or;
 mod with;
 mod without;
+mod added;
 
+pub use added::Added;
 pub use and::And;
 pub use changed::Changed;
 pub use or::Or;

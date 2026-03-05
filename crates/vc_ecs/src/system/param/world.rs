@@ -1,7 +1,7 @@
 use super::SystemParam;
 use crate::system::AccessTable;
 use crate::tick::Tick;
-use crate::world::{UnsafeWorld, World, WorldMode};
+use crate::world::{UnsafeWorld, World};
 
 // ---------------------------------------------------------
 // World
@@ -9,18 +9,13 @@ use crate::world::{UnsafeWorld, World, WorldMode};
 unsafe impl SystemParam for &World {
     type State = ();
     type Item<'world, 'state> = &'world World;
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
-    const MAIN_THREAD: bool = false;
+    const NON_SEND: bool = false;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(_world: &mut World) -> Self::State {}
 
     unsafe fn mark_access(table: &mut AccessTable, _state: &Self::State) -> bool {
-        if table.can_world_ref() {
-            table.set_world_ref();
-            true
-        } else {
-            false
-        }
+        table.set_world_ref()
     }
 
     unsafe fn get_param<'w, 's>(
@@ -36,18 +31,15 @@ unsafe impl SystemParam for &World {
 unsafe impl SystemParam for &mut World {
     type State = ();
     type Item<'world, 'state> = &'world mut World;
-    const WORLD_MODE: WorldMode = WorldMode::FullMut;
-    const MAIN_THREAD: bool = false;
+    const NON_SEND: bool = false;
+    // We hold the mutable borrowing of this world,
+    // so we cannot parallelize with other systems.
+    const EXCLUSIVE: bool = true;
 
     unsafe fn init_state(_world: &mut World) -> Self::State {}
 
     unsafe fn mark_access(table: &mut AccessTable, _state: &Self::State) -> bool {
-        if table.can_world_mut() {
-            table.set_world_mut();
-            true
-        } else {
-            false
-        }
+        table.set_world_mut()
     }
 
     unsafe fn get_param<'w, 's>(

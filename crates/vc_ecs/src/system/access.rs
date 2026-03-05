@@ -81,14 +81,26 @@ impl AccessTable {
                 && self.filter.values().all(FilterData::is_read_only))
     }
 
-    pub fn set_world_mut(&mut self) {
-        *self = const { Self::new() };
-        self.world_mut = true;
+    pub fn set_world_mut(&mut self) -> bool {
+        if self.can_world_mut() {
+            *self = const { Self::new() };
+            self.world_mut = true;
+            true
+        } else {
+            false
+        }
     }
 
-    pub fn set_world_ref(&mut self) {
-        *self = const { Self::new() };
-        self.world_ref = true;
+    pub fn set_world_ref(&mut self) -> bool {
+        if self.can_world_ref() {
+            if !self.world_ref {
+                *self = const { Self::new() };
+                self.world_ref = true;
+            }
+            true
+        } else {
+            false
+        }
     }
 
     pub fn can_reading_res(&self, id: ResourceId) -> bool {
@@ -99,16 +111,26 @@ impl AccessTable {
         !self.world_ref && !self.world_mut && !self.res_reading.contains(id.index())
     }
 
-    pub fn set_reading_res(&mut self, id: ResourceId) {
-        if !self.world_ref {
-            self.res_reading.grow_and_insert(id.index());
+    pub fn set_reading_res(&mut self, id: ResourceId) -> bool {
+        if self.can_reading_res(id) {
+            if !self.world_ref {
+                self.res_reading.grow_and_insert(id.index());
+            }
+            true
+        } else {
+            false
         }
     }
 
-    pub fn set_writing_res(&mut self, id: ResourceId) {
-        let index = id.index();
-        self.res_reading.grow_and_insert(index);
-        self.res_writing.grow_and_insert(index);
+    pub fn set_writing_res(&mut self, id: ResourceId) -> bool {
+        if self.can_writing_res(id) {
+            let index = id.index();
+            self.res_reading.grow_and_insert(index);
+            self.res_writing.grow_and_insert(index);
+            true
+        } else {
+            false
+        }
     }
 
     pub fn can_query(&self, data: &FilterData, params: &[FilterParam]) -> bool {
@@ -129,17 +151,21 @@ impl AccessTable {
         })
     }
 
-    pub fn set_query(&mut self, data: &FilterData, params: &[FilterParam]) {
-        if self.world_ref {
-            return;
-        }
-        params.iter().for_each(|param| {
-            if let Some(item) = self.filter.get_mut(param) {
-                item.merge(data);
-            } else {
-                self.filter.insert(param.clone(), data.clone());
+    pub fn set_query(&mut self, data: &FilterData, params: &[FilterParam]) -> bool {
+        if self.can_query(data, params) {
+            if !self.world_ref {
+                params.iter().for_each(|param| {
+                    if let Some(item) = self.filter.get_mut(param) {
+                        item.merge(data);
+                    } else {
+                        self.filter.insert(param.clone(), data.clone());
+                    }
+                });
             }
-        });
+            true
+        } else {
+            false
+        }
     }
 
     pub fn parallelizable(&self, other: &Self) -> bool {

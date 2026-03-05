@@ -1,13 +1,13 @@
-use super::SystemParam;
+use super::{SystemParam, ReadOnlySystemParam};
 use crate::borrow::{NonSync, NonSyncMut, NonSyncRef};
 use crate::borrow::{Res, ResMut, ResRef};
 use crate::resource::{Resource, ResourceId};
 use crate::system::AccessTable;
 use crate::tick::Tick;
 use crate::utils::DebugName;
-use crate::world::{UnsafeWorld, World, WorldMode};
+use crate::world::{UnsafeWorld, World};
 
-// ---------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Resource
 
 #[cold]
@@ -16,25 +16,23 @@ fn uninit_resource(name: DebugName) -> ! {
     panic!("Resource {name} is uninitialzed before system run.")
 }
 
+// -----------------------------------------------------------------------------
+// Res
+
+unsafe impl<T: Resource + Sync> ReadOnlySystemParam for Res<'_, T> {}
+
 unsafe impl<T: Resource + Sync> SystemParam for Res<'_, T> {
     type State = ResourceId;
     type Item<'world, 'state> = Res<'world, T>;
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
-    const MAIN_THREAD: bool = false;
+    const NON_SEND: bool = false;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
-        // We do not prepare resource here,
-        // thereby delaying memory allocation.
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_reading_res(*state) {
-            table.set_reading_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_reading_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(
@@ -59,25 +57,23 @@ unsafe impl<T: Resource + Sync> SystemParam for Res<'_, T> {
     }
 }
 
+// -----------------------------------------------------------------------------
+// ResRef
+
+unsafe impl<T: Resource + Sync> ReadOnlySystemParam for ResRef<'_, T> {}
+
 unsafe impl<T: Resource + Sync> SystemParam for ResRef<'_, T> {
     type State = ResourceId;
     type Item<'world, 'state> = ResRef<'world, T>;
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
-    const MAIN_THREAD: bool = false;
+    const NON_SEND: bool = false;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
-        // We do not prepare resource here,
-        // thereby delaying memory allocation.
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_reading_res(*state) {
-            table.set_reading_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_reading_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(
@@ -89,9 +85,9 @@ unsafe impl<T: Resource + Sync> SystemParam for ResRef<'_, T> {
         unsafe {
             let world = world.read_only();
             if let Some(data) = world.storages.res.get(*state)
-                && let Some(ptr) = data.get_ref(last_run, this_run)
+                && let Some(untyped) = data.get_ref(last_run, this_run)
             {
-                ptr.into_res::<T>()
+                untyped.into_res::<T>()
             } else {
                 uninit_resource(DebugName::type_name::<T>());
             }
@@ -99,25 +95,21 @@ unsafe impl<T: Resource + Sync> SystemParam for ResRef<'_, T> {
     }
 }
 
+// -----------------------------------------------------------------------------
+// ResMut
+
 unsafe impl<T: Resource + Sync> SystemParam for ResMut<'_, T> {
     type State = ResourceId;
     type Item<'world, 'state> = ResMut<'world, T>;
-    const WORLD_MODE: WorldMode = WorldMode::DataMut;
-    const MAIN_THREAD: bool = false;
+    const NON_SEND: bool = false;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
-        // We do not prepare resource here,
-        // thereby delaying memory allocation.
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_writing_res(*state) {
-            table.set_writing_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_writing_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(
@@ -129,9 +121,9 @@ unsafe impl<T: Resource + Sync> SystemParam for ResMut<'_, T> {
         unsafe {
             let world = world.data_mut();
             if let Some(data) = world.storages.res.get_mut(*state)
-                && let Some(ptr) = data.get_mut(last_run, this_run)
+                && let Some(untyped) = data.get_mut(last_run, this_run)
             {
-                ptr.into_res::<T>()
+                untyped.into_res::<T>()
             } else {
                 uninit_resource(DebugName::type_name::<T>());
             }
@@ -139,25 +131,23 @@ unsafe impl<T: Resource + Sync> SystemParam for ResMut<'_, T> {
     }
 }
 
+// -----------------------------------------------------------------------------
+// Option<Res>
+
+unsafe impl<T: Resource + Sync> ReadOnlySystemParam for Option<Res<'_, T>> {}
+
 unsafe impl<T: Resource + Sync> SystemParam for Option<Res<'_, T>> {
     type State = ResourceId;
     type Item<'world, 'state> = Option<Res<'world, T>>;
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
-    const MAIN_THREAD: bool = false;
+    const NON_SEND: bool = false;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
-        // We do not prepare resource here,
-        // thereby delaying memory allocation.
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_reading_res(*state) {
-            table.set_reading_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_reading_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(
@@ -178,25 +168,23 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<Res<'_, T>> {
     }
 }
 
+// -----------------------------------------------------------------------------
+// Option<ResRef>
+
+unsafe impl<T: Resource + Sync> ReadOnlySystemParam for Option<ResRef<'_, T>> {}
+
 unsafe impl<T: Resource + Sync> SystemParam for Option<ResRef<'_, T>> {
     type State = ResourceId;
     type Item<'world, 'state> = Option<ResRef<'world, T>>;
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
-    const MAIN_THREAD: bool = false;
+    const NON_SEND: bool = false;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
-        // We do not prepare resource here,
-        // thereby delaying memory allocation.
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_reading_res(*state) {
-            table.set_reading_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_reading_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(
@@ -213,23 +201,21 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<ResRef<'_, T>> {
     }
 }
 
+// -----------------------------------------------------------------------------
+// Option<ResMut>
+
 unsafe impl<T: Resource + Sync> SystemParam for Option<ResMut<'_, T>> {
     type State = ResourceId;
     type Item<'world, 'state> = Option<ResMut<'world, T>>;
-    const WORLD_MODE: WorldMode = WorldMode::DataMut;
-    const MAIN_THREAD: bool = false;
+    const NON_SEND: bool = false;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_writing_res(*state) {
-            table.set_writing_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_writing_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(
@@ -246,25 +232,25 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<ResMut<'_, T>> {
     }
 }
 
-unsafe impl<T: Resource + Sync> SystemParam for NonSync<'_, T> {
+// -----------------------------------------------------------------------------
+// NonSync
+
+unsafe impl<T: Resource> ReadOnlySystemParam for NonSync<'_, T> {}
+
+unsafe impl<T: Resource> SystemParam for NonSync<'_, T> {
     type State = ResourceId;
     type Item<'world, 'state> = NonSync<'world, T>;
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
-    const MAIN_THREAD: bool = true;
+    // Because the resource is !Sync, we can only borrow it
+    // on the main thread. In other words, this system is !Send. 
+    const NON_SEND: bool = true;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
-        // We do not prepare resource here,
-        // thereby delaying memory allocation.
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_reading_res(*state) {
-            table.set_reading_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_reading_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(
@@ -289,11 +275,18 @@ unsafe impl<T: Resource + Sync> SystemParam for NonSync<'_, T> {
     }
 }
 
-unsafe impl<T: Resource + Sync> SystemParam for NonSyncRef<'_, T> {
+// -----------------------------------------------------------------------------
+// NonSyncRef
+
+unsafe impl<T: Resource> ReadOnlySystemParam for NonSyncRef<'_, T> {}
+
+unsafe impl<T: Resource> SystemParam for NonSyncRef<'_, T> {
     type State = ResourceId;
     type Item<'world, 'state> = NonSyncRef<'world, T>;
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
-    const MAIN_THREAD: bool = true;
+    // Because the resource is !Sync, we can only borrow it
+    // on the main thread. In other words, this system is !Send. 
+    const NON_SEND: bool = true;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
@@ -302,12 +295,7 @@ unsafe impl<T: Resource + Sync> SystemParam for NonSyncRef<'_, T> {
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_reading_res(*state) {
-            table.set_reading_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_reading_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(
@@ -329,25 +317,23 @@ unsafe impl<T: Resource + Sync> SystemParam for NonSyncRef<'_, T> {
     }
 }
 
-unsafe impl<T: Resource + Sync> SystemParam for NonSyncMut<'_, T> {
+// -----------------------------------------------------------------------------
+// NonSyncMut
+
+unsafe impl<T: Resource> SystemParam for NonSyncMut<'_, T> {
     type State = ResourceId;
     type Item<'world, 'state> = NonSyncMut<'world, T>;
-    const WORLD_MODE: WorldMode = WorldMode::DataMut;
-    const MAIN_THREAD: bool = true;
+    // Because the resource is !Sync, we can only borrow it
+    // on the main thread. In other words, this system is !Send. 
+    const NON_SEND: bool = true;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
-        // We do not prepare resource here,
-        // thereby delaying memory allocation.
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_writing_res(*state) {
-            table.set_writing_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_writing_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(
@@ -369,25 +355,25 @@ unsafe impl<T: Resource + Sync> SystemParam for NonSyncMut<'_, T> {
     }
 }
 
-unsafe impl<T: Resource + Sync> SystemParam for Option<NonSync<'_, T>> {
+// -----------------------------------------------------------------------------
+// Option<NonSync>
+
+unsafe impl<T: Resource> ReadOnlySystemParam for Option<NonSync<'_, T>> {}
+
+unsafe impl<T: Resource> SystemParam for Option<NonSync<'_, T>> {
     type State = ResourceId;
     type Item<'world, 'state> = Option<NonSync<'world, T>>;
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
-    const MAIN_THREAD: bool = true;
+    // Because the resource is !Sync, we can only borrow it
+    // on the main thread. In other words, this system is !Send. 
+    const NON_SEND: bool = true;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
-        // We do not prepare resource here,
-        // thereby delaying memory allocation.
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_reading_res(*state) {
-            table.set_reading_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_reading_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(
@@ -408,25 +394,25 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<NonSync<'_, T>> {
     }
 }
 
-unsafe impl<T: Resource + Sync> SystemParam for Option<NonSyncRef<'_, T>> {
+// -----------------------------------------------------------------------------
+// Option<NonSyncRef>
+
+unsafe impl<T: Resource> ReadOnlySystemParam for Option<NonSyncRef<'_, T>> {}
+
+unsafe impl<T: Resource> SystemParam for Option<NonSyncRef<'_, T>> {
     type State = ResourceId;
     type Item<'world, 'state> = Option<NonSyncRef<'world, T>>;
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
-    const MAIN_THREAD: bool = true;
+    // Because the resource is !Sync, we can only borrow it
+    // on the main thread. In other words, this system is !Send. 
+    const NON_SEND: bool = true;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
-        // We do not prepare resource here,
-        // thereby delaying memory allocation.
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_reading_res(*state) {
-            table.set_reading_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_reading_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(
@@ -443,23 +429,23 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<NonSyncRef<'_, T>> {
     }
 }
 
-unsafe impl<T: Resource + Sync> SystemParam for Option<NonSyncMut<'_, T>> {
+// -----------------------------------------------------------------------------
+// Option<NonSyncMut>
+
+unsafe impl<T: Resource> SystemParam for Option<NonSyncMut<'_, T>> {
     type State = ResourceId;
     type Item<'world, 'state> = Option<NonSyncMut<'world, T>>;
-    const WORLD_MODE: WorldMode = WorldMode::DataMut;
-    const MAIN_THREAD: bool = true;
+    // Because the resource is !Sync, we can only borrow it
+    // on the main thread. In other words, this system is !Send. 
+    const NON_SEND: bool = true;
+    const EXCLUSIVE: bool = false;
 
     unsafe fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
     unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-        if table.can_writing_res(*state) {
-            table.set_writing_res(*state);
-            true
-        } else {
-            false
-        }
+        table.set_writing_res(*state)
     }
 
     unsafe fn get_param<'w, 's>(

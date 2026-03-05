@@ -18,7 +18,6 @@ impl World {
         } else {
             let world = unsafe { world.full_mut() };
             let state = <QueryState<D, F>>::new(world);
-
             world.insert_resource(state)
         }
     }
@@ -37,9 +36,10 @@ impl World {
     pub fn query<D: QueryData + 'static>(&mut self) -> Query<'_, '_, D> {
         let world: UnsafeWorld<'_> = self.unsafe_world();
         let state = unsafe { world.full_mut().cache_query_state::<D, ()>() };
-        state.update(unsafe { world.read_only() });
-        let last_run = unsafe { world.read_only().last_run() };
-        let this_run = unsafe { world.read_only().this_run() };
+        let read_only_world = unsafe { world.read_only() };
+        state.update(read_only_world);
+        let last_run = read_only_world.last_run();
+        let this_run = read_only_world.this_run();
 
         unsafe { <Query<D> as SystemParam>::get_param(world, state, last_run, this_run) }
     }
@@ -49,9 +49,10 @@ impl World {
     ) -> Query<'_, '_, D, F> {
         let world: UnsafeWorld<'_> = self.unsafe_world();
         let state = unsafe { world.full_mut().cache_query_state::<D, F>() };
-        state.update(unsafe { world.read_only() });
-        let last_run = unsafe { world.read_only().last_run() };
-        let this_run = unsafe { world.read_only().this_run() };
+        let read_only_world = unsafe { world.read_only() };
+        state.update(read_only_world);
+        let last_run = read_only_world.last_run();
+        let this_run = read_only_world.this_run();
 
         unsafe { <Query<D, F> as SystemParam>::get_param(world, state, last_run, this_run) }
     }

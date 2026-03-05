@@ -81,7 +81,7 @@ pub struct FilterParam {
 
 impl FilterParam {
     pub fn with(&self) -> &[ComponentId] {
-        &self.params[0..self.with_len]
+        &self.params[..self.with_len]
     }
 
     pub fn without(&self) -> &[ComponentId] {

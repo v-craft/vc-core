@@ -1,16 +1,16 @@
 use alloc::vec::Vec;
 
-use super::{QueryData, ReadOnlyQuery};
+use super::{QueryData, ReadOnlyQueryData};
 use crate::archetype::Archetype;
 use crate::entity::Entity;
 use crate::storage::{Table, TableRow};
 use crate::system::{FilterData, FilterParamBuilder};
 use crate::tick::Tick;
-use crate::world::{UnsafeWorld, World, WorldMode};
+use crate::world::{UnsafeWorld, World};
 
 macro_rules! impl_tuple {
     (0: []) => {
-        unsafe impl ReadOnlyQuery for () {}
+        unsafe impl ReadOnlyQueryData for () {}
 
         unsafe impl QueryData for () {
             type State = ();
@@ -18,7 +18,6 @@ macro_rules! impl_tuple {
             type Item<'world> = ();
 
             const COMPONENTS_ARE_DENSE: bool = true;
-            const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
 
             unsafe fn build_state(_world: &mut World) -> Self::State {}
 
@@ -58,7 +57,7 @@ macro_rules! impl_tuple {
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
         #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
-        unsafe impl<$name: ReadOnlyQuery> ReadOnlyQuery for ($name,) {}
+        unsafe impl<$name: ReadOnlyQueryData> ReadOnlyQueryData for ($name,) {}
 
         #[cfg_attr(docsrs, doc(fake_variadic))]
         #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
@@ -68,7 +67,6 @@ macro_rules! impl_tuple {
             type Item<'world> = ( <$name>::Item<'world>, );
 
             const COMPONENTS_ARE_DENSE: bool = <$name>::COMPONENTS_ARE_DENSE;
-            const WORLD_MODE: WorldMode = <$name>::WORLD_MODE;
 
             unsafe fn build_state(world: &mut World) -> Self::State {
                 unsafe { <$name>::build_state(world) }
@@ -120,7 +118,7 @@ macro_rules! impl_tuple {
     };
     ($num:literal : [$($index:tt : $name:ident),*]) => {
         #[cfg_attr(docsrs, doc(hidden))]
-        unsafe impl<$($name: ReadOnlyQuery),*> ReadOnlyQuery for ($($name),*) {}
+        unsafe impl<$($name: ReadOnlyQueryData),*> ReadOnlyQueryData for ($($name),*) {}
 
         #[cfg_attr(docsrs, doc(hidden))]
         unsafe impl<$($name: QueryData),*> QueryData for ($($name),*) {
@@ -128,12 +126,7 @@ macro_rules! impl_tuple {
             type Cache<'world> = ( $( <$name>::Cache<'world> ),* );
             type Item<'world> = ( $( <$name>::Item<'world> ),* );
 
-            const COMPONENTS_ARE_DENSE: bool = {
-                true $( && <$name>::COMPONENTS_ARE_DENSE )*
-            };
-            const WORLD_MODE: WorldMode = {
-                WorldMode::ReadOnly $( .merge(<$name>::WORLD_MODE) )*
-            };
+            const COMPONENTS_ARE_DENSE: bool = { true $( && <$name>::COMPONENTS_ARE_DENSE )* };
 
             unsafe fn build_state(world: &mut World) -> Self::State {
                 unsafe {

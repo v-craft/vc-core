@@ -1,9 +1,7 @@
 use core::iter::FusedIterator;
-use core::sync::atomic::Ordering;
 
-use super::{QueryData, QueryFilter, QueryState};
+use super::{QueryData, QueryFilter, QueryState, ReadOnlyQueryData, Query};
 use crate::entity::{Entity, StorageId};
-use crate::query::{Query, ReadOnlyQuery};
 use crate::storage::TableRow;
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
@@ -19,6 +17,27 @@ pub struct QueryIter<'w, 's, D: QueryData, F: QueryFilter> {
 }
 
 impl<D: QueryData, F: QueryFilter> QueryIter<'_, '_, D, F> {
+    /// # Safety
+    /// Ensure by caller.
+    unsafe fn new<'w, 's>(
+        world: UnsafeWorld<'w>,
+        state: &'s QueryState<D, F>,
+        last_run: Tick,
+        this_run: Tick,
+    ) -> QueryIter<'w, 's, D, F> {
+        unsafe {
+            QueryIter {
+                world,
+                state,
+                d_cache: D::build_cache(&state.d_state, world, last_run, this_run),
+                f_cache: F::build_cache(&state.f_state, world, last_run, this_run),
+                storages: state.storages.iter(),
+                entities: EMPTY_ENTITIES,
+                row: 0,
+            }
+        }
+    }
+
     #[cold]
     #[inline(never)]
     fn update_slice(&mut self) -> Option<()> {
@@ -72,7 +91,7 @@ impl<'w, D: QueryData, F: QueryFilter> Iterator for QueryIter<'w, '_, D, F> {
             let old_row = self.row;
 
             let entity = unsafe { *self.entities.get_unchecked(old_row) };
-            // the number of entities < u32::MAX, the row will never wrapping.
+            // the number of entities < u32::MAX, the row will never overflow.
             self.row += 1;
 
             let table_row = if QueryState::<D, F>::IS_DENSE {
@@ -127,41 +146,42 @@ impl<'w, 's, D: QueryData, F: QueryFilter> IntoIterator for Query<'w, 's, D, F> 
     }
 }
 
+impl<'s, D: QueryData, F: QueryFilter> Query<'_, 's, D, F> {
+    pub fn iter_mut(&mut self) -> QueryIter<'_, 's, D, F> {
+        unsafe {
+            QueryIter::new(self.world, self.state, self.last_run, self.this_run)
+        }
+    }
+
+    pub fn iter(&mut self) -> QueryIter<'_, 's, D, F>
+    where
+        D: ReadOnlyQueryData,
+    {
+        unsafe {
+            QueryIter::new(self.world, self.state, self.last_run, self.this_run)
+        }
+    }
+}
+
 impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
     pub fn iter_mut<'s, 'w>(&'s self, world: &'w mut World) -> QueryIter<'w, 's, D, F> {
         let last_run = world.last_run;
         let this_run = Tick::new(*world.this_run.get_mut());
         let world = world.unsafe_world();
         unsafe {
-            QueryIter {
-                world,
-                state: self,
-                d_cache: D::build_cache(&self.d_state, world, last_run, this_run),
-                f_cache: F::build_cache(&self.f_state, world, last_run, this_run),
-                storages: self.storages.iter(),
-                entities: EMPTY_ENTITIES,
-                row: 0,
-            }
+            QueryIter::new(world, self, last_run, this_run)
         }
     }
 
     pub fn iter<'s, 'w>(&'s self, world: &'w World) -> QueryIter<'w, 's, D, F>
     where
-        D: ReadOnlyQuery,
+        D: ReadOnlyQueryData,
     {
-        let last_run = world.last_run;
-        let this_run = Tick::new(world.this_run.load(Ordering::Relaxed));
+        let last_run = world.last_run();
+        let this_run = world.this_run();
         let world = world.unsafe_world();
         unsafe {
-            QueryIter {
-                world,
-                state: self,
-                d_cache: D::build_cache(&self.d_state, world, last_run, this_run),
-                f_cache: F::build_cache(&self.f_state, world, last_run, this_run),
-                storages: self.storages.iter(),
-                entities: EMPTY_ENTITIES,
-                row: 0,
-            }
+            QueryIter::new(world, self, last_run, this_run)
         }
     }
 }

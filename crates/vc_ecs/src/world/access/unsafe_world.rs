@@ -4,23 +4,6 @@ use core::ptr::NonNull;
 
 use crate::world::World;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum WorldMode {
-    ReadOnly = 0,
-    DataMut = 1,
-    FullMut = 2,
-}
-
-impl WorldMode {
-    pub const fn merge(self, other: Self) -> Self {
-        if self as u8 >= other as u8 {
-            self
-        } else {
-            other
-        }
-    }
-}
-
 #[derive(Clone, Copy)]
 pub struct UnsafeWorld<'a> {
     world: NonNull<World>,

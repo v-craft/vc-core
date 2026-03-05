@@ -10,7 +10,7 @@ use crate::component::Components;
 use crate::entity::{Entities, EntityAllocator};
 use crate::resource::Resources;
 use crate::storage::Storages;
-use crate::tick::Tick;
+use crate::tick::{CHECK_CYCLE, CheckTicks, Tick};
 use crate::world::WorldId;
 
 pub struct World {
@@ -25,6 +25,7 @@ pub struct World {
     pub(crate) archetypes: Archetypes,
     pub(crate) this_run: AtomicU32,
     pub(crate) last_run: Tick,
+    pub(crate) last_check: Tick,
 }
 
 impl Debug for World {
@@ -57,6 +58,7 @@ impl World {
             archetypes: Archetypes::new(),
             this_run: AtomicU32::new(1),
             last_run: Tick::new(0),
+            last_check: Tick::new(0),
         })
     }
 
@@ -72,9 +74,27 @@ impl World {
         Tick::new(self.this_run.load(Ordering::Relaxed))
     }
 
+    pub fn advance_tick(&self) -> Tick {
+        Tick::new(self.this_run.fetch_add(1, Ordering::Relaxed))
+    }
+
     pub fn update_tick(&mut self) {
         let last = *self.this_run.get_mut();
         self.last_run = Tick::new(last);
         *self.this_run.get_mut() = last.wrapping_add(1);
+    }
+
+    pub fn check_ticks(&mut self) -> Option<CheckTicks> {
+        let this_run = *self.this_run.get_mut();
+        let this_run = Tick::new(this_run);
+        if this_run.relative_to(self.last_check).get() < CHECK_CYCLE {
+            return None;
+        }
+
+        let checker = CheckTicks::new(this_run);
+        self.storages.check_ticks(checker);
+        self.last_check = this_run;
+        
+        Some(checker)
     }
 }

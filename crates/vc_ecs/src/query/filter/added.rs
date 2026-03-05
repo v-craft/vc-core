@@ -18,17 +18,17 @@ union StorageSwitch<'w> {
     sparse: Option<&'w Map>,
 }
 
-pub struct ChangedView<'w> {
+pub struct AddedView<'w> {
     ticks: StorageSwitch<'w>,
     last_run: Tick,
     this_run: Tick,
 }
 
-pub struct Changed<T: Component>(T);
+pub struct Added<T: Component>(T);
 
-unsafe impl<T: Component> QueryFilter for Changed<T> {
+unsafe impl<T: Component> QueryFilter for Added<T> {
     type State = ComponentId;
-    type Cache<'world> = ChangedView<'world>;
+    type Cache<'world> = AddedView<'world>;
 
     const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
     const ENABLE_ENTITY_FILTER: bool = true;
@@ -44,7 +44,7 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
         this_run: Tick,
     ) -> Self::Cache<'w> {
         match T::STORAGE {
-            ComponentStorage::Dense => ChangedView {
+            ComponentStorage::Dense => AddedView {
                 ticks: StorageSwitch { dense: None },
                 last_run,
                 this_run,
@@ -52,7 +52,7 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
             ComponentStorage::Sparse => {
                 let maps = unsafe { &world.read_only().storages.maps };
                 if let Some(map_id) = maps.get_id(*state) {
-                    ChangedView {
+                    AddedView {
                         ticks: StorageSwitch {
                             sparse: maps.get(map_id),
                         },
@@ -60,7 +60,7 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
                         this_run,
                     }
                 } else {
-                    ChangedView {
+                    AddedView {
                         ticks: StorageSwitch { sparse: None },
                         last_run,
                         this_run,
@@ -87,7 +87,7 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
                 cache.ticks = StorageSwitch { dense: None };
                 return;
             };
-            let slice = unsafe { ThinSlice::from_ref(table.get_changed_slice(table_col)) };
+            let slice = unsafe { ThinSlice::from_ref(table.get_added_slice(table_col)) };
             cache.ticks = StorageSwitch { dense: Some(slice) };
         }
     }
@@ -102,7 +102,7 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
                 cache.ticks = StorageSwitch { dense: None };
                 return;
             };
-            let slice = unsafe { ThinSlice::from_ref(table.get_changed_slice(table_col)) };
+            let slice = unsafe { ThinSlice::from_ref(table.get_added_slice(table_col)) };
             cache.ticks = StorageSwitch { dense: Some(slice) };
         }
     }
@@ -119,8 +119,8 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
                 let Some(slice) = dense else {
                     return false;
                 };
-                let changed = unsafe { *slice.get(table_row.0 as usize) };
-                changed.is_newer_than(cache.last_run, cache.this_run)
+                let added = unsafe { *slice.get(table_row.0 as usize) };
+                added.is_newer_than(cache.last_run, cache.this_run)
             }
             ComponentStorage::Sparse => {
                 let sparse = unsafe { cache.ticks.sparse };
@@ -130,8 +130,8 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
                 let Some(map_row) = map.get_map_row(entity) else {
                     return false;
                 };
-                let changed = unsafe { map.get_changed(map_row) };
-                changed.is_newer_than(cache.last_run, cache.this_run)
+                let added = unsafe { map.get_added(map_row) };
+                added.is_newer_than(cache.last_run, cache.this_run)
             }
         }
     }

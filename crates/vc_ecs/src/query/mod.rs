@@ -10,8 +10,8 @@ mod state;
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use data::{QueryData, ReadOnlyQuery};
-pub use filter::{And, Changed, Or, QueryFilter, With, Without};
+pub use data::{QueryData, ReadOnlyQueryData};
+pub use filter::{And, Changed, Or, QueryFilter, With, Without, Added};
 pub use iter::QueryIter;
 pub use query::Query;
 pub use state::QueryState;

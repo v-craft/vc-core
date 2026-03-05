@@ -1,17 +1,17 @@
 use alloc::vec::Vec;
 
-use super::{QueryData, ReadOnlyQuery};
+use super::{QueryData, ReadOnlyQueryData};
 use crate::archetype::Archetype;
 use crate::entity::Entity;
 use crate::storage::{Table, TableRow};
 use crate::system::{FilterData, FilterParamBuilder};
 use crate::tick::Tick;
-use crate::world::{EntityMut, EntityRef, UnsafeWorld, World, WorldMode};
+use crate::world::{EntityMut, EntityRef, UnsafeWorld, World};
 
 // -----------------------------------------------------------------------------
 // Entity
 
-unsafe impl ReadOnlyQuery for Entity {}
+unsafe impl ReadOnlyQueryData for Entity {}
 
 unsafe impl QueryData for Entity {
     type State = ();
@@ -19,7 +19,6 @@ unsafe impl QueryData for Entity {
     type Item<'world> = Entity;
 
     const COMPONENTS_ARE_DENSE: bool = true;
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
 
     unsafe fn build_state(_world: &mut World) -> Self::State {}
 
@@ -71,7 +70,7 @@ pub struct EntityView<'w> {
     this_run: Tick,
 }
 
-unsafe impl ReadOnlyQuery for EntityRef<'_> {}
+unsafe impl ReadOnlyQueryData for EntityRef<'_> {}
 
 unsafe impl QueryData for EntityRef<'_> {
     type State = ();
@@ -79,7 +78,6 @@ unsafe impl QueryData for EntityRef<'_> {
     type Item<'world> = EntityRef<'world>;
 
     const COMPONENTS_ARE_DENSE: bool = true;
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
 
     unsafe fn build_state(_world: &mut World) -> Self::State {}
 
@@ -146,7 +144,6 @@ unsafe impl QueryData for EntityMut<'_> {
     type Item<'world> = EntityMut<'world>;
 
     const COMPONENTS_ARE_DENSE: bool = true;
-    const WORLD_MODE: WorldMode = WorldMode::DataMut;
 
     unsafe fn build_state(_world: &mut World) -> Self::State {}
 

@@ -2,14 +2,14 @@ use core::ptr::NonNull;
 
 use alloc::vec::Vec;
 
-use super::{QueryData, ReadOnlyQuery};
+use super::{QueryData, ReadOnlyQueryData};
 use crate::archetype::Archetype;
 use crate::component::{Component, ComponentId, ComponentStorage};
 use crate::entity::Entity;
 use crate::storage::{Column, Map, Table, TableRow};
 use crate::system::{FilterData, FilterParamBuilder};
 use crate::tick::Tick;
-use crate::world::{UnsafeWorld, World, WorldMode};
+use crate::world::{UnsafeWorld, World};
 
 // -----------------------------------------------------------------------------
 // DataView / ComponentView
@@ -74,7 +74,7 @@ impl ComponentView {
 // -----------------------------------------------------------------------------
 // &T
 
-unsafe impl<T: Component> ReadOnlyQuery for &T {}
+unsafe impl<T: Component> ReadOnlyQueryData for &T {}
 
 unsafe impl<T: Component> QueryData for &T {
     type State = ComponentId;
@@ -82,7 +82,6 @@ unsafe impl<T: Component> QueryData for &T {
     type Item<'world> = &'world T;
 
     const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
 
     unsafe fn build_state(world: &mut World) -> Self::State {
         world.register_component::<T>()
@@ -166,15 +165,15 @@ unsafe impl<T: Component> QueryData for &T {
 // -----------------------------------------------------------------------------
 // Option<&T>
 
-unsafe impl<T: Component> ReadOnlyQuery for Option<&T> {}
+unsafe impl<T: Component> ReadOnlyQueryData for Option<&T> {}
 
 unsafe impl<T: Component> QueryData for Option<&T> {
     type State = ComponentId;
     type Cache<'world> = DataView;
     type Item<'world> = Option<&'world T>;
 
-    const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
-    const WORLD_MODE: WorldMode = WorldMode::ReadOnly;
+    // Due to `Option`, this data will not affect the filter.
+    const COMPONENTS_ARE_DENSE: bool = false;
 
     unsafe fn build_state(world: &mut World) -> Self::State {
         world.register_component::<T>()
@@ -237,7 +236,6 @@ unsafe impl<T: Component> QueryData for &mut T {
     type Item<'world> = &'world mut T;
 
     const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
-    const WORLD_MODE: WorldMode = WorldMode::DataMut;
 
     unsafe fn build_state(world: &mut World) -> Self::State {
         world.register_component::<T>()
@@ -332,8 +330,8 @@ unsafe impl<T: Component> QueryData for Option<&mut T> {
     type Cache<'world> = ComponentView;
     type Item<'world> = Option<&'world mut T>;
 
-    const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
-    const WORLD_MODE: WorldMode = WorldMode::DataMut;
+    // Due to `Option`, this data will not affect the filter.
+    const COMPONENTS_ARE_DENSE: bool = false;
 
     unsafe fn build_state(world: &mut World) -> Self::State {
         world.register_component::<T>()
