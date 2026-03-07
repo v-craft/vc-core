@@ -4,11 +4,6 @@
 //! references or pointers instead, while adding lifetimes and optional alignment
 //! checks to improve safety over raw pointers.
 //!
-//! **ConstNonNull**
-//!
-//! [`ConstNonNull<T>`] is similar to [`NonNull<T>`](core::ptr::NonNull): a non-null
-//! pointer that cannot be used to obtain mutable references directly.
-//!
 //! **ThinSlice** and **ThinSliceMut**
 //!
 //! [`ThinSlice`] and [`ThinSliceMut`] is a thin slice pointer that stores only a
@@ -28,7 +23,7 @@
 //! If the value is neither read nor dropped, it may leak.
 //!
 //! `OwningPtr` does **not** manage allocation; it typically points to stack values
-//! or data managed by other containers.
+//! or data managed by other containers(e.g. `[MaybeUninit<T>; N]`).
 #![expect(unsafe_code, reason = "Raw pointers are inherently unsafe.")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![no_std]
@@ -36,13 +31,11 @@
 // -----------------------------------------------------------------------------
 // Modules
 
-mod non_null;
 mod thin_slice;
 mod type_erased;
 
 // -----------------------------------------------------------------------------
 // Top-level exports
 
-pub use non_null::ConstNonNull;
 pub use thin_slice::{ThinSlice, ThinSliceMut};
 pub use type_erased::{OwningPtr, Ptr, PtrMut};

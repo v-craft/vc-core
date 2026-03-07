@@ -1,5 +1,5 @@
 use super::{ReadOnlySystemParam, SystemParam};
-use crate::borrow::{NonSync, NonSyncMut, NonSyncRef};
+use crate::borrow::{NonSend, NonSendMut, NonSendRef};
 use crate::borrow::{Res, ResMut, ResRef};
 use crate::resource::{Resource, ResourceId};
 use crate::system::AccessTable;
@@ -87,7 +87,7 @@ unsafe impl<T: Resource + Sync> SystemParam for ResRef<'_, T> {
             if let Some(data) = world.storages.res.get(*state)
                 && let Some(untyped) = data.get_ref(last_run, this_run)
             {
-                untyped.into_res::<T>()
+                untyped.into_resource::<T>()
             } else {
                 uninit_resource(DebugName::type_name::<T>());
             }
@@ -98,7 +98,7 @@ unsafe impl<T: Resource + Sync> SystemParam for ResRef<'_, T> {
 // -----------------------------------------------------------------------------
 // ResMut
 
-unsafe impl<T: Resource + Sync> SystemParam for ResMut<'_, T> {
+unsafe impl<T: Resource + Send> SystemParam for ResMut<'_, T> {
     type State = ResourceId;
     type Item<'world, 'state> = ResMut<'world, T>;
     const NON_SEND: bool = false;
@@ -123,7 +123,7 @@ unsafe impl<T: Resource + Sync> SystemParam for ResMut<'_, T> {
             if let Some(data) = world.storages.res.get_mut(*state)
                 && let Some(untyped) = data.get_mut(last_run, this_run)
             {
-                untyped.into_res::<T>()
+                untyped.into_resource::<T>()
             } else {
                 uninit_resource(DebugName::type_name::<T>());
             }
@@ -196,7 +196,7 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<ResRef<'_, T>> {
         unsafe {
             let world = world.read_only();
             let data = world.storages.res.get(*state)?;
-            Some(data.get_ref(last_run, this_run)?.into_res::<T>())
+            Some(data.get_ref(last_run, this_run)?.into_resource::<T>())
         }
     }
 }
@@ -204,7 +204,7 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<ResRef<'_, T>> {
 // -----------------------------------------------------------------------------
 // Option<ResMut>
 
-unsafe impl<T: Resource + Sync> SystemParam for Option<ResMut<'_, T>> {
+unsafe impl<T: Resource + Send> SystemParam for Option<ResMut<'_, T>> {
     type State = ResourceId;
     type Item<'world, 'state> = Option<ResMut<'world, T>>;
     const NON_SEND: bool = false;
@@ -227,19 +227,19 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<ResMut<'_, T>> {
         unsafe {
             let world = world.data_mut();
             let data = world.storages.res.get_mut(*state)?;
-            Some(data.get_mut(last_run, this_run)?.into_res::<T>())
+            Some(data.get_mut(last_run, this_run)?.into_resource::<T>())
         }
     }
 }
 
 // -----------------------------------------------------------------------------
-// NonSync
+// NonSend
 
-unsafe impl<T: Resource> ReadOnlySystemParam for NonSync<'_, T> {}
+unsafe impl<T: Resource> ReadOnlySystemParam for NonSend<'_, T> {}
 
-unsafe impl<T: Resource> SystemParam for NonSync<'_, T> {
+unsafe impl<T: Resource> SystemParam for NonSend<'_, T> {
     type State = ResourceId;
-    type Item<'world, 'state> = NonSync<'world, T>;
+    type Item<'world, 'state> = NonSend<'world, T>;
     // Because the resource is !Sync, we can only borrow it
     // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
@@ -265,7 +265,7 @@ unsafe impl<T: Resource> SystemParam for NonSync<'_, T> {
                 && let Some(ptr) = data.get_data()
             {
                 ptr.debug_assert_aligned::<T>();
-                NonSync {
+                NonSend {
                     value: ptr.as_ref(),
                 }
             } else {
@@ -276,13 +276,13 @@ unsafe impl<T: Resource> SystemParam for NonSync<'_, T> {
 }
 
 // -----------------------------------------------------------------------------
-// NonSyncRef
+// NonSendRef
 
-unsafe impl<T: Resource> ReadOnlySystemParam for NonSyncRef<'_, T> {}
+unsafe impl<T: Resource> ReadOnlySystemParam for NonSendRef<'_, T> {}
 
-unsafe impl<T: Resource> SystemParam for NonSyncRef<'_, T> {
+unsafe impl<T: Resource> SystemParam for NonSendRef<'_, T> {
     type State = ResourceId;
-    type Item<'world, 'state> = NonSyncRef<'world, T>;
+    type Item<'world, 'state> = NonSendRef<'world, T>;
     // Because the resource is !Sync, we can only borrow it
     // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
@@ -309,7 +309,7 @@ unsafe impl<T: Resource> SystemParam for NonSyncRef<'_, T> {
             if let Some(data) = world.storages.res.get(*state)
                 && let Some(ptr) = data.get_ref(last_run, this_run)
             {
-                ptr.into_non_sync::<T>()
+                ptr.into_non_send::<T>()
             } else {
                 uninit_resource(DebugName::type_name::<T>());
             }
@@ -318,11 +318,11 @@ unsafe impl<T: Resource> SystemParam for NonSyncRef<'_, T> {
 }
 
 // -----------------------------------------------------------------------------
-// NonSyncMut
+// NonSendMut
 
-unsafe impl<T: Resource> SystemParam for NonSyncMut<'_, T> {
+unsafe impl<T: Resource> SystemParam for NonSendMut<'_, T> {
     type State = ResourceId;
-    type Item<'world, 'state> = NonSyncMut<'world, T>;
+    type Item<'world, 'state> = NonSendMut<'world, T>;
     // Because the resource is !Sync, we can only borrow it
     // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
@@ -347,7 +347,7 @@ unsafe impl<T: Resource> SystemParam for NonSyncMut<'_, T> {
             if let Some(data) = world.storages.res.get_mut(*state)
                 && let Some(ptr) = data.get_mut(last_run, this_run)
             {
-                ptr.into_non_sync::<T>()
+                ptr.into_non_send::<T>()
             } else {
                 uninit_resource(DebugName::type_name::<T>());
             }
@@ -356,13 +356,13 @@ unsafe impl<T: Resource> SystemParam for NonSyncMut<'_, T> {
 }
 
 // -----------------------------------------------------------------------------
-// Option<NonSync>
+// Option<NonSend>
 
-unsafe impl<T: Resource> ReadOnlySystemParam for Option<NonSync<'_, T>> {}
+unsafe impl<T: Resource> ReadOnlySystemParam for Option<NonSend<'_, T>> {}
 
-unsafe impl<T: Resource> SystemParam for Option<NonSync<'_, T>> {
+unsafe impl<T: Resource> SystemParam for Option<NonSend<'_, T>> {
     type State = ResourceId;
-    type Item<'world, 'state> = Option<NonSync<'world, T>>;
+    type Item<'world, 'state> = Option<NonSend<'world, T>>;
     // Because the resource is !Sync, we can only borrow it
     // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
@@ -387,7 +387,7 @@ unsafe impl<T: Resource> SystemParam for Option<NonSync<'_, T>> {
             let data = world.storages.res.get(*state)?;
             let ptr = data.get_data()?;
             ptr.debug_assert_aligned::<T>();
-            Some(NonSync {
+            Some(NonSend {
                 value: ptr.as_ref(),
             })
         }
@@ -395,13 +395,13 @@ unsafe impl<T: Resource> SystemParam for Option<NonSync<'_, T>> {
 }
 
 // -----------------------------------------------------------------------------
-// Option<NonSyncRef>
+// Option<NonSendRef>
 
-unsafe impl<T: Resource> ReadOnlySystemParam for Option<NonSyncRef<'_, T>> {}
+unsafe impl<T: Resource> ReadOnlySystemParam for Option<NonSendRef<'_, T>> {}
 
-unsafe impl<T: Resource> SystemParam for Option<NonSyncRef<'_, T>> {
+unsafe impl<T: Resource> SystemParam for Option<NonSendRef<'_, T>> {
     type State = ResourceId;
-    type Item<'world, 'state> = Option<NonSyncRef<'world, T>>;
+    type Item<'world, 'state> = Option<NonSendRef<'world, T>>;
     // Because the resource is !Sync, we can only borrow it
     // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
@@ -424,17 +424,17 @@ unsafe impl<T: Resource> SystemParam for Option<NonSyncRef<'_, T>> {
         unsafe {
             let world = world.read_only();
             let data = world.storages.res.get(*state)?;
-            Some(data.get_ref(last_run, this_run)?.into_non_sync::<T>())
+            Some(data.get_ref(last_run, this_run)?.into_non_send::<T>())
         }
     }
 }
 
 // -----------------------------------------------------------------------------
-// Option<NonSyncMut>
+// Option<NonSendMut>
 
-unsafe impl<T: Resource> SystemParam for Option<NonSyncMut<'_, T>> {
+unsafe impl<T: Resource> SystemParam for Option<NonSendMut<'_, T>> {
     type State = ResourceId;
-    type Item<'world, 'state> = Option<NonSyncMut<'world, T>>;
+    type Item<'world, 'state> = Option<NonSendMut<'world, T>>;
     // Because the resource is !Sync, we can only borrow it
     // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
@@ -457,7 +457,7 @@ unsafe impl<T: Resource> SystemParam for Option<NonSyncMut<'_, T>> {
         unsafe {
             let world = world.data_mut();
             let data = world.storages.res.get_mut(*state)?;
-            Some(data.get_mut(last_run, this_run)?.into_non_sync::<T>())
+            Some(data.get_mut(last_run, this_run)?.into_non_send::<T>())
         }
     }
 }

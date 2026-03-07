@@ -3,7 +3,7 @@ use core::sync::atomic::Ordering;
 
 use vc_ptr::{OwningPtr, PtrMut};
 
-use crate::borrow::{NonSyncMut, NonSyncRef, ResMut, ResRef};
+use crate::borrow::{NonSendMut, NonSendRef, ResMut, ResRef};
 use crate::resource::{Resource, ResourceId};
 use crate::tick::Tick;
 use crate::utils::DebugCheckedUnwrap;
@@ -25,6 +25,31 @@ fn insert_internal<'a, 'b>(
 }
 
 impl World {
+    /// Inserts or replaces a `Send` resource and returns a mutable reference to it.
+    ///
+    /// The resource is registered by type on first use. Once inserted, it can be
+    /// accessed from systems through [`crate::borrow::Res`],
+    /// [`crate::borrow::ResRef`], or [`crate::borrow::ResMut`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use vc_ecs::resource::Resource;
+    /// use vc_ecs::world::{World, WorldIdAllocator};
+    ///
+    /// static IDS: WorldIdAllocator = WorldIdAllocator::new();
+    ///
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Counter(u32);
+    ///
+    /// unsafe impl Resource for Counter {}
+    ///
+    /// let mut world = World::new(IDS.alloc());
+    /// let counter = world.insert_resource(Counter(1));
+    /// counter.0 += 1;
+    ///
+    /// assert_eq!(world.get_resource::<Counter>(), Some(&Counter(2)));
+    /// ```
     pub fn insert_resource<T: Resource + Send>(&mut self, value: T) -> &mut T {
         // let id = self.register_resource::<T>();
         let id = self.resources.register::<T>();
@@ -32,6 +57,7 @@ impl World {
         unsafe { insert_internal(self, value, id).consume::<T>() }
     }
 
+    /// Removes and returns a `Send` resource if it exists.
     pub fn remove_resource<T: Resource + Send>(&mut self) -> Option<T> {
         if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get_mut(id)
@@ -42,6 +68,20 @@ impl World {
         }
     }
 
+    /// Drop a `Send` resource if it exists.
+    ///
+    /// This will be faster than removing, as there is no need to return data.
+    pub fn drop_resource<T: Resource + Send>(&mut self) {
+        if let Some(id) = self.resources.get_id(TypeId::of::<T>())
+            && let Some(data) = self.storages.res.get_mut(id)
+        {
+            unsafe { data.drop_in_place::<T>() }
+        }
+    }
+
+    /// Returns a shared reference to a `Send + Sync` resource without change detection.
+    ///
+    /// This mirrors the behavior of the [`crate::borrow::Res`] system parameter.
     pub fn get_resource<T: Resource + Sync>(&self) -> Option<&T> {
         if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get(id)
@@ -54,6 +94,9 @@ impl World {
         }
     }
 
+    /// Returns a shared resource borrow with change detection.
+    ///
+    /// This mirrors the behavior of the [`crate::borrow::ResRef`] system parameter.
     pub fn get_resource_ref<T: Resource + Sync>(&self) -> Option<ResRef<'_, T>> {
         if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get(id)
@@ -61,25 +104,54 @@ impl World {
             let last_run = self.last_run;
             let this_run = Tick::new(self.this_run.load(Ordering::Relaxed));
             let ptr = data.get_ref(last_run, this_run)?;
-            Some(unsafe { ptr.into_res::<T>() })
+            Some(unsafe { ptr.into_resource::<T>() })
         } else {
             None
         }
     }
 
-    pub fn get_resource_mut<T: Resource + Sync>(&mut self) -> Option<ResMut<'_, T>> {
+    /// Returns an exclusive resource borrow with change detection.
+    ///
+    /// This mirrors the behavior of the [`crate::borrow::ResMut`] system parameter.
+    pub fn get_resource_mut<T: Resource + Send>(&mut self) -> Option<ResMut<'_, T>> {
         if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get_mut(id)
         {
             let last_run = self.last_run;
             let this_run = Tick::new(*self.this_run.get_mut());
             let ptr = data.get_mut(last_run, this_run)?;
-            Some(unsafe { ptr.into_res::<T>() })
+            Some(unsafe { ptr.into_resource::<T>() })
         } else {
             None
         }
     }
 
+    /// Inserts or replaces a main-thread resource and returns a mutable reference to it.
+    ///
+    /// Unlike [`World::insert_resource`], this accepts `!Sync` values. Access to the
+    /// resource is restricted to the thread that created the world.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called from a thread other than the world's main thread.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use core::cell::Cell;
+    /// use vc_ecs::resource::Resource;
+    /// use vc_ecs::world::{World, WorldIdAllocator};
+    ///
+    /// static IDS: WorldIdAllocator = WorldIdAllocator::new();
+    ///
+    /// struct LocalCounter(Cell<u32>);
+    ///
+    /// unsafe impl Resource for LocalCounter {}
+    ///
+    /// let mut world = World::new(IDS.alloc());
+    /// world.insert_non_send(LocalCounter(Cell::new(3)));
+    /// assert_eq!(world.get_non_send::<LocalCounter>().unwrap().0.get(), 3);
+    /// ```
     pub fn insert_non_send<T: Resource>(&mut self, value: T) -> &mut T {
         assert! {
             self.thread_hash == crate::utils::thread_hash(),
@@ -93,6 +165,11 @@ impl World {
         unsafe { insert_internal(self, value, id).consume::<T>() }
     }
 
+    /// Removes and returns a main-thread resource if it exists.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called from a thread other than the world's main thread.
     pub fn remove_non_send<T: Resource>(&mut self) -> Option<T> {
         assert! {
             self.thread_hash == crate::utils::thread_hash(),
@@ -108,7 +185,32 @@ impl World {
         }
     }
 
-    pub fn get_non_sync<T: Resource>(&mut self) -> Option<&T> {
+    /// Drop a resource if it exists.
+    ///
+    /// This will be faster than removing, as there is no need to return data.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called from a thread other than the world's main thread.
+    pub fn drop_non_send<T: Resource>(&mut self) {
+        assert! {
+            self.thread_hash == crate::utils::thread_hash(),
+            "!Send Resource can only be inserted/removed on the main thread.",
+        }
+
+        if let Some(id) = self.resources.get_id(TypeId::of::<T>())
+            && let Some(data) = self.storages.res.get_mut(id)
+        {
+            unsafe { data.drop_in_place::<T>() }
+        }
+    }
+
+    /// Returns a shared reference to a main-thread resource without change detection.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called from a thread other than the world's main thread.
+    pub fn get_non_send<T: Resource>(&mut self) -> Option<&T> {
         assert! {
             self.thread_hash == crate::utils::thread_hash(),
             "!Sync Resource can only be borrowed on the main thread.",
@@ -125,7 +227,14 @@ impl World {
         }
     }
 
-    pub fn get_non_sync_ref<T: Resource>(&self) -> Option<NonSyncRef<'_, T>> {
+    /// Returns a shared main-thread resource borrow with change detection.
+    ///
+    /// This mirrors the behavior of the [`crate::borrow::NonSendRef`] system parameter.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called from a thread other than the world's main thread.
+    pub fn get_non_send_ref<T: Resource>(&self) -> Option<NonSendRef<'_, T>> {
         assert! {
             self.thread_hash == crate::utils::thread_hash(),
             "!Sync Resource can only be borrowed on the main thread.",
@@ -137,13 +246,20 @@ impl World {
             let last_run = self.last_run;
             let this_run = Tick::new(self.this_run.load(Ordering::Relaxed));
             let ptr = data.get_ref(last_run, this_run)?;
-            Some(unsafe { ptr.into_non_sync::<T>() })
+            Some(unsafe { ptr.into_non_send::<T>() })
         } else {
             None
         }
     }
 
-    pub fn get_non_sync_mut<T: Resource>(&mut self) -> Option<NonSyncMut<'_, T>> {
+    /// Returns an exclusive main-thread resource borrow with change detection.
+    ///
+    /// This mirrors the behavior of the [`crate::borrow::NonSendMut`] system parameter.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called from a thread other than the world's main thread.
+    pub fn get_non_send_mut<T: Resource>(&mut self) -> Option<NonSendMut<'_, T>> {
         assert! {
             self.thread_hash == crate::utils::thread_hash(),
             "!Sync Resource can only be borrowed on the main thread.",
@@ -155,7 +271,7 @@ impl World {
             let last_run = self.last_run;
             let this_run = Tick::new(*self.this_run.get_mut());
             let ptr = data.get_mut(last_run, this_run)?;
-            Some(unsafe { ptr.into_non_sync::<T>() })
+            Some(unsafe { ptr.into_non_send::<T>() })
         } else {
             None
         }

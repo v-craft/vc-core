@@ -127,11 +127,7 @@ impl TypeRegistry {
 
     // - If key [`TypeId`] has already exist, the function will do nothing and return `false`.
     // - If the key [`TypeId`] does not exist, the function will insert value and return `true`.
-    fn register_internal(
-        &mut self,
-        type_id: TypeId,
-        get_type_meta: impl FnOnce() -> TypeMeta,
-    ) -> bool {
+    fn register_internal(&mut self, type_id: TypeId, get_type_meta: fn() -> TypeMeta) -> bool {
         self.type_meta_table.try_insert(type_id, || {
             let meta = get_type_meta();
             Self::add_new_type_indices(

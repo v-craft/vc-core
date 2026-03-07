@@ -24,6 +24,9 @@ pub use adapters::*;
 /// than a normal [`Iterator`]*.
 ///
 /// Therefore, you should profile your code before using [`ParallelIterator`].
+///
+/// This trait is usually consumed through adapter chains and a terminal method
+/// such as [`ParallelIterator::collect`] or [`ParallelIterator::for_each`].
 pub trait ParallelIterator<BatchIter>
 where
     BatchIter: Iterator + Send,

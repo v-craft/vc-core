@@ -5,7 +5,9 @@ use crate::TaskPool;
 // -----------------------------------------------------------------------------
 // ParallelSlice
 
-/// Provides functions for mapping read-only slices across a provided [`TaskPool`].
+/// Provides helpers for processing immutable slices with a [`TaskPool`].
+///
+/// Work is split into independent chunks and collected back in chunk order.
 pub trait ParallelSlice<T: Sync>: AsRef<[T]> {
     /// Splits the slice in chunks of size `chunks_size` or less and maps the chunks
     /// in parallel across the provided `task_pool`.
@@ -16,6 +18,10 @@ pub trait ParallelSlice<T: Sync>: AsRef<[T]> {
     /// first argument, and the chunk as the second argument.
     ///
     /// Returns a `Vec` of the mapped results in the same order as the input.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `chunk_size` is `0`.
     ///
     /// # Example
     ///
@@ -66,6 +72,10 @@ pub trait ParallelSlice<T: Sync>: AsRef<[T]> {
     ///
     /// Returns a `Vec` of the mapped results in the same order as the input.
     ///
+    /// # Panics
+    ///
+    /// Panics if `max_tasks` is `Some(0)`.
+    ///
     /// # Example
     ///
     /// ```
@@ -113,7 +123,9 @@ impl<S, T: Sync> ParallelSlice<T> for S where S: AsRef<[T]> {}
 // -----------------------------------------------------------------------------
 // ParallelSliceMut
 
-/// Provides functions for mapping mutable slices across a provided [`TaskPool`].
+/// Provides helpers for processing mutable slices with a [`TaskPool`].
+///
+/// Work is split into disjoint chunks and collected back in chunk order.
 pub trait ParallelSliceMut<T: Send>: AsMut<[T]> {
     /// Splits the slice in chunks of size `chunks_size` or less and maps the chunks
     /// in parallel across the provided `task_pool`.
@@ -124,6 +136,10 @@ pub trait ParallelSliceMut<T: Send>: AsMut<[T]> {
     /// first argument, and the chunk as the second argument.
     ///
     /// Returns a `Vec` of the mapped results in the same order as the input.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `chunk_size` is `0`.
     ///
     /// # Example
     ///
@@ -176,6 +192,10 @@ pub trait ParallelSliceMut<T: Send>: AsMut<[T]> {
     /// first argument, and the chunk as the second argument.
     ///
     /// Returns a `Vec` of the mapped results in the same order as the input.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `max_tasks` is `Some(0)`.
     ///
     /// # Example
     ///

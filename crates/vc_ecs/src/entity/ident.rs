@@ -114,7 +114,7 @@ impl EntityGeneration {
         Self(self.0.wrapping_add(versions))
     }
 
-    /// Identical to [`add`](Self::add) but also returns a `bool` indicating if
+    /// Identical to [`wrapping_add`](Self::wrapping_add) but also returns a `bool` indicating if
     /// after these `versions`, one such version could conflict with a previous one.
     ///
     /// If this happens, this will no longer uniquely identify a version of an
@@ -245,7 +245,7 @@ impl Entity {
 
     /// Creates an `Entity` from its raw `u64` representation.
     ///
-    /// This is the inverse of [`to_bits()`].
+    /// This is the inverse of [`Entity::to_bits`].
     ///
     /// # Panics
     ///

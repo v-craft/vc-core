@@ -96,6 +96,27 @@ impl<const N: usize, const K: usize> BloomFilter<N, K> {
         }
     }
 
+    /// Clears the Bloom filter, resetting all bits to 0.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_utils::extra::BloomFilter;
+    /// let mut filter = BloomFilter::<2>::new();
+    ///
+    /// filter.insert(&42);
+    /// assert!(filter.contains(&42));
+    ///
+    /// filter.clear();
+    /// assert!(!filter.contains(&42));
+    /// ```
+    pub fn clear(&mut self) {
+        #[expect(unsafe_code, reason = "write_bytes is faster then for_each")]
+        unsafe {
+            core::ptr::write_bytes(self.bits.as_mut_ptr(), 0, N);
+        }
+    }
+
     /// Checks whether the item **might** be in the filter.
     ///
     /// Returns `false` if the item is **definitely not** in the filter.

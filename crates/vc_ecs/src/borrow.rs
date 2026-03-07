@@ -13,9 +13,14 @@ use crate::tick::{TicksSliceMut, TicksSliceRef};
 // -----------------------------------------------------------------------------
 // ResRef
 
-/// A thin shared reference to a Sync resource.
+/// A thin shared reference to a `Send + Sync` resource.
 ///
-/// Provides read-only access to a resource **without** change detection.
+/// This is the lightweight resource view used when a system only needs immutable
+/// access and does not need change detection. It is also returned by
+/// [`crate::world::World::get_resource`].
+///
+/// Prefer [`ResRef`] when you need to inspect whether the resource changed since
+/// the last system run.
 pub struct Res<'w, T: Resource + Sync> {
     pub(crate) value: &'w T,
 }
@@ -23,9 +28,10 @@ pub struct Res<'w, T: Resource + Sync> {
 // -----------------------------------------------------------------------------
 // ResRef
 
-/// A shared reference to a Sync resource.
+/// A shared reference to a `Send + Sync` resource with change detection.
 ///
-/// Provides read-only access to a resource with change detection.
+/// This is the read-only resource parameter for systems that need change ticks,
+/// or the wrapper returned by [`crate::world::World::get_resource_ref`].
 pub struct ResRef<'w, T: Resource + Sync> {
     pub(crate) value: &'w T,
     pub(crate) ticks: TicksRef<'w>,
@@ -34,42 +40,48 @@ pub struct ResRef<'w, T: Resource + Sync> {
 // -----------------------------------------------------------------------------
 // ResMut
 
-/// An exclusive reference to a Sync resource.
+/// An exclusive reference to a `Send` resource with change detection.
 ///
-/// Provides mutable access to a resource with change detection.
-pub struct ResMut<'w, T: Resource + Sync> {
+/// This is the mutable resource parameter for systems and the wrapper returned by
+/// [`crate::world::World::get_resource_mut`]. Mutable access participates in the
+/// ECS borrow rules, so no other system can read or write the same resource at
+/// the same time.
+pub struct ResMut<'w, T: Resource + Send> {
     pub(crate) value: &'w mut T,
     pub(crate) ticks: TicksMut<'w>,
 }
 
 // -----------------------------------------------------------------------------
-// NonSync
+// NonSend
 
-/// A shared reference to a !Sync resource.
+/// A thin shared reference to a `!Sync` resource.
 ///
-/// Provides read-only access to a resource without change detection.
-pub struct NonSync<'w, T: Resource> {
+/// `NonSend` parameters can only be fetched on the world's main thread. Use this
+/// variant when immutable access is enough and change detection is not needed.
+pub struct NonSend<'w, T: Resource> {
     pub(crate) value: &'w T,
 }
 
 // -----------------------------------------------------------------------------
-// NonSyncRef
+// NonSendRef
 
-/// A shared reference to a !Sync resource.
+/// A shared reference to a `!Sync` resource with change detection.
 ///
-/// Provides read-only access to a resource with change detection.
-pub struct NonSyncRef<'w, T: Resource> {
+/// This behaves like [`ResRef`] but marks the containing system as main-thread
+/// only.
+pub struct NonSendRef<'w, T: Resource> {
     pub(crate) value: &'w T,
     pub(crate) ticks: TicksRef<'w>,
 }
 
 // -----------------------------------------------------------------------------
-// NonSyncMut
+// NonSendMut
 
-/// An exclusive reference to a !Sync resource.
+/// An exclusive reference to a `!Send` resource with change detection.
 ///
-/// Provides mutable access to a resource with change detection.
-pub struct NonSyncMut<'w, T: Resource> {
+/// This mutable view is restricted to the main thread and prevents any concurrent
+/// access to the same resource while the system runs.
+pub struct NonSendMut<'w, T: Resource> {
     pub(crate) value: &'w mut T,
     pub(crate) ticks: TicksMut<'w>,
 }
@@ -165,7 +177,7 @@ pub struct UntypedSliceMut<'w> {
 // -----------------------------------------------------------------------------
 // From
 
-impl<'w, T: Resource + Sync> From<ResMut<'w, T>> for ResRef<'w, T> {
+impl<'w, T: Resource + Send + Sync> From<ResMut<'w, T>> for ResRef<'w, T> {
     #[inline]
     fn from(other: ResMut<'w, T>) -> Self {
         Self {
@@ -175,7 +187,7 @@ impl<'w, T: Resource + Sync> From<ResMut<'w, T>> for ResRef<'w, T> {
     }
 }
 
-impl<'w, T: Resource + Sync> From<ResMut<'w, T>> for Mut<'w, T> {
+impl<'w, T: Resource + Send> From<ResMut<'w, T>> for Mut<'w, T> {
     #[inline]
     fn from(other: ResMut<'w, T>) -> Mut<'w, T> {
         Mut {
@@ -195,9 +207,9 @@ impl<'w, T: Resource + Sync> From<ResRef<'w, T>> for Ref<'w, T> {
     }
 }
 
-impl<'w, T: Resource> From<NonSyncMut<'w, T>> for NonSyncRef<'w, T> {
+impl<'w, T: Resource> From<NonSendMut<'w, T>> for NonSendRef<'w, T> {
     #[inline]
-    fn from(other: NonSyncMut<'w, T>) -> Self {
+    fn from(other: NonSendMut<'w, T>) -> Self {
         Self {
             value: other.value,
             ticks: other.ticks.into(),
@@ -205,9 +217,9 @@ impl<'w, T: Resource> From<NonSyncMut<'w, T>> for NonSyncRef<'w, T> {
     }
 }
 
-impl<'w, T: Resource> From<NonSyncMut<'w, T>> for Mut<'w, T> {
+impl<'w, T: Resource> From<NonSendMut<'w, T>> for Mut<'w, T> {
     #[inline]
-    fn from(other: NonSyncMut<'w, T>) -> Mut<'w, T> {
+    fn from(other: NonSendMut<'w, T>) -> Mut<'w, T> {
         Mut {
             value: other.value,
             ticks: other.ticks,
@@ -215,9 +227,9 @@ impl<'w, T: Resource> From<NonSyncMut<'w, T>> for Mut<'w, T> {
     }
 }
 
-impl<'w, T: Resource> From<NonSyncRef<'w, T>> for Ref<'w, T> {
+impl<'w, T: Resource> From<NonSendRef<'w, T>> for Ref<'w, T> {
     #[inline]
-    fn from(other: NonSyncRef<'w, T>) -> Self {
+    fn from(other: NonSendRef<'w, T>) -> Self {
         Self {
             value: other.value,
             ticks: other.ticks,
@@ -288,7 +300,7 @@ impl<'w> From<UntypedSliceMut<'w>> for UntypedSliceRef<'w> {
 // -----------------------------------------------------------------------------
 // IntoIterator
 
-impl<'w, 'a, T: Resource + Sync> IntoIterator for &'a mut ResMut<'w, T>
+impl<'w, 'a, T: Resource + Send> IntoIterator for &'a mut ResMut<'w, T>
 where
     &'a mut T: IntoIterator,
 {
@@ -302,7 +314,7 @@ where
     }
 }
 
-impl<'w, 'a, T: Resource + Sync> IntoIterator for &'a ResMut<'w, T>
+impl<'w, 'a, T: Resource + Send> IntoIterator for &'a ResMut<'w, T>
 where
     &'a T: IntoIterator,
 {
@@ -341,7 +353,7 @@ where
     }
 }
 
-impl<'w, 'a, T: Resource> IntoIterator for &'a mut NonSyncMut<'w, T>
+impl<'w, 'a, T: Resource> IntoIterator for &'a mut NonSendMut<'w, T>
 where
     &'a mut T: IntoIterator,
 {
@@ -355,7 +367,7 @@ where
     }
 }
 
-impl<'w, 'a, T: Resource> IntoIterator for &'a NonSyncMut<'w, T>
+impl<'w, 'a, T: Resource> IntoIterator for &'a NonSendMut<'w, T>
 where
     &'a T: IntoIterator,
 {
@@ -368,7 +380,7 @@ where
     }
 }
 
-impl<'w, 'a, T: Resource> IntoIterator for &'a NonSyncRef<'w, T>
+impl<'w, 'a, T: Resource> IntoIterator for &'a NonSendRef<'w, T>
 where
     &'a T: IntoIterator,
 {
@@ -381,7 +393,7 @@ where
     }
 }
 
-impl<'w, 'a, T: Resource> IntoIterator for &'a NonSync<'w, T>
+impl<'w, 'a, T: Resource> IntoIterator for &'a NonSend<'w, T>
 where
     &'a T: IntoIterator,
 {
@@ -449,12 +461,12 @@ macro_rules! impl_debug {
     };
 }
 
-impl_debug!(ResMut<'w, T> Resource Sync);
+impl_debug!(ResMut<'w, T> Resource Send);
 impl_debug!(ResRef<'w, T> Resource Sync);
 impl_debug!(Res<'w, T> Resource Sync);
-impl_debug!(NonSyncMut<'w, T> Resource);
-impl_debug!(NonSyncRef<'w, T> Resource);
-impl_debug!(NonSync<'w, T> Resource);
+impl_debug!(NonSendMut<'w, T> Resource);
+impl_debug!(NonSendRef<'w, T> Resource);
+impl_debug!(NonSend<'w, T> Resource);
 impl_debug!(Mut<'w, T>);
 impl_debug!(Ref<'w, T>);
 
@@ -524,7 +536,7 @@ macro_rules! impl_ref_methods {
     };
 }
 
-impl_ref_methods!(NonSyncRef<'w, T>, T, Resource);
+impl_ref_methods!(NonSendRef<'w, T>, T, Resource);
 impl_ref_methods!(ResRef<'w, T>, T, Resource Sync);
 impl_ref_methods!(Ref<'w, T>, T,);
 
@@ -542,7 +554,7 @@ impl<'w, T: Resource + Sync> Res<'w, T> {
     }
 }
 
-impl<'w, T: Resource> NonSync<'w, T> {
+impl<'w, T: Resource> NonSend<'w, T> {
     /// Returns the inner reference `&T` with the same lifetime.
     #[inline(always)]
     pub fn into_inner(self) -> &'w T {
@@ -640,8 +652,8 @@ macro_rules! impl_mut_methods {
     };
 }
 
-impl_mut_methods!(ResMut<'w, T>, T, Resource Sync);
-impl_mut_methods!(NonSyncMut<'w, T>, T, Resource);
+impl_mut_methods!(ResMut<'w, T>, T, Resource Send);
+impl_mut_methods!(NonSendMut<'w, T>, T, Resource);
 impl_mut_methods!(Mut<'w, T>, T,);
 
 // -----------------------------------------------------------------------------
@@ -675,9 +687,9 @@ macro_rules! impl_change_detection {
 }
 
 impl_change_detection!(ResRef<'w, T>, T, Resource Sync);
-impl_change_detection!(ResMut<'w, T>, T, Resource Sync);
-impl_change_detection!(NonSyncRef<'w, T>, T, Resource);
-impl_change_detection!(NonSyncMut<'w, T>, T, Resource);
+impl_change_detection!(ResMut<'w, T>, T, Resource Send);
+impl_change_detection!(NonSendRef<'w, T>, T, Resource);
+impl_change_detection!(NonSendMut<'w, T>, T, Resource);
 impl_change_detection!(Ref<'w, T>, T,);
 impl_change_detection!(Mut<'w, T>, T,);
 
@@ -705,11 +717,11 @@ macro_rules! impl_deref {
 }
 
 impl_deref!(ResRef<'w, T>, T, Resource Sync);
-impl_deref!(ResMut<'w, T>, T, Resource Sync);
+impl_deref!(ResMut<'w, T>, T, Resource Send);
 impl_deref!(Res<'w, T>, T, Resource Sync);
-impl_deref!(NonSyncRef<'w, T>, T, Resource);
-impl_deref!(NonSyncMut<'w, T>, T, Resource);
-impl_deref!(NonSync<'w, T>, T, Resource);
+impl_deref!(NonSendRef<'w, T>, T, Resource);
+impl_deref!(NonSendMut<'w, T>, T, Resource);
+impl_deref!(NonSend<'w, T>, T, Resource);
 impl_deref!(Ref<'w, T>, T,);
 impl_deref!(Mut<'w, T>, T,);
 
@@ -736,8 +748,8 @@ macro_rules! impl_deref_mut {
     }
 }
 
-impl_deref_mut!(ResMut<'w, T>, T, Resource Sync);
-impl_deref_mut!(NonSyncMut<'w, T>, T, Resource);
+impl_deref_mut!(ResMut<'w, T>, T, Resource Send);
+impl_deref_mut!(NonSendMut<'w, T>, T, Resource);
 impl_deref_mut!(Mut<'w, T>, T,);
 
 // -----------------------------------------------------------------------------
@@ -1028,7 +1040,7 @@ impl<'w> UntypedRef<'w> {
     /// # Safety
     /// `T` must be the erased pointee type for this [`UntypedRef`].
     #[inline(always)]
-    pub unsafe fn into_res<T: Resource + Sync>(self) -> ResRef<'w, T> {
+    pub unsafe fn into_resource<T: Resource + Sync>(self) -> ResRef<'w, T> {
         self.value.debug_assert_aligned::<T>();
         ResRef {
             value: unsafe { self.value.as_ref() },
@@ -1036,14 +1048,14 @@ impl<'w> UntypedRef<'w> {
         }
     }
 
-    /// Specifies the reference type and converts self to a [`NonSync`].
+    /// Specifies the reference type and converts self to a [`NonSend`].
     ///
     /// # Safety
     /// `T` must be the erased pointee type for this [`UntypedRef`].
     #[inline(always)]
-    pub unsafe fn into_non_sync<T: Resource>(self) -> NonSyncRef<'w, T> {
+    pub unsafe fn into_non_send<T: Resource>(self) -> NonSendRef<'w, T> {
         self.value.debug_assert_aligned::<T>();
-        NonSyncRef {
+        NonSendRef {
             value: unsafe { self.value.as_ref() },
             ticks: self.ticks,
         }
@@ -1105,7 +1117,7 @@ impl<'w> UntypedMut<'w> {
     /// # Safety
     /// `T` must be the erased pointee type for this [`UntypedMut`].
     #[inline(always)]
-    pub unsafe fn into_res<T: Resource + Sync>(self) -> ResMut<'w, T> {
+    pub unsafe fn into_resource<T: Resource + Send>(self) -> ResMut<'w, T> {
         self.value.debug_assert_aligned::<T>();
         ResMut {
             value: unsafe { self.value.consume() },
@@ -1113,14 +1125,14 @@ impl<'w> UntypedMut<'w> {
         }
     }
 
-    /// Specifies the reference type and converts self to a [`NonSyncMut`].
+    /// Specifies the reference type and converts self to a [`NonSendMut`].
     ///
     /// # Safety
     /// `T` must be the erased pointee type for this [`UntypedRef`].
     #[inline(always)]
-    pub unsafe fn into_non_sync<T: Resource>(self) -> NonSyncMut<'w, T> {
+    pub unsafe fn into_non_send<T: Resource>(self) -> NonSendMut<'w, T> {
         self.value.debug_assert_aligned::<T>();
-        NonSyncMut {
+        NonSendMut {
             value: unsafe { self.value.consume() },
             ticks: self.ticks,
         }

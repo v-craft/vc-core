@@ -633,29 +633,6 @@ impl<'a> OwningPtr<'a> {
         Self(NonNull::from_mut(r).cast(), PhantomData)
     }
 
-    /// Returns an optional drop function for type `T`.
-    ///
-    /// If `T` implements `Drop` or contains fields that need dropping,
-    /// this returns `Some` with a function that can drop a `T` from
-    /// an [`OwningPtr`]. Otherwise, it returns `None`.
-    #[inline(always)]
-    pub const fn drop_fn_of<T>() -> Option<unsafe fn(OwningPtr<'_>)> {
-        /// # Safety
-        /// Ensure by caller.
-        unsafe fn drop_fn<T>(ptr: OwningPtr<'_>) {
-            ptr.debug_assert_aligned::<T>();
-            unsafe {
-                ptr.drop_as::<T>();
-            }
-        }
-
-        if ::core::mem::needs_drop::<T>() {
-            Some(drop_fn::<T>)
-        } else {
-            None
-        }
-    }
-
     /// Consumes the [`OwningPtr`] to drop the underlying data of type `T`.
     ///
     /// The caller must ensure the pointer is suitable for `T`.
@@ -731,23 +708,6 @@ impl<'a> OwningPtr<'a> {
     pub const unsafe fn write<T>(&mut self, value: T) {
         unsafe {
             ptr::write(self.0.as_ptr() as *mut T, value);
-        }
-    }
-
-    /// Copies `count` bytes from `src` into the memory pointed to by this pointer.
-    ///
-    /// This is equivalent to `ptr::copy_nonoverlapping`; the regions must not overlap.
-    ///
-    /// # Safety
-    /// - `self` must be valid for writes of `count` bytes.
-    /// - `src` must be valid for reads of `count` bytes.
-    /// - The source and destination regions must not overlap.
-    /// - The caller must ensure the written bytes are later interpreted with a
-    ///   compatible type and alignment.
-    #[inline(always)]
-    pub const unsafe fn write_bytes(&mut self, src: *const u8, count: usize) {
-        unsafe {
-            ptr::copy_nonoverlapping::<u8>(src, self.0.as_ptr(), count);
         }
     }
 

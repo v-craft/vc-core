@@ -32,8 +32,6 @@ use crate::world::{UnsafeWorld, World};
 ///
 /// - [`COMPONENTS_ARE_DENSE`](Self::COMPONENTS_ARE_DENSE) allows optimizations
 ///   when all accessed components use dense storage
-/// - [`WORLD_MODE`](Self::WORLD_MODE) determines thread-safety requirements
-/// - Cache methods enable pre-computation to speed up entity iteration
 pub unsafe trait QueryData {
     /// Static data shared across all query instances.
     ///

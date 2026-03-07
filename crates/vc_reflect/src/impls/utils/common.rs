@@ -9,7 +9,7 @@ use crate::info::VariantKind;
 use crate::ops::{ApplyError, ReflectRef};
 use crate::ops::{Array, Enum, List, Map, Set, Struct, Tuple, TupleStruct};
 
-/// A function use for implementing [`Reflect::`]
+/// A function use for implementing [`Reflect::apply`]
 ///
 /// # Rules
 ///
@@ -202,7 +202,7 @@ pub fn array_debug(dyn_array: &dyn Array, f: &mut fmt::Formatter<'_>) -> fmt::Re
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::`]
+/// A function use for implementing [`Reflect::apply`]
 ///
 /// # Rules
 ///
@@ -392,7 +392,7 @@ pub fn tuple_debug(dyn_tuple: &dyn Tuple, f: &mut fmt::Formatter<'_>) -> fmt::Re
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::`] .
+/// A function use for implementing [`Reflect::apply`] .
 ///
 /// # Rules
 ///
@@ -590,7 +590,7 @@ pub fn struct_debug(dyn_struct: &dyn Struct, f: &mut fmt::Formatter<'_>) -> fmt:
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::`] .
+/// A function use for implementing [`Reflect::apply`] .
 ///
 /// # Rules
 ///
@@ -869,7 +869,7 @@ pub fn enum_debug(dyn_enum: &dyn Enum, f: &mut fmt::Formatter<'_>) -> fmt::Resul
     }
 }
 
-/// A function use for implementing [`Reflect::`] .
+/// A function use for implementing [`Reflect::apply`] .
 ///
 /// # Rules
 ///
@@ -1077,7 +1077,7 @@ pub fn list_debug(dyn_list: &dyn List, f: &mut fmt::Formatter<'_>) -> fmt::Resul
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::`] .
+/// A function use for implementing [`Reflect::apply`] .
 ///
 /// # Rules
 ///
@@ -1301,7 +1301,7 @@ pub fn map_debug(dyn_map: &dyn Map, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::`] .
+/// A function use for implementing [`Reflect::apply`] .
 ///
 /// # Rules
 ///
@@ -1496,7 +1496,7 @@ pub fn set_debug(dyn_set: &dyn Set, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     debug.finish()
 }
 
-/// A function use for implementing [`Reflect::`] .
+/// A function use for implementing [`Reflect::apply`] .
 ///
 /// # Rules
 ///

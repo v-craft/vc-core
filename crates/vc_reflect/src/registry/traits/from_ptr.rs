@@ -9,7 +9,7 @@ use crate::registry::FromType;
 
 #[derive(Clone)]
 pub struct ReflectFromPtr {
-    ty_id: TypeId,
+    type_id: TypeId,
     from_ptr: unsafe fn(Ptr) -> &dyn Reflect,
     from_ptr_mut: unsafe fn(PtrMut) -> &mut dyn Reflect,
 }
@@ -17,7 +17,7 @@ pub struct ReflectFromPtr {
 impl ReflectFromPtr {
     /// Returns the [`TypeId`] that the [`ReflectFromPtr`] was constructed for.
     pub fn type_id(&self) -> TypeId {
-        self.ty_id
+        self.type_id
     }
 
     /// Convert `Ptr` into `&dyn Reflect`.
@@ -25,7 +25,7 @@ impl ReflectFromPtr {
     /// # Safety
     ///
     /// `val` must be a pointer to value of the type that the [`ReflectFromPtr`] was constructed for.
-    /// This can be verified by checking that the type id returned by [`ReflectFromPtr::ty_id`] is the expected one.
+    /// This can be verified by checking that the type id returned by [`ReflectFromPtr::type_id`] is the expected one.
     pub unsafe fn as_reflect<'a>(&self, val: Ptr<'a>) -> &'a dyn Reflect {
         // SAFETY: contract uphold by the caller.
         unsafe { (self.from_ptr)(val) }
@@ -36,7 +36,7 @@ impl ReflectFromPtr {
     /// # Safety
     ///
     /// `val` must be a pointer to a value of the type that the [`ReflectFromPtr`] was constructed for
-    /// This can be verified by checking that the type id returned by [`ReflectFromPtr::ty_id`] is the expected one.
+    /// This can be verified by checking that the type id returned by [`ReflectFromPtr::type_id`] is the expected one.
     pub unsafe fn as_reflect_mut<'a>(&self, val: PtrMut<'a>) -> &'a mut dyn Reflect {
         // SAFETY: contract uphold by the caller.
         unsafe { (self.from_ptr_mut)(val) }
@@ -70,7 +70,7 @@ impl ReflectFromPtr {
 impl<T: Typed + Reflect> FromType<T> for ReflectFromPtr {
     fn from_type() -> Self {
         ReflectFromPtr {
-            ty_id: TypeId::of::<T>(),
+            type_id: TypeId::of::<T>(),
             from_ptr: |ptr| {
                 // SAFETY: `from_ptr_mut` is either called in `ReflectFromPtr::as_reflect`
                 // or returned by `ReflectFromPtr::from_ptr`, both lay out the invariants

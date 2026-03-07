@@ -51,6 +51,76 @@ Three specialized task pools are provided for different workloads:
 Internally, all are `TaskPool` instances but can be configured with different worker counts
 to optimize overall efficiency.
 
+## Examples
+
+### Spawn and await a `Send` task
+
+```rust
+use vc_task::{TaskPool, block_on};
+
+let pool = TaskPool::new();
+let task = pool.spawn(async { 21 * 2 });
+
+assert_eq!(block_on(task), 42);
+```
+
+### Borrow stack data with `scope`
+
+```rust
+use vc_task::TaskPool;
+
+let pool = TaskPool::new();
+let values = [1_u32, 2, 3, 4];
+
+let mut doubled = pool.scope(|scope| {
+  for value in &values {
+    scope.spawn(async move { *value * 2 });
+  }
+});
+
+doubled.sort_unstable();
+assert_eq!(doubled, vec![2, 4, 6, 8]);
+```
+
+### Drive a `!Send` task on the main thread
+
+```rust
+use core::cell::Cell;
+use std::rc::Rc;
+use vc_task::{TaskPool, block_on};
+
+let pool = TaskPool::new();
+let value = Rc::new(Cell::new(0));
+let value_for_task = Rc::clone(&value);
+
+let task = pool.spawn_local(async move {
+  value_for_task.set(7);
+  value_for_task.get()
+});
+
+pool.with_local_executor(|executor| {
+  while executor.try_tick() {}
+});
+
+assert_eq!(block_on(task), 7);
+assert_eq!(value.get(), 7);
+```
+
+### Process a slice in parallel
+
+```rust
+use vc_task::{ParallelSlice, TaskPool};
+
+let pool = TaskPool::new();
+let values = (0..12).collect::<Vec<u32>>();
+
+let chunk_sums = values.par_chunk_map(&pool, 4, |_index, chunk| {
+  chunk.iter().copied().sum::<u32>()
+});
+
+assert_eq!(chunk_sums, vec![6, 22, 38]);
+```
+
 ## Platform Support
 
 ### `no_std` Support

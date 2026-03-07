@@ -157,8 +157,6 @@ impl Archetypes {
 
 impl Archetypes {
     /// Returns the number of registered archetypes.
-    ///
-    /// Similar to [`Archetypes::version`] .
     #[inline]
     pub fn len(&self) -> usize {
         self.arches.len()

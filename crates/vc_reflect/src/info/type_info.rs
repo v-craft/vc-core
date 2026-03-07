@@ -323,10 +323,7 @@ impl TypeInfo {
     /// struct A;
     ///
     /// let info = A::type_info();
-    ///
-    /// if let Some(docs) = info.docs() {
-    ///     unreachable!();
-    /// }
+    /// assert!(info.docs.is_none());
     /// ```
     #[cfg_attr(not(feature = "reflect_docs"), inline(always))]
     pub const fn docs(&self) -> Option<&str> {

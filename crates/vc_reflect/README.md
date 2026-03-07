@@ -68,62 +68,66 @@ assert_eq!(info.index_of("name"), Some(0));
 assert_eq!(info.index_of("health"), Some(2));
 ```
 
-### Register a type and construct it dynamically
+### Read nested data with path access
+
+```rust
+use vc_reflect::derive::Reflect;
+use vc_reflect::access::{PathAccessor, ReflectPathAccess};
+
+#[derive(Reflect)]
+struct Inventory {
+    coins: u32,
+    slots: Vec<Option<&'static str>>,
+}
+
+let inventory = Inventory {
+    coins: 42,
+    slots: vec![Some("Sword"), None],
+};
+
+// Once access
+assert_eq!(*inventory.access_as::<u32>(".coins").unwrap(), 42);
+
+// Reuseable accessor
+let accessor = PathAccessor::parse_static(".slots[0]").unwrap();
+let first_slot = accessor.access_as::<Option<String>>(&inventory).unwrap();
+assert_eq!(first_slot, Some("Sword"));
+```
+
+### Register a type and operate it dynamically
 
 ```rust
 use core::any::TypeId;
-use vc_reflect::{
-    derive::Reflect,
-    registry::{ReflectDefault, TypeRegistry},
-};
+use vc_reflect::{Reflect, derive::Reflect};
+use vc_reflect::ops::Struct;
+use vc_reflect::registry::{ReflectDefault, TypeRegistry};
 
 #[derive(Reflect, Default)]
-#[reflect(default)]
+#[reflect(default, auto_register)]
 struct Enemy {
     species: String,
     hp: u32,
 }
 
+let type_id = TypeId::of::<Enemy>();
+
+// Dynamic operation
+
 let mut registry = TypeRegistry::default();
-registry.register::<Enemy>();
+registry.auto_register();
 
-assert!(registry.get_type_info(TypeId::of::<Enemy>()).is_some());
+assert!(registry.contains(type_id));
 
-let default_ctor = registry
-    .get_type_trait::<ReflectDefault>(TypeId::of::<Enemy>())
-    .unwrap();
+let default_ctor = registry.get_type_trait::<ReflectDefault>(type_id).unwrap();
+let mut dyn_obj: Box<dyn Reflect> = default_ctor.default();
+let dyn_struct: &mut dyn Struct = dyn_obj.reflect_mut().as_struct().unwrap();
+dyn_struct.field_mut("hp").unwrap().apply(&100u32);
 
-let enemy = default_ctor.default().take::<Enemy>().unwrap();
+// Downcast
 
+let enemy: Enemy = dyn_obj.take::<Enemy>().unwrap();
 assert!(enemy.species.is_empty());
-assert_eq!(enemy.hp, 0);
-```
-
-### Read nested data with path access
-
-```rust
-use vc_reflect::{
-    access::{PathAccessor, ReflectPathAccess},
-    derive::Reflect,
-};
-
-#[derive(Reflect)]
-struct Inventory {
-    coins: u32,
-    slots: Vec<Option<String>>,
-}
-
-let inventory = Inventory {
-    coins: 42,
-    slots: vec![Some("Sword".to_string()), None],
-};
-
-assert_eq!(*inventory.access_as::<u32>(".coins").unwrap(), 42);
-
-let accessor = PathAccessor::parse_static(".slots[0]").unwrap();
-let first_slot = accessor.access_as::<Option<String>>(&inventory).unwrap();
-
-assert_eq!(first_slot.as_deref(), Some("Sword"));
+assert_eq!(enemy.hp, 100);
 ```
 
 These examples cover the most common entry points:

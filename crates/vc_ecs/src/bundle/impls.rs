@@ -24,12 +24,12 @@ use crate::component::{Component, ComponentCollector, ComponentWriter};
 ///    the collected component set.
 /// 3. **Storage Allocation**: Space is allocated in the appropriate archetype.
 /// 4. **Component Writing**: Component values are written to storage via
-///    [`write_fields`](Self::write_fields) and [`write_required`](Self::write_required).
+///    [`write_explicit`](Self::write_explicit) and [`write_required`](Self::write_required).
 ///
 /// # Writing Semantics
 /// The bundle trait distinguishes between two types of component writes:
 ///
-/// ## Explicit Fields ([`write_fields`](Self::write_fields))
+/// ## Explicit Fields ([`write_explicit`](Self::write_explicit))
 /// - Writes components that are explicitly provided in the bundle
 /// - Later fields override earlier ones if duplicates occur
 /// - Used for primary component initialization
@@ -52,7 +52,7 @@ use crate::component::{Component, ComponentCollector, ComponentWriter};
 /// - Registration order does **not** need to match write order
 ///
 /// ## Writing Safety
-/// - [`write_fields`](Self::write_fields) and [`write_required`](Self::write_required)
+/// - [`write_explicit`](Self::write_explicit) and [`write_required`](Self::write_required)
 ///   must write components at the correct memory offsets
 /// - Writes must not overflow the allocated storage
 /// - Component data must be properly aligned
@@ -66,7 +66,7 @@ pub unsafe trait Bundle: Sized + Sync + Send + 'static {
     /// with this bundle.
     ///
     /// # Safety
-    /// - Every component type written in [`write_fields`](Self::write_fields) or
+    /// - Every component type written in [`write_explicit`](Self::write_explicit) or
     ///   [`write_required`](Self::write_required) **must** be registered here.
     /// - Registering extra component types that are never written is disallowed.
     unsafe fn collect_components(collector: &mut ComponentCollector);

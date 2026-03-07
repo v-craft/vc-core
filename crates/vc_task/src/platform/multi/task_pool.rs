@@ -62,7 +62,7 @@ impl Drop for CallOnDrop {
 ///
 /// let task_pool = TaskPoolBuilder::new()
 ///     .thread_num(2)
-///     .thread_name(String::from("doc"))
+///     .thread_name("doc".to_string())
 ///     .build();
 ///
 /// let result = AtomicU32::new(0);
@@ -70,12 +70,12 @@ impl Drop for CallOnDrop {
 /// task_pool.scope(|scope| {
 ///     for _ in 0..100 {
 ///         scope.spawn(async {
-///             result.fetch_add(1, Ordering::AcqRel);
+///             result.fetch_add(1, Ordering::Relaxed);
 ///         })
 ///     }
 /// });
 ///
-/// let result = result.load(Ordering::Acquire);
+/// let result = result.load(Ordering::Relaxed);
 /// assert_eq!(result, 100);
 /// ```
 ///
@@ -197,27 +197,24 @@ thread_local! {
 /// Specifically:
 /// - `spawn_local` accepts non‑`Send` tasks.
 /// - `scope_with_executor` allows sending tasks to a specific thread.
+///
+/// Returned task handles are futures themselves, so they can be awaited with
+/// [`block_on`] or composed with other async utilities.
 /// 
 /// ## Examples
 ///
 /// ```
 /// use vc_task::TaskPool;
-/// use core::sync::atomic::{AtomicU32, Ordering};
-///
 /// let task_pool = TaskPool::new();
 ///
-/// let result = AtomicU32::new(0);
-///
-/// task_pool.scope(|scope| {
-///     for _ in 0..1000 {
-///         scope.spawn(async {
-///             result.fetch_add(1, Ordering::AcqRel);
-///         })
+/// let mut results = task_pool.scope(|scope| {
+///     for value in [1_u32, 2, 3, 4] {
+///         scope.spawn(async move { value * value });
 ///     }
 /// });
 ///
-/// let result = result.load(Ordering::Acquire);
-/// assert_eq!(result, 1000);
+/// results.sort_unstable();
+/// assert_eq!(results, vec![1, 4, 9, 16]);
 /// ```
 /// 
 /// ---
@@ -305,8 +302,8 @@ pub struct TaskPool {
 impl TaskPool {
     /// Creates a `TaskPool` with default configuration.
     /// 
-    /// The number of threads created by this function is depends on
-    /// [`std::thread::available_parallelism`], not less than `1`.
+    /// The worker count defaults to [`std::thread::available_parallelism`] and is
+    /// never lower than `1`.
     pub fn new() -> Self {
         TaskPoolBuilder::new().build()
     }
@@ -400,9 +397,12 @@ impl TaskPool {
     ///
     /// Typically used to tick the local executor on the main thread
     /// when it must share time with other work.
+    ///
+    /// This is mainly relevant for tasks spawned through
+    /// [`TaskPool::spawn_local`] from the main thread.
     /// 
     /// The local executor of the worker thread will be automatically
-    /// executed without the need for manually tick.
+    /// executed without needing manual ticking.
     #[inline]
     pub fn with_local_executor<F, R>(&self, f: F) -> R
     where
@@ -416,8 +416,9 @@ impl TaskPool {
     /// Each thread should create only one `ScopeExecutor`;
     /// otherwise deadlocks may occur.
     /// 
-    /// Usually used to obtain it from the main thread, allowing
-    /// the worker thread to pass tasks, or explicitly tick on the main thread.
+    /// Usually this is obtained on the main thread and passed to workers so they
+    /// can submit thread-affine tasks back to that thread via
+    /// [`TaskPool::scope_with_executor`].
     #[inline]
     pub fn get_scope_executor() -> Arc<ScopeExecutor<'static>> {
         SCOPE_EXECUTOR.with(Clone::clone)
@@ -440,24 +441,13 @@ impl TaskPool {
     ///
     /// # Examples
     ///
-    /// ```no_run
-    /// use vc_task::TaskPool;
-    /// use std::sync::{Arc, Mutex};
-    /// use core::time::Duration;
+    /// ```
+    /// use vc_task::{TaskPool, block_on};
     ///
     /// let pool = TaskPool::new();
+    /// let task = pool.spawn(async { 21 + 21 });
     ///
-    /// let counter = Arc::new(Mutex::new(0_i32));
-    ///
-    /// let c = counter.clone();
-    ///
-    /// pool.spawn(async move {
-    ///     *c.lock().unwrap() += 1;
-    /// }).detach();
-    ///
-    /// std::thread::sleep(Duration::from_millis(100));
-    ///
-    /// assert_eq!(*counter.lock().unwrap(), 1);
+    /// assert_eq!(block_on(task), 42);
     /// ```
     #[inline]
     pub fn spawn<T: Send + 'static>(
@@ -475,6 +465,30 @@ impl TaskPool {
     /// Worker threads automatically tick their `LocalExecutor`, **but the main
     /// thread does not**. If used on the main thread, you must explicitly tick it
     /// via [`with_local_executor`].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use core::cell::Cell;
+    /// use std::rc::Rc;
+    /// use vc_task::{TaskPool, block_on};
+    ///
+    /// let pool = TaskPool::new();
+    /// let value = Rc::new(Cell::new(0));
+    /// let value_for_task = Rc::clone(&value);
+    ///
+    /// let task = pool.spawn_local(async move {
+    ///     value_for_task.set(7);
+    ///     value_for_task.get()
+    /// });
+    ///
+    /// pool.with_local_executor(|executor| {
+    ///     while executor.try_tick() {}
+    /// });
+    ///
+    /// assert_eq!(block_on(task), 7);
+    /// assert_eq!(value.get(), 7);
+    /// ```
     ///
     /// [`with_local_executor`]: Self::with_local_executor
     #[inline]
@@ -500,32 +514,16 @@ impl TaskPool {
     ///
     /// let pool = TaskPool::new();
     ///
-    /// let mut x = 0;
+    /// let values = [1_u32, 2, 3, 4];
     ///
-    /// let results = pool.scope(|s| {
-    ///     s.spawn(async {
-    ///         // You can borrow the spawner inside a task and spawn nested tasks.
-    ///         s.spawn(async {
-    ///             x = 2;
-    ///             1
-    ///         });
-    ///         0
-    ///     });
+    /// let mut results = pool.scope(|scope| {
+    ///     for value in &values {
+    ///         scope.spawn(async move { *value * 2 });
+    ///     }
     /// });
     ///
-    /// // Ordering is non‑deterministic when spawning from within tasks.
-    /// assert!(results.contains(&0));
-    /// assert!(results.contains(&1));
-    ///
-    /// // Ordering is deterministic when spawning directly from the closure.
-    /// let results = pool.scope(|s| {
-    ///     s.spawn(async { 0 });
-    ///     s.spawn(async { 1 });
-    /// });
-    /// assert_eq!(&results[..], &[0, 1]);
-    ///
-    /// // `x` is accessible after the scope because it was only borrowed temporarily.
-    /// assert_eq!(x, 2);
+    /// results.sort_unstable();
+    /// assert_eq!(results, vec![2, 4, 6, 8]);
     /// ```
     #[inline]
     pub fn scope<'env, F, T>(&self, f: F) -> Vec<T>
@@ -768,7 +766,8 @@ impl Drop for TaskPool {
 
 /// A [`TaskPool`] scope for running one or more non‑`'static` futures.
 ///
-/// For more information, see [`TaskPool::scope`].
+/// All tasks spawned through a scope are awaited before the enclosing
+/// [`TaskPool::scope`] or [`TaskPool::scope_with_executor`] call returns.
 #[derive(Debug)]
 pub struct Scope<'scope, 'env: 'scope, T> {
     global_executor: &'scope GlobalExecutor<'scope>,

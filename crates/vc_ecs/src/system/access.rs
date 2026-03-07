@@ -55,7 +55,7 @@ impl Debug for AccessTable {
 }
 
 impl AccessTable {
-    /// Creates an empty [`Access`] collection.
+    /// Creates an empty [`AccessTable`] collection.
     pub const fn new() -> Self {
         Self {
             world_mut: false,

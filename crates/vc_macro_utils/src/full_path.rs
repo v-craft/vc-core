@@ -1,7 +1,9 @@
+//! Full path type markers for Rust core items.
+
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
 
-/// Full Path (FP) for [`core::any::Any`]
+/// Full Path (FP) for [`Any`](core::any::Any)
 pub struct AnyFP;
 /// Full Path (FP) for [`Clone`]
 pub struct CloneFP;
@@ -27,7 +29,7 @@ pub struct HashFP;
 pub struct HasherFP;
 /// Full Path (FP) for [`Debug`](core::fmt::Debug)
 pub struct DebugFP;
-/// Full Path (FP) for [`Debug`](core::any::TypeId)
+/// Full Path (FP) for [`TypeId`](core::any::TypeId)
 pub struct TypeIdFP;
 
 impl ToTokens for AnyFP {
