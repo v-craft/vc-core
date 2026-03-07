@@ -280,7 +280,7 @@ impl<'a> ReflectMeta<'a> {
     /// But we only need to explicitly constrain fields with generic parameters.
     ///
     /// Specifically, if `FromReflect` is enabled,
-    /// we need to insert `TypeTraitFromReflect`, so the constraints must also be consistent with `FromReflect`.
+    /// we need to insert `ReflectFromReflect`, so the constraints must also be consistent with `FromReflect`.
     /// (Required that all fields implement `FromReflect`)
     ///
     /// ## Summary

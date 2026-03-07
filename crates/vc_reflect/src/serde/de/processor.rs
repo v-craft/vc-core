@@ -24,11 +24,11 @@ use crate::registry::{TypeMeta, TypeRegistry};
 /// (indicating no support for any type).
 ///
 /// This does not mean that deserialization is not supported, [`DeserializeDriver`] will still
-/// try using [`TypeTraitDeserialize`] and default deserialization methods.
+/// try using [`ReflectDeserialize`] and default deserialization methods.
 ///
 /// See deserialization rules in [`DeserializeDriver`] .
 ///
-/// [`TypeTraitDeserialize`]: crate::registry::TypeTraitDeserialize
+/// [`ReflectDeserialize`]: crate::registry::ReflectDeserialize
 /// [`DeserializeDriver`]: crate::serde::DeserializeDriver
 /// [`&dyn Reflect`]: crate::Reflect
 /// [`&TypeRegistry`]: crate::registry::TypeRegistry

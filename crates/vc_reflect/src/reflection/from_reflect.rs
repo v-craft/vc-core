@@ -172,3 +172,54 @@ impl FromReflect for crate::ops::DynamicEnum {
         }
     }
 }
+
+// -----------------------------------------------------------------------------
+// tests
+
+#[cfg(test)]
+mod tests {
+    use super::FromReflect;
+    use crate::Reflect;
+    use crate::derive::Reflect;
+    use crate::ops::DynamicStruct;
+    use alloc::boxed::Box;
+
+    #[derive(Reflect, PartialEq, Debug)]
+    struct Pair {
+        left: i32,
+        right: bool,
+    }
+
+    #[test]
+    fn take_from_reflect() {
+        let value = Box::new(Pair {
+            left: 3,
+            right: true,
+        }) as Box<dyn Reflect>;
+
+        let pair = Pair::take_from_reflect(value).unwrap();
+        assert_eq!(
+            pair,
+            Pair {
+                left: 3,
+                right: true
+            }
+        );
+    }
+
+    #[test]
+    fn from_reflect() {
+        let mut dynamic = DynamicStruct::new();
+        dynamic.extend("left", 9_i32);
+        dynamic.extend("right", false);
+
+        let pair = Pair::from_reflect(&dynamic).unwrap();
+        assert_eq!(
+            pair,
+            Pair {
+                left: 9,
+                right: false
+            }
+        );
+    }
+}

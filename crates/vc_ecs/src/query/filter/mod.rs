@@ -1,9 +1,9 @@
+mod added;
 mod and;
 mod changed;
 mod or;
 mod with;
 mod without;
-mod added;
 
 pub use added::Added;
 pub use and::And;

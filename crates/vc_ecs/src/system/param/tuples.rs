@@ -1,5 +1,4 @@
-
-use super::{SystemParam, ReadOnlySystemParam};
+use super::{ReadOnlySystemParam, SystemParam};
 use crate::system::AccessTable;
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};

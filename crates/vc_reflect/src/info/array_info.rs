@@ -7,7 +7,7 @@ use crate::info::{Generics, Type, TypeInfo, TypePath, Typed};
 use crate::info::{impl_docs_fn, impl_generic_fn, impl_type_fn};
 use crate::ops::Array;
 
-/// A container for compile-time array infomation.
+/// A container for compile-time array information.
 ///
 /// At present, `ArrayInfo` does not have `CustomAttributes`, which can save memory.
 ///

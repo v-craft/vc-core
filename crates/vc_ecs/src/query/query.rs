@@ -58,7 +58,10 @@ impl<D: QueryData, F: QueryFilter> Debug for Query<'_, '_, D, F> {
 // -----------------------------------------------------------------------------
 // ReadOnlyQuery
 
-unsafe impl<D: ReadOnlyQueryData + 'static, F: QueryFilter + 'static> ReadOnlySystemParam for Query<'_, '_, D, F> {}
+unsafe impl<D: ReadOnlyQueryData + 'static, F: QueryFilter + 'static> ReadOnlySystemParam
+    for Query<'_, '_, D, F>
+{
+}
 
 impl<D: ReadOnlyQueryData, F: QueryFilter> Copy for Query<'_, '_, D, F> {}
 

@@ -76,21 +76,21 @@ impl error::Error for ReflectKindError {}
 ///
 /// # Content
 ///
-/// A `TypeInfo` contains following infomation:
+/// A `TypeInfo` contains the following information:
 ///
-/// - **kind**: as same as [`ReflectKind`], may be `Struct`, `Enum` etc.
-/// - **id**: Unique type identify, [`core::any::TypeId`].
-/// - **name**: type name, module path etc, as same as [`TypePathTable`].
-/// - **generics**: [`Generics`], including type param and const param.
+/// - **kind**: The [`ReflectKind`], such as `Struct` or `Enum`.
+/// - **id**: The unique type identifier, [`core::any::TypeId`].
+/// - **name**: Type naming information, as provided by [`TypePathTable`].
+/// - **generics**: [`Generics`], including type and const parameters.
 /// - **attributes**: [`CustomAttributes`], similar to C# attributes.
-/// - **docs**: type docuement, need **reflect_docs** feature.
+/// - **docs**: Type documentation, available with the `reflect_docs` feature.
 ///
-/// Which can be convert to internal info, for example [`StructInfo`] and [`EnumInfo`],
-/// then you can get more infomation like fileds info and item number.
+/// It can also be converted into more specific metadata types, such as [`StructInfo`]
+/// and [`EnumInfo`], which expose field and variant details.
 ///
 /// # Obtain
 ///
-/// Generally, a type's `TypeInfo` was defined by [`Typed`] trait.
+/// In general, a type's `TypeInfo` is provided by the [`Typed`] trait.
 ///
 /// For any given type, it can be retrieved in one of four ways:
 ///
@@ -102,9 +102,9 @@ impl error::Error for ReflectKindError {}
 /// Each returns a static reference to [`TypeInfo`], but they all have their own use cases.
 ///
 /// - If you know the type at compile time, [`Typed::type_info`] is probably the simplest.
-/// - If you have a `dyn Reflect` you can use [`DynamicTyped::reflect_type_info`]..
+/// - If you have a `dyn Reflect`, use [`DynamicTyped::reflect_type_info`].
 /// - If you only care about data content (such as serialization), then [`Reflect::represented_type_info`] should be used.
-/// - If all you have is a [`TypeId`] or [type path], you will need to get through [`TypeRegistry::get_type_info`].
+/// - If all you have is a [`TypeId`] or [type path], use [`TypeRegistry::get_type_info`].
 ///
 /// You may also opt to use [`TypeRegistry::get_type_info`] in place of the other methods simply because
 /// it can be more performant. This is because those other methods may require attaining a lock on
@@ -153,7 +153,7 @@ macro_rules! impl_cast_method {
 
 macro_rules! impl_is_method {
     ($name:ident : $kind:ident) => {
-        /// Check infomation kind, can be used in const function.
+        /// Checks the metadata kind. Can be used in const functions.
         #[inline]
         pub(crate) const fn $name(&self) -> bool {
             match self {

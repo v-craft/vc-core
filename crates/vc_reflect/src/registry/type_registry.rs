@@ -22,7 +22,7 @@ use crate::registry::{FromType, GetTypeMeta, TypeMeta, TypeTrait};
 /// # Example
 ///
 /// ```
-/// use vc_reflect::registry::{TypeRegistry, TypeTraitDefault};
+/// use vc_reflect::registry::{TypeRegistry, ReflectDefault};
 /// use vc_reflect::info::DynamicTypePath;
 ///
 /// let input = "String";
@@ -30,7 +30,7 @@ use crate::registry::{FromType, GetTypeMeta, TypeMeta, TypeTrait};
 ///
 /// let generator = registry
 ///     .get_with_type_name(input).unwrap()
-///     .get_trait::<TypeTraitDefault>().unwrap();
+///     .get_trait::<ReflectDefault>().unwrap();
 ///
 /// let s = generator.default();
 /// assert_eq!(s.reflect_type_path(), "alloc::string::String");
@@ -146,8 +146,8 @@ impl TypeRegistry {
 
     /// Try add or do nothing.
     ///
-    /// The function will will check if `TypeMeta.type_id()` exists.  
-    /// - If key [`TypeId`] has already exist, the function will do nothing and return `false`.
+    /// This function checks whether `TypeMeta.type_id()` already exists.  
+    /// - If the key [`TypeId`] already exists, the function does nothing and returns `false`.
     /// - If the key [`TypeId`] does not exist, the function will insert value and return `true`.
     ///
     /// This method will _not_ register type dependencies.
@@ -167,8 +167,8 @@ impl TypeRegistry {
 
     /// Insert or **Overwrite** inner TypeTraits.
     ///
-    /// The function will will check if `TypeMeta.type_id()` exists.  
-    /// - If key [`TypeId`] has already exist, the value will be overwritten.
+    /// This function checks whether `TypeMeta.type_id()` already exists.  
+    /// - If the key [`TypeId`] already exists, the value will be overwritten.
     ///   But full_path and type_name table will not be modified.  
     /// - If the key [`TypeId`] does not exist, the value will be inserted.
     ///   And type path will be inserted to full_path and type_name table.
@@ -202,7 +202,7 @@ impl TypeRegistry {
     ///
     /// ```
     /// # use core::any::TypeId;
-    /// # use vc_reflect::{derive::Reflect, registry::{TypeRegistry, TypeTraitDefault}};
+    /// # use vc_reflect::{derive::Reflect, registry::{TypeRegistry, ReflectDefault}};
     /// #[derive(Reflect, Default)]
     /// #[reflect(default)]
     /// struct Foo {
@@ -222,7 +222,7 @@ impl TypeRegistry {
     /// assert!(type_registry.contains(TypeId::of::<i32>()));
     ///
     /// // Its type data
-    /// assert!(type_registry.get_type_trait::<TypeTraitDefault>(TypeId::of::<Foo>()).is_some());
+    /// assert!(type_registry.get_type_trait::<ReflectDefault>(TypeId::of::<Foo>()).is_some());
     /// ```
     pub fn register<T: GetTypeMeta>(&mut self) {
         if self.register_internal(TypeId::of::<T>(), T::get_type_meta) {
@@ -255,7 +255,7 @@ impl TypeRegistry {
     ///
     /// ```no_run
     /// # use std::any::TypeId;
-    /// # use vc_reflect::{derive::Reflect, registry::{TypeRegistry, TypeTraitDefault}};
+    /// # use vc_reflect::{derive::Reflect, registry::{TypeRegistry, ReflectDefault}};
     /// #[derive(Reflect, Default)]
     /// #[reflect(default, auto_register)]
     /// struct Foo {
@@ -277,7 +277,7 @@ impl TypeRegistry {
     ///
     /// // Associated type trait is available
     /// assert!(type_registry
-    ///     .get_type_trait::<TypeTraitDefault>(TypeId::of::<Foo>())
+    ///     .get_type_trait::<ReflectDefault>(TypeId::of::<Foo>())
     ///     .is_some());
     /// ```
     #[cfg_attr(not(feature = "auto_register"), inline(always))]
@@ -313,17 +313,17 @@ impl TypeRegistry {
     /// However, in cases where you want to add a piece of type trait
     /// that was not included in the list of `#[reflect(...)]` type trait in the derive,
     /// or where the type is generic and cannot register e.g.
-    /// `TypeTraitSerialize` unconditionally without knowing the specific type parameters,
+    /// `ReflectSerialize` unconditionally without knowing the specific type parameters,
     /// this method can be used to insert additional type trait.
     ///
     /// # Example
     /// ```
-    /// use vc_reflect::registry::{TypeRegistry, TypeTraitSerialize, TypeTraitDeserialize};
+    /// use vc_reflect::registry::{TypeRegistry, ReflectSerialize, ReflectDeserialize};
     ///
     /// let mut type_registry = TypeRegistry::default();
     /// type_registry.register::<Option<String>>();
-    /// type_registry.register_type_trait::<Option<String>, TypeTraitSerialize>();
-    /// type_registry.register_type_trait::<Option<String>, TypeTraitDeserialize>();
+    /// type_registry.register_type_trait::<Option<String>, ReflectSerialize>();
+    /// type_registry.register_type_trait::<Option<String>, ReflectDeserialize>();
     /// ```
     pub fn register_type_trait<T: Typed, D: TypeTrait + FromType<T>>(&mut self) {
         match self.type_meta_table.get_mut(&TypeId::of::<T>()) {
@@ -526,5 +526,87 @@ impl core::fmt::Debug for TypeRegistryArc {
             .type_path_to_id
             .keys()
             .fmt(f)
+    }
+}
+
+// -----------------------------------------------------------------------------
+// tests
+
+#[cfg(test)]
+mod tests {
+    use alloc::vec::Vec;
+    use core::any::TypeId;
+
+    use super::{TypeRegistry, TypeRegistryArc};
+    use crate::derive::Reflect;
+    use crate::info::TypePath;
+    use crate::registry::{ReflectDefault, ReflectFromPtr};
+
+    mod foo {
+        use crate::derive::Reflect;
+
+        #[derive(Reflect)]
+        pub struct MyType;
+    }
+
+    mod bar {
+        use crate::derive::Reflect;
+
+        #[derive(Reflect)]
+        pub struct MyType;
+    }
+
+    #[derive(Reflect, Default)]
+    #[reflect(default)]
+    struct NeedsDefault {
+        value: i32,
+    }
+
+    #[test]
+    fn lookup_and_ambiguity_checks() {
+        let mut registry = TypeRegistry::empty();
+        registry.register::<foo::MyType>();
+        registry.register::<bar::MyType>();
+
+        assert!(
+            registry
+                .get_with_type_path(foo::MyType::type_path())
+                .is_some()
+        );
+        assert!(
+            registry
+                .get_with_type_path(bar::MyType::type_path())
+                .is_some()
+        );
+        assert!(registry.is_ambiguous("MyType"));
+        assert!(registry.get_with_type_name("MyType").is_none());
+    }
+
+    #[test]
+    fn registers_traits() {
+        let mut registry = TypeRegistry::default();
+        registry.register::<NeedsDefault>();
+
+        assert!(registry.contains(TypeId::of::<NeedsDefault>()));
+        assert!(
+            registry
+                .get_type_trait::<ReflectDefault>(TypeId::of::<NeedsDefault>())
+                .is_some()
+        );
+        assert!(
+            registry
+                .get_type_trait::<ReflectFromPtr>(TypeId::of::<NeedsDefault>())
+                .is_some()
+        );
+
+        let with_default: Vec<_> = registry
+            .iter_with_trait::<ReflectDefault>()
+            .map(|(meta, _)| meta.type_id())
+            .collect();
+        assert!(with_default.contains(&TypeId::of::<NeedsDefault>()));
+
+        let arc = TypeRegistryArc::default();
+        arc.write().register::<NeedsDefault>();
+        assert!(arc.read().contains(TypeId::of::<NeedsDefault>()));
     }
 }

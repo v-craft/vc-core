@@ -4,8 +4,8 @@ use crate::{
     impls::NonGenericTypeInfoCell,
     info::{OpaqueInfo, TypeInfo, Typed},
     registry::{
-        FromType, GetTypeMeta, TypeMeta, TypeTraitDeserialize, TypeTraitFromPtr,
-        TypeTraitFromReflect, TypeTraitSerialize
+        FromType, GetTypeMeta, TypeMeta, ReflectDeserialize, ReflectFromPtr,
+        ReflectFromReflect, ReflectSerialize
     }
 };
 use alloc::borrow::Cow;
@@ -36,9 +36,9 @@ impl FromReflect for &'static Path {
 impl GetTypeMeta for &'static Path {
     fn get_type_meta() -> TypeMeta {
         let mut type_meta = TypeMeta::with_capacity::<Self>(3);
-        type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitSerialize>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectSerialize>(FromType::<Self>::from_type());
         type_meta
     }
 }
@@ -64,10 +64,10 @@ impl FromReflect for Cow<'static, Path> {
 impl GetTypeMeta for Cow<'static, Path> {
     fn get_type_meta() -> TypeMeta {
         let mut type_meta: TypeMeta = TypeMeta::with_capacity::<Self>(4);
-        type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitDeserialize>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitSerialize>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectDeserialize>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectSerialize>(FromType::<Self>::from_type());
         type_meta
     }
 }

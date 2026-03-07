@@ -8,14 +8,14 @@ use crate::info::{TypePath, Typed};
 use crate::registry::FromType;
 
 #[derive(Clone)]
-pub struct TypeTraitFromPtr {
+pub struct ReflectFromPtr {
     ty_id: TypeId,
     from_ptr: unsafe fn(Ptr) -> &dyn Reflect,
     from_ptr_mut: unsafe fn(PtrMut) -> &mut dyn Reflect,
 }
 
-impl TypeTraitFromPtr {
-    /// Returns the [`TypeId`] that the [`TypeTraitFromPtr`] was constructed for.
+impl ReflectFromPtr {
+    /// Returns the [`TypeId`] that the [`ReflectFromPtr`] was constructed for.
     pub fn type_id(&self) -> TypeId {
         self.ty_id
     }
@@ -24,8 +24,8 @@ impl TypeTraitFromPtr {
     ///
     /// # Safety
     ///
-    /// `val` must be a pointer to value of the type that the [`TypeTraitFromPtr`] was constructed for.
-    /// This can be verified by checking that the type id returned by [`TypeTraitFromPtr::ty_id`] is the expected one.
+    /// `val` must be a pointer to value of the type that the [`ReflectFromPtr`] was constructed for.
+    /// This can be verified by checking that the type id returned by [`ReflectFromPtr::ty_id`] is the expected one.
     pub unsafe fn as_reflect<'a>(&self, val: Ptr<'a>) -> &'a dyn Reflect {
         // SAFETY: contract uphold by the caller.
         unsafe { (self.from_ptr)(val) }
@@ -35,45 +35,45 @@ impl TypeTraitFromPtr {
     ///
     /// # Safety
     ///
-    /// `val` must be a pointer to a value of the type that the [`TypeTraitFromPtr`] was constructed for
-    /// This can be verified by checking that the type id returned by [`TypeTraitFromPtr::ty_id`] is the expected one.
+    /// `val` must be a pointer to a value of the type that the [`ReflectFromPtr`] was constructed for
+    /// This can be verified by checking that the type id returned by [`ReflectFromPtr::ty_id`] is the expected one.
     pub unsafe fn as_reflect_mut<'a>(&self, val: PtrMut<'a>) -> &'a mut dyn Reflect {
         // SAFETY: contract uphold by the caller.
         unsafe { (self.from_ptr_mut)(val) }
     }
 
     /// Get a function pointer to turn a `Ptr` into `&dyn Reflect` for
-    /// the type this [`TypeTraitFromPtr`] was constructed for.
+    /// the type this [`ReflectFromPtr`] was constructed for.
     ///
     /// # Safety
     ///
     /// When calling the unsafe function returned by this method you must ensure that:
-    /// - The input `Ptr` points to the `Reflect` type this `TypeTraitFromPtr`
+    /// - The input `Ptr` points to the `Reflect` type this `ReflectFromPtr`
     ///   was constructed for.
     pub fn from_ptr(&self) -> unsafe fn(Ptr) -> &dyn Reflect {
         self.from_ptr
     }
 
     /// Get a function pointer to turn a `PtrMut` into `&mut dyn Reflect` for
-    /// the type this [`TypeTraitFromPtr`] was constructed for.
+    /// the type this [`ReflectFromPtr`] was constructed for.
     ///
     /// # Safety
     ///
     /// When calling the unsafe function returned by this method you must ensure that:
-    /// - The input `PtrMut` points to the `Reflect` type this `TypeTraitFromPtr`
+    /// - The input `PtrMut` points to the `Reflect` type this `ReflectFromPtr`
     ///   was constructed for.
     pub fn from_ptr_mut(&self) -> unsafe fn(PtrMut) -> &mut dyn Reflect {
         self.from_ptr_mut
     }
 }
 
-impl<T: Typed + Reflect> FromType<T> for TypeTraitFromPtr {
+impl<T: Typed + Reflect> FromType<T> for ReflectFromPtr {
     fn from_type() -> Self {
-        TypeTraitFromPtr {
+        ReflectFromPtr {
             ty_id: TypeId::of::<T>(),
             from_ptr: |ptr| {
-                // SAFETY: `from_ptr_mut` is either called in `TypeTraitFromPtr::as_reflect`
-                // or returned by `TypeTraitFromPtr::from_ptr`, both lay out the invariants
+                // SAFETY: `from_ptr_mut` is either called in `ReflectFromPtr::as_reflect`
+                // or returned by `ReflectFromPtr::from_ptr`, both lay out the invariants
                 // required by `deref`
                 ptr.debug_assert_aligned::<T>();
                 unsafe { ptr.as_ref::<T>() as &dyn Reflect }
@@ -90,20 +90,20 @@ impl<T: Typed + Reflect> FromType<T> for TypeTraitFromPtr {
 
 // Explicitly implemented here so that code readers do not need
 // to ponder the principles of proc-macros in advance.
-impl TypePath for TypeTraitFromPtr {
+impl TypePath for ReflectFromPtr {
     #[inline(always)]
     fn type_path() -> &'static str {
-        "vc_reflect::registry::TypeTraitFromPtr"
+        "vc_reflect::registry::ReflectFromPtr"
     }
 
     #[inline(always)]
     fn type_name() -> &'static str {
-        "TypeTraitFromPtr"
+        "ReflectFromPtr"
     }
 
     #[inline(always)]
     fn type_ident() -> &'static str {
-        "TypeTraitFromPtr"
+        "ReflectFromPtr"
     }
 
     #[inline(always)]
@@ -117,14 +117,14 @@ impl TypePath for TypeTraitFromPtr {
 
 #[cfg(test)]
 mod tests {
-    use super::TypeTraitFromPtr;
+    use super::ReflectFromPtr;
     use crate::info::TypePath;
 
     #[test]
     fn type_path() {
-        assert!(TypeTraitFromPtr::type_path() == "vc_reflect::registry::TypeTraitFromPtr");
-        assert!(TypeTraitFromPtr::module_path() == Some("vc_reflect::registry"));
-        assert!(TypeTraitFromPtr::type_ident() == "TypeTraitFromPtr");
-        assert!(TypeTraitFromPtr::type_name() == "TypeTraitFromPtr");
+        assert!(ReflectFromPtr::type_path() == "vc_reflect::registry::ReflectFromPtr");
+        assert!(ReflectFromPtr::module_path() == Some("vc_reflect::registry"));
+        assert!(ReflectFromPtr::type_ident() == "ReflectFromPtr");
+        assert!(ReflectFromPtr::type_name() == "ReflectFromPtr");
     }
 }

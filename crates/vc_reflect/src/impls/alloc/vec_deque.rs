@@ -4,8 +4,8 @@ use alloc::vec::Vec;
 
 use crate::info::{GenericInfo, Generics, ListInfo, TypeInfo, TypeParamInfo, Typed};
 use crate::ops::{List, ListItemIter};
-use crate::registry::{FromType, GetTypeMeta, TypeMeta, TypeTraitFromPtr};
-use crate::registry::{TypeTraitDefault, TypeTraitFromReflect};
+use crate::registry::{FromType, GetTypeMeta, ReflectFromPtr, TypeMeta};
+use crate::registry::{ReflectDefault, ReflectFromReflect};
 use crate::{FromReflect, Reflect, impls};
 
 crate::derive::impl_type_path!(::alloc::collections::VecDeque<T>);
@@ -128,9 +128,9 @@ impl<T: Typed + FromReflect> List for VecDeque<T> {
 impl<T: Typed + FromReflect + GetTypeMeta> GetTypeMeta for VecDeque<T> {
     fn get_type_meta() -> TypeMeta {
         let mut meta = TypeMeta::with_capacity::<Self>(3);
-        meta.insert_trait::<TypeTraitDefault>(FromType::<Self>::from_type());
-        meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectDefault>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
         meta
     }
 

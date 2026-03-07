@@ -482,3 +482,64 @@ impl_reflect_path_access!(dyn Tuple);
 impl_reflect_path_access!(dyn List);
 impl_reflect_path_access!(dyn Array);
 impl_reflect_path_access!(dyn Enum);
+
+// -----------------------------------------------------------------------------
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use super::{PathAccessError, PathAccessor, ReflectPathAccess};
+    use crate::derive::Reflect;
+    use alloc::string::ToString;
+    use alloc::vec;
+    use alloc::vec::Vec;
+
+    #[derive(Reflect)]
+    struct Inner {
+        value: i32,
+    }
+
+    #[derive(Reflect)]
+    struct Outer {
+        inner: Inner,
+        values: Vec<i32>,
+    }
+
+    #[test]
+    fn access_mut() {
+        let accessor = PathAccessor::parse_static(".inner.value").unwrap();
+        let mut value = Outer {
+            inner: Inner { value: 1 },
+            values: vec![10, 20, 30],
+        };
+
+        assert_eq!(accessor.to_string(), ".inner.value");
+        *accessor.access_mut_as::<i32>(&mut value).unwrap() = 5;
+
+        assert_eq!(value.inner.value, 5);
+        assert_eq!(
+            *PathAccessor::parse_static(".values[1]")
+                .unwrap()
+                .access_as::<i32>(&value)
+                .unwrap(),
+            20
+        );
+    }
+
+    #[test]
+    fn parse_errors() {
+        let value = Outer {
+            inner: Inner { value: 7 },
+            values: vec![1, 2, 3],
+        };
+
+        let err = PathAccessor::parse_static(".inner.value")
+            .unwrap()
+            .access_as::<bool>(&value)
+            .unwrap_err();
+        assert_eq!(err, PathAccessError::InvalidDowncast);
+
+        let err = value.access_as::<i32>(".values[").unwrap_err();
+        assert!(matches!(err, PathAccessError::ParseError(_)));
+    }
+}

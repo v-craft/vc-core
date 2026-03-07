@@ -69,7 +69,6 @@ pub trait IntoSystem<I: SystemInput, O, Marker>: Sized {
     fn into_system(this: Self) -> Self::System;
 }
 
-
 impl<T: System> IntoSystem<T::Input, T::Output, ()> for T {
     type System = T;
     fn into_system(this: Self) -> Self::System {
@@ -85,5 +84,3 @@ impl<T: SystemFunction> IntoSystem<T::Input, T::Output, FunctionMarker> for T {
         FunctionSystem::new(this)
     }
 }
-
-

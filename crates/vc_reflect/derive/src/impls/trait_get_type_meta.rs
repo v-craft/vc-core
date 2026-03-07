@@ -21,10 +21,10 @@ pub(crate) fn impl_trait_get_type_meta(
 
     let outer_ = Ident::new("__ret__", Span::call_site());
 
-    // `1` : TypeTraitFromPtr
+    // `1` : ReflectFromPtr
     let mut trait_counter = 1usize;
 
-    // We can only add `TypeTraitFromReflect` when using the default `FromReflect` implementation.
+    // We can only add `ReflectFromReflect` when using the default `FromReflect` implementation.
     // If it is uniformly added, there may be issues with mismatched generic constraints.
     let insert_from_reflect = if meta.attrs().impl_switchs.impl_from_reflect {
         trait_counter += 1;

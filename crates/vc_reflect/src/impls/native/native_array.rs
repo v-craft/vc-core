@@ -3,7 +3,7 @@ use crate::{
     impls::{GenericTypeInfoCell, GenericTypePathCell},
     info::{ArrayInfo, TypeInfo, TypePath, Typed},
     ops::{Array, ArrayItemIter, ReflectCloneError},
-    registry::{FromType, GetTypeMeta, TypeMeta, TypeRegistry, TypeTraitFromPtr},
+    registry::{FromType, GetTypeMeta, ReflectFromPtr, TypeMeta, TypeRegistry},
 };
 use alloc::{borrow::ToOwned, boxed::Box, string::ToString, vec::Vec};
 
@@ -139,7 +139,7 @@ impl<T: Reflect + Typed, const N: usize> Array for [T; N] {
 impl<T: Reflect + Typed + GetTypeMeta, const N: usize> GetTypeMeta for [T; N] {
     fn get_type_meta() -> TypeMeta {
         let mut type_meta = TypeMeta::with_capacity::<[T; N]>(1);
-        type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
         type_meta
     }
 

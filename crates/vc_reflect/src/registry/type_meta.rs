@@ -23,11 +23,11 @@ use crate::registry::{TypeRegistry, TypeTrait};
 /// # Example
 ///
 /// ```
-/// # use vc_reflect::registry::{TypeMeta, TypeTraitDefault, FromType};
+/// # use vc_reflect::registry::{TypeMeta, ReflectDefault, FromType};
 /// let mut meta = TypeMeta::of::<String>();
-/// meta.insert_trait::<TypeTraitDefault>(FromType::<String>::from_type());
+/// meta.insert_trait::<ReflectDefault>(FromType::<String>::from_type());
 ///
-/// let f = meta.get_trait::<TypeTraitDefault>().unwrap();
+/// let f = meta.get_trait::<ReflectDefault>().unwrap();
 /// let s = f.default().take::<String>().unwrap();
 ///
 /// assert_eq!(s, "");
@@ -273,9 +273,9 @@ impl core::fmt::Debug for TypeMeta {
 /// Add additional [`TypeTrait`]:
 ///
 /// ```
-/// use vc_reflect::{derive::{Reflect, reflect_trait}, registry::GetTypeMeta};
+/// use vc_reflect::{derive::{Reflect, reflect_cast}, registry::GetTypeMeta};
 ///
-/// #[reflect_trait]
+/// #[reflect_cast]
 /// trait MyDisplay {
 ///     fn display(&self) { /* ... */ }
 /// }
@@ -283,23 +283,23 @@ impl core::fmt::Debug for TypeMeta {
 /// impl MyDisplay for A{}
 ///
 /// #[derive(Reflect)]
-/// #[reflect(type_trait = ReflectMyDisplay)]
+/// #[reflect(type_trait = ReflectCastMyDisplay)]
 /// struct A;
 ///
 /// let meta = A::get_type_meta();
 ///
-/// assert!(meta.has_trait::<ReflectMyDisplay>());
+/// assert!(meta.has_trait::<ReflectCastMyDisplay>());
 /// ```
 ///
-/// See more infomation in [`derive::reflect_trait`](crate::derive::reflect_trait).
+/// See [`derive::reflect_cast`](crate::derive::reflect_cast) for more details.
 ///
 /// ## Manually
 ///
 /// ```
-/// use vc_reflect::derive::{Reflect, reflect_trait};
+/// use vc_reflect::derive::{Reflect, reflect_cast};
 /// use vc_reflect::registry::{GetTypeMeta, FromType, TypeMeta};
 ///
-/// #[reflect_trait]
+/// #[reflect_cast]
 /// trait MyDisplay {
 ///     fn display(&self) { /* ... */ }
 /// }
@@ -313,13 +313,13 @@ impl core::fmt::Debug for TypeMeta {
 /// impl GetTypeMeta for A {
 ///     fn get_type_meta() -> TypeMeta {
 ///         let mut meta = TypeMeta::of::<Self>();
-///         meta.insert_trait::<ReflectMyDisplay>(FromType::<Self>::from_type());
+///         meta.insert_trait::<ReflectCastMyDisplay>(FromType::<Self>::from_type());
 ///         meta
 ///     }
 /// }
 ///
 /// let meta = A::get_type_meta();
-/// assert!(meta.has_trait::<ReflectMyDisplay>());
+/// assert!(meta.has_trait::<ReflectCastMyDisplay>());
 /// ```
 ///
 /// [`TypeTrait`]: crate::registry::TypeTrait
@@ -335,4 +335,46 @@ pub trait GetTypeMeta: Typed {
     /// Registers other types needed by this type.
     /// **Allow** not to register oneself.
     fn register_dependencies(_registry: &mut TypeRegistry) {}
+}
+
+// -----------------------------------------------------------------------------
+// tests
+
+#[cfg(test)]
+mod tests {
+    use super::TypeMeta;
+    use crate::derive::{Reflect, TypePath};
+    use crate::registry::{GetTypeMeta, ReflectDefault};
+    use alloc::string::String;
+
+    #[derive(Clone, TypePath)]
+    struct Counter(u32);
+
+    #[derive(Reflect)]
+    #[reflect(@123_u32)]
+    struct Tagged;
+
+    #[test]
+    fn manages_traits_and_attributes() {
+        let mut meta = TypeMeta::with_capacity::<String>(1);
+        meta.insert_trait(Counter(1));
+
+        assert!(meta.has_trait::<Counter>());
+        assert_eq!(meta.trait_count(), 1);
+        assert_eq!(meta.get_trait::<Counter>().unwrap().0, 1);
+
+        meta.get_trait_mut::<Counter>().unwrap().0 = 4;
+        assert_eq!(meta.get_trait::<Counter>().unwrap().0, 4);
+
+        let cloned = meta.clone();
+        assert_eq!(cloned.get_trait::<Counter>().unwrap().0, 4);
+
+        let removed = meta.remove_trait::<Counter>().unwrap();
+        assert_eq!(removed.0, 4);
+        assert!(!meta.has_trait::<Counter>());
+
+        let tagged_meta = Tagged::get_type_meta();
+        assert_eq!(tagged_meta.get_attribute::<u32>(), Some(&123_u32));
+        assert!(!tagged_meta.has_trait::<ReflectDefault>());
+    }
 }

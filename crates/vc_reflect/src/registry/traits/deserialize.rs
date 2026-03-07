@@ -8,17 +8,17 @@ use crate::registry::FromType;
 
 /// A container providing `serde` deserialization support for reflected types.
 ///
-/// Internally stores function pointers corresponding to specific types. When given a reflected type,
-/// it downcasts to the concrete type and invokes the `serde` deserialization functions.
+/// Internally stores function pointers corresponding to specific types. During deserialization,
+/// it invokes the concrete type's `serde` implementation and returns the result as `Box<dyn Reflect>`.
 ///
-/// This is usually used for the internal implementation of [`vc_reflect::serde`],
-/// see more infomation in [`ReflectDeserializeDriver`](vc_reflect::serde::ReflectDeserializeDriver).
+/// This is typically used by the internal implementation of [`vc_reflect::serde`].
+/// See [`ReflectDeserializeDriver`](vc_reflect::serde::ReflectDeserializeDriver) for details.
 ///
 /// # Examples
 ///
 /// ```
 /// use core::any::TypeId;
-/// use vc_reflect::registry::{TypeTraitDeserialize, TypeRegistry};
+/// use vc_reflect::registry::{ReflectDeserialize, TypeRegistry};
 /// use vc_reflect::{Reflect, derive::Reflect};
 /// use serde::Deserialize;
 ///
@@ -33,7 +33,7 @@ use crate::registry::FromType;
 /// let mut registry = TypeRegistry::new();
 /// registry.register::<MyStruct>();
 ///
-/// let processor = registry.get_type_trait::<TypeTraitDeserialize>(TypeId::of::<MyStruct>()).unwrap();
+/// let processor = registry.get_type_trait::<ReflectDeserialize>(TypeId::of::<MyStruct>()).unwrap();
 ///
 /// let mut deserializer = ron::Deserializer::from_str(input).unwrap();
 ///
@@ -42,16 +42,16 @@ use crate::registry::FromType;
 /// assert_eq!(val.take::<MyStruct>().unwrap(), MyStruct{ value: 123 });
 /// ```
 #[derive(Clone)]
-pub struct TypeTraitDeserialize {
+pub struct ReflectDeserialize {
     func: fn(
         deserializer: &mut dyn erased_serde::Deserializer,
     ) -> Result<Box<dyn Reflect>, erased_serde::Error>,
 }
 
-impl TypeTraitDeserialize {
+impl ReflectDeserialize {
     /// Deserializes a reflected value.
     ///
-    /// See [`TypeTraitDeserialize`] for examples.
+    /// See [`ReflectDeserialize`] for examples.
     #[inline(always)]
     pub fn deserialize<'de, D: Deserializer<'de>>(
         &self,
@@ -62,7 +62,7 @@ impl TypeTraitDeserialize {
     }
 }
 
-impl<T: for<'a> Deserialize<'a> + Typed + Reflect> FromType<T> for TypeTraitDeserialize {
+impl<T: for<'a> Deserialize<'a> + Typed + Reflect> FromType<T> for ReflectDeserialize {
     fn from_type() -> Self {
         Self {
             func: |deserializer| Ok(Box::new(T::deserialize(deserializer)?)),
@@ -72,20 +72,20 @@ impl<T: for<'a> Deserialize<'a> + Typed + Reflect> FromType<T> for TypeTraitDese
 
 // Explicitly implemented here so that code readers do not need
 // to ponder the principles of proc-macros in advance.
-impl TypePath for TypeTraitDeserialize {
+impl TypePath for ReflectDeserialize {
     #[inline(always)]
     fn type_path() -> &'static str {
-        "vc_reflect::registry::TypeTraitDeserialize"
+        "vc_reflect::registry::ReflectDeserialize"
     }
 
     #[inline(always)]
     fn type_name() -> &'static str {
-        "TypeTraitDeserialize"
+        "ReflectDeserialize"
     }
 
     #[inline(always)]
     fn type_ident() -> &'static str {
-        "TypeTraitDeserialize"
+        "ReflectDeserialize"
     }
 
     #[inline(always)]
@@ -99,14 +99,14 @@ impl TypePath for TypeTraitDeserialize {
 
 #[cfg(test)]
 mod tests {
-    use super::TypeTraitDeserialize;
+    use super::ReflectDeserialize;
     use crate::info::TypePath;
 
     #[test]
     fn type_path() {
-        assert!(TypeTraitDeserialize::type_path() == "vc_reflect::registry::TypeTraitDeserialize");
-        assert!(TypeTraitDeserialize::module_path() == Some("vc_reflect::registry"));
-        assert!(TypeTraitDeserialize::type_ident() == "TypeTraitDeserialize");
-        assert!(TypeTraitDeserialize::type_name() == "TypeTraitDeserialize");
+        assert!(ReflectDeserialize::type_path() == "vc_reflect::registry::ReflectDeserialize");
+        assert!(ReflectDeserialize::module_path() == Some("vc_reflect::registry"));
+        assert!(ReflectDeserialize::type_ident() == "ReflectDeserialize");
+        assert!(ReflectDeserialize::type_name() == "ReflectDeserialize");
     }
 }

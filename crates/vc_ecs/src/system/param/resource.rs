@@ -1,4 +1,4 @@
-use super::{SystemParam, ReadOnlySystemParam};
+use super::{ReadOnlySystemParam, SystemParam};
 use crate::borrow::{NonSync, NonSyncMut, NonSyncRef};
 use crate::borrow::{Res, ResMut, ResRef};
 use crate::resource::{Resource, ResourceId};
@@ -241,7 +241,7 @@ unsafe impl<T: Resource> SystemParam for NonSync<'_, T> {
     type State = ResourceId;
     type Item<'world, 'state> = NonSync<'world, T>;
     // Because the resource is !Sync, we can only borrow it
-    // on the main thread. In other words, this system is !Send. 
+    // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
@@ -284,7 +284,7 @@ unsafe impl<T: Resource> SystemParam for NonSyncRef<'_, T> {
     type State = ResourceId;
     type Item<'world, 'state> = NonSyncRef<'world, T>;
     // Because the resource is !Sync, we can only borrow it
-    // on the main thread. In other words, this system is !Send. 
+    // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
@@ -324,7 +324,7 @@ unsafe impl<T: Resource> SystemParam for NonSyncMut<'_, T> {
     type State = ResourceId;
     type Item<'world, 'state> = NonSyncMut<'world, T>;
     // Because the resource is !Sync, we can only borrow it
-    // on the main thread. In other words, this system is !Send. 
+    // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
@@ -364,7 +364,7 @@ unsafe impl<T: Resource> SystemParam for Option<NonSync<'_, T>> {
     type State = ResourceId;
     type Item<'world, 'state> = Option<NonSync<'world, T>>;
     // Because the resource is !Sync, we can only borrow it
-    // on the main thread. In other words, this system is !Send. 
+    // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
@@ -403,7 +403,7 @@ unsafe impl<T: Resource> SystemParam for Option<NonSyncRef<'_, T>> {
     type State = ResourceId;
     type Item<'world, 'state> = Option<NonSyncRef<'world, T>>;
     // Because the resource is !Sync, we can only borrow it
-    // on the main thread. In other words, this system is !Send. 
+    // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
@@ -436,7 +436,7 @@ unsafe impl<T: Resource> SystemParam for Option<NonSyncMut<'_, T>> {
     type State = ResourceId;
     type Item<'world, 'state> = Option<NonSyncMut<'world, T>>;
     // Because the resource is !Sync, we can only borrow it
-    // on the main thread. In other words, this system is !Send. 
+    // on the main thread. In other words, this system is !Send.
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 

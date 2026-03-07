@@ -20,8 +20,8 @@ use crate::impls::{GenericTypeInfoCell, GenericTypePathCell, NonGenericTypeInfoC
 use crate::info::{TupleInfo, TypeInfo, TypePath, Typed, UnnamedField};
 use crate::ops::{ApplyError, ReflectCloneError, Tuple, TupleFieldIter};
 use crate::registry::{FromType, GetTypeMeta, TypeMeta, TypeRegistry};
-use crate::registry::{TypeTraitDefault, TypeTraitFromPtr, TypeTraitFromReflect};
-use crate::registry::{TypeTraitDeserialize, TypeTraitSerialize};
+use crate::registry::{ReflectDefault, ReflectFromPtr, ReflectFromReflect};
+use crate::registry::{ReflectDeserialize, ReflectSerialize};
 use crate::{FromReflect, Reflect};
 
 macro_rules! impl_type_path_tuple {
@@ -185,11 +185,11 @@ macro_rules! impl_reflect_tuple {
         impl GetTypeMeta for () {
             fn get_type_meta() -> TypeMeta {
                 let mut type_meta = TypeMeta::with_capacity::<Self>(5);
-                type_meta.insert_trait::<TypeTraitDefault>(FromType::<Self>::from_type());
-                type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-                type_meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
-                type_meta.insert_trait::<TypeTraitSerialize>(FromType::<Self>::from_type());
-                type_meta.insert_trait::<TypeTraitDeserialize>(FromType::<Self>::from_type());
+                type_meta.insert_trait::<ReflectDefault>(FromType::<Self>::from_type());
+                type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+                type_meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
+                type_meta.insert_trait::<ReflectSerialize>(FromType::<Self>::from_type());
+                type_meta.insert_trait::<ReflectDeserialize>(FromType::<Self>::from_type());
                 type_meta
             }
         }
@@ -296,7 +296,7 @@ macro_rules! impl_reflect_tuple {
         impl<$name: Reflect + Typed + GetTypeMeta> GetTypeMeta for ($name,) {
             fn get_type_meta() -> TypeMeta {
                 let mut type_meta =  TypeMeta::with_capacity::<($name,)>(1);
-                type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
+                type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
                 type_meta
             }
 
@@ -413,7 +413,7 @@ macro_rules! impl_reflect_tuple {
         impl<$($name: Reflect + Typed + GetTypeMeta),*> GetTypeMeta for ($($name,)*) {
             fn get_type_meta() -> TypeMeta {
                 let mut type_meta =  TypeMeta::with_capacity::<($($name,)*)>(1);
-                type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
+                type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
                 type_meta
             }
 

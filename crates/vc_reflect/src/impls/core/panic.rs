@@ -3,8 +3,8 @@ use crate::{
     impls::NonGenericTypeInfoCell,
     info::{OpaqueInfo, TypeInfo, TypePath, Typed},
     ops::ApplyError,
-    registry::TypeTraitFromReflect,
-    registry::{FromType, GetTypeMeta, TypeMeta, TypeTraitFromPtr},
+    registry::ReflectFromReflect,
+    registry::{FromType, GetTypeMeta, ReflectFromPtr, TypeMeta},
 };
 use alloc::boxed::Box;
 use core::panic::Location;
@@ -81,8 +81,8 @@ impl Reflect for &'static Location<'static> {
 impl GetTypeMeta for &'static Location<'static> {
     fn get_type_meta() -> TypeMeta {
         let mut meta = TypeMeta::with_capacity::<Self>(2);
-        meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
         meta
     }
 }

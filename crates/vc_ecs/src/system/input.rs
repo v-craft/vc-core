@@ -1,4 +1,3 @@
-
 pub trait SystemInput: Sized {
     type Data<'i>;
     type Item<'i>: SystemInput;

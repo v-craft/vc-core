@@ -1,29 +1,28 @@
-//! Provide type registry for non-object infomation querying.
+//! Provides a type registry for querying reflected metadata without holding values.
 //!
 //! ## Menu
 //!
 //! - [`TypeTrait`]: A trait representing a capability supported by a type.
-//! - [`FromType`]: A trait provide a function to crate a `TypeTrait` from a type.
+//! - [`FromType`]: A trait that constructs a `TypeTrait` from a concrete type.
 //! - [`TypeMeta`]: A container including a [`TypeInfo`] and a [`TypeTrait`] table.
-//! - [`GetTypeMeta`]: A trait provide a function to crate a `TypeMeta` from a type.
-//! - [`TypeRegistry`]: A container for storaging and operating `TypeMeta`s.
+//! - [`GetTypeMeta`]: A trait that constructs a [`TypeMeta`] from a type.
+//! - [`TypeRegistry`]: A container for storing and querying [`TypeMeta`] values.
 //! - TypeTraits:
-//!     - [`TypeTraitDefault`]: Provide [`Default`] capability for reflecion type.
-//!     - [`TypeTraitFromPtr`]: Convert ptr to reflection reference.
-//!     - [`TypeTraitFromReflect`]: Provide [`FromReflect`] support for deserialization.
-//!     - [`TypeTraitSerialize`]: Provide serialization support for reflection type.
-//!     - [`TypeTraitDeserialize`]: Provide deserialization support for reflection type.
-//! - [`reflect_trait`]: a attribute macro, which generate a `Reflect{trait_name}` struct, can be used as [`TypeTrait`].
+//!     - [`ReflectDefault`]: Provides [`Default`] support for reflected types.
+//!     - [`ReflectFromPtr`]: Converts raw pointers into reflection references.
+//!     - [`ReflectFromReflect`]: Provide [`FromReflect`] support for deserialization.
+//!     - [`ReflectSerialize`]: Provides serialization support for reflected types.
+//!     - [`ReflectDeserialize`]: Provides deserialization support for reflected types.
+//! - [`reflect_cast`]: An attribute macro that generates a `ReflectCast{Trait}` helper usable as a [`TypeTrait`].
 //!
 //! ## auto_register
 //!
-//! See [`TypeRegistry::auto_register`] .
+//! See [`TypeRegistry::auto_register`].
 //!
-//! We use [`inventory`] crate to implement static registration,
-//! not all platforms support it (although major platforms do).
+//! This module uses the [`inventory`] crate for static registration.
+//! Not all platforms support it, although major targets do.
 //!
-//! The good news is that if it is not supported,
-//! this function will directly return false without causing any errors.
+//! On unsupported platforms, auto-registration simply returns `false` without failing.
 //!
 //! ### auto_register type menu
 //!
@@ -40,7 +39,7 @@
 //! - "std" feature:
 //!   `OsString` `PathBuf` `Cow<'static, Path>` `&'static Path`
 //!
-//! [`reflect_trait`]: crate::derive::reflect_trait
+//! [`reflect_cast`]: crate::derive::reflect_cast
 //! [`FromReflect`]: crate::FromReflect
 //! [`TypeInfo`]: crate::info::TypeInfo
 
@@ -57,9 +56,9 @@ mod type_trait;
 // Exports
 
 pub use from_type::FromType;
-pub use traits::TypeTraitDefault;
-pub use traits::{TypeTraitDeserialize, TypeTraitSerialize};
-pub use traits::{TypeTraitFromPtr, TypeTraitFromReflect};
+pub use traits::ReflectDefault;
+pub use traits::{ReflectDeserialize, ReflectSerialize};
+pub use traits::{ReflectFromPtr, ReflectFromReflect};
 pub use type_meta::{GetTypeMeta, TypeMeta};
 pub use type_registry::{TypeRegistry, TypeRegistryArc};
 pub use type_trait::TypeTrait;

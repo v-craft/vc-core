@@ -189,7 +189,7 @@ impl<'a> TypeParser<'a> {
         mut ty_generic_fn: impl FnMut(&TypeParam) -> StringExpr,
         vc_reflect_path: &Path,
     ) -> StringExpr {
-        let macro_utils_path = crate::path::macro_utils_(vc_reflect_path);
+        let macro_utils_ = crate::path::macro_utils_(vc_reflect_path);
 
         let mut params = generics.params.iter().filter_map(|param| match param {
             GenericParam::Type(type_param) => Some(ty_generic_fn(type_param)),
@@ -198,7 +198,7 @@ impl<'a> TypeParser<'a> {
                 let ty = &const_param.ty;
 
                 Some(StringExpr::Owned(quote! {
-                    <#ty as #macro_utils_path::ToString>::to_string(&#ident)
+                    <#ty as #macro_utils_::ToString>::to_string(&#ident)
                 }))
             }
             GenericParam::Lifetime(_) => None,

@@ -94,7 +94,7 @@ impl World {
         let checker = CheckTicks::new(this_run);
         self.storages.check_ticks(checker);
         self.last_check = this_run;
-        
+
         Some(checker)
     }
 }

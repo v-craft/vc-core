@@ -6,7 +6,7 @@
 //! - [`impl_reflect_opaque`]
 //! - [`impl_type_path`]
 //! - [`impl_auto_register`]
-//! - [`reflect_trait`]
+//! - [`reflect_cast`]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(clippy::std_instead_of_core, reason = "proc-macro lib")]
 #![allow(clippy::std_instead_of_alloc, reason = "proc-macro lib")]
@@ -118,10 +118,10 @@ mod utils;
 /// Available flags:
 ///
 /// - `clone`: Standard `Clone`
-/// - `default`: Standard `Default`
 /// - `hash`: Standard `Hash`
 /// - `eq`: Standard `PartialEq`
 /// - `cmp`: Standard `PartialOrd`
+/// - `default`: Standard `Default`
 /// - `serialize`: `serde::Serialize`
 /// - `deserialize`: `serde::Deserialize`
 ///
@@ -153,14 +153,14 @@ mod utils;
 ///
 /// ## Custom GetTypeMeta
 ///
-/// By default, a type's `get_type_meta` includes at least `TypeTraitFromPtr`. The following type traits may also be
+/// By default, a type's `get_type_meta` includes at least `ReflectFromPtr`. The following type traits may also be
 /// included based on conditions:
 ///
-/// - `TypeTraitFromReflect`: If the default `FromReflect` implementation is enabled (not disabled with
+/// - `ReflectFromReflect`: If the default `FromReflect` implementation is enabled (not disabled with
 ///   `#[reflect(FromReflect = false)]`).
-/// - `TypeTraitDefault`: If `Default` is marked as available via `#[reflect(default)]`.
-/// - `TypeTraitSerialize`: If `serde::Serialize` is marked as available via `#[reflect(serialize)]`.
-/// - `TypeTraitDeserialize`: If `serde::Deserialize` is marked as available via `#[reflect(deserialize)]`.
+/// - `ReflectDefault`: If `Default` is marked as available via `#[reflect(default)]`.
+/// - `ReflectSerialize`: If `serde::Serialize` is marked as available via `#[reflect(serialize)]`.
+/// - `ReflectDeserialize`: If `serde::Deserialize` is marked as available via `#[reflect(deserialize)]`.
 ///
 /// You can also manually add type traits using `#[reflect(type_trait = (...))]`. These will be automatically
 /// inserted into `get_type_meta`.
@@ -169,11 +169,11 @@ mod utils;
 ///
 /// ```rust, ignore
 /// #[derive(Reflect)]
-/// #[reflect(type_trait = TypeTraitPrint)]
+/// #[reflect(type_trait = ReflectPrint)]
 /// struct A;
 ///
 /// #[derive(Reflect)]
-/// #[reflect(type_trait = (ReflectDebug, TypeTraitClone, ReflectDisplay))]
+/// #[reflect(type_trait = (ReflectDebug, ReflectClone, ReflectDisplay))]
 /// struct A;
 /// ```
 ///
@@ -339,7 +339,7 @@ pub fn derive_type_path(input: TokenStream) -> TokenStream {
 /// }
 /// ```
 ///
-/// See more infomation in [`derive Reflect`](derive_full_reflect) .
+/// See [`derive Reflect`](derive_full_reflect) for more details.
 #[proc_macro]
 pub fn impl_reflect(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -473,17 +473,21 @@ pub fn impl_type_path(input: TokenStream) -> TokenStream {
 /// impl_auto_register!(Vec<T: Clone>); // Error
 /// ```
 ///
-/// This is not conflict with `reflect(auto_register)` attribute.
+/// This does not conflict with the `reflect(auto_register)` attribute.
 ///
 /// See: [`derive Reflect`](derive_full_reflect)
 #[proc_macro]
-pub fn impl_auto_register(_input: TokenStream) -> TokenStream {
+#[allow(
+    unused_variables,
+    reason = "`input` is unused if the feature is not enabled."
+)]
+pub fn impl_auto_register(input: TokenStream) -> TokenStream {
     #[cfg(not(feature = "auto_register"))]
     return utils::empty().into();
 
     #[cfg(feature = "auto_register")]
     {
-        let type_path = syn::parse_macro_input!(_input as syn::Type);
+        let type_path = syn::parse_macro_input!(input as syn::Type);
 
         let vc_reflect_path = path::vc_reflect();
         let auto_register_ =
@@ -503,22 +507,19 @@ pub fn impl_auto_register(_input: TokenStream) -> TokenStream {
 
 /// Impl `TypeTrait` for specific trait with a new struct.
 ///
-/// This macro will generate a `Reflect{trait_name}` struct, which implements `TypeTrait` and `TypePath`.
+/// This macro will generate a `ReflectCast{trait_name}` struct, which implements `TypeTrait` and `TypePath`.
 ///
-/// For example, for `Display`, this will generate `ReflectDisplay`.
+/// For example, for `Display`, this will generate `ReflectCastDisplay`.
 ///
 /// It only contains three methods internally:
-/// - `get`: cast `&dyn Reflect` to `&dyn {trait_name}`
-/// - `get_mut`: cast `&mut dyn Reflect` to `&mut dyn {trait_name}`
-/// - `get_boxed`: cast `Box<dyn Reflect>` to `Box<dyn {trait_name}>`
-///
-/// The generated `Reflect{Trait}` helper only provides casting helpers (not the trait methods
-/// themselves), so the struct is named `Reflect{Trait}` rather than using a `TypeTrait` prefix.
+/// - `cast_ref`: cast `&dyn Reflect` to `&dyn {trait_name}`
+/// - `cast_mut`: cast `&mut dyn Reflect` to `&mut dyn {trait_name}`
+/// - `cast_boxed`: cast `Box<dyn Reflect>` to `Box<dyn {trait_name}>`
 ///
 /// ## Example
 ///
 /// ```ignore
-/// #[reflect_trait]
+/// #[reflect_cast]
 /// pub trait MyDebug {
 ///     fn debug(&self);
 /// }
@@ -527,15 +528,15 @@ pub fn impl_auto_register(_input: TokenStream) -> TokenStream {
 ///
 /// let reg = TypeRegistry::new()
 ///     .register::<String>()
-///     .register_type_trait::<String, ReflectMyDebug>();
+///     .register_type_trait::<String, ReflectCastMyDebug>();
 ///
 /// let x: Box<dyn Reflect> = Box::new(String::from("123"));
 ///
-/// let reflect_my_debug = reg.get_type_trait::<ReflectMyDebug>::((*x).type_id()).unwrap();
-/// let x: Box<dyn MyDebug> = reflect_my_debug.get_boxed(x);
+/// let cast_my_debug = reg.get_type_trait::<ReflectCastMyDebug>::((*x).type_id()).unwrap();
+/// let x: Box<dyn MyDebug> = cast_my_debug.cast_boxed(x);
 /// x.debug();
 /// ```
 #[proc_macro_attribute]
-pub fn reflect_trait(_args: TokenStream, input: TokenStream) -> TokenStream {
-    impls::impl_reflect_trait(input)
+pub fn reflect_cast(_args: TokenStream, input: TokenStream) -> TokenStream {
+    impls::impl_reflect_cast(input)
 }

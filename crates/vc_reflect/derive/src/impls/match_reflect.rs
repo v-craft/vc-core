@@ -4,9 +4,9 @@ use syn::DeriveInput;
 
 use crate::{ImplSourceKind, derive_data::ReflectDerive};
 
-/// Provided for `#[derive(Reflect)]` and `impl_reflect`.
+/// Shared entry point for `#[derive(Reflect)]` and `impl_reflect!`.
 pub(crate) fn match_reflect_impls(ast: DeriveInput, source: ImplSourceKind) -> TokenStream {
-    // Parse type kind, attribute and fields infomation.
+    // Parse the type kind, attributes, and field metadata.
     let reflect_derive = match ReflectDerive::from_input(&ast, source) {
         Ok(val) => val,
         Err(err) => return err.into_compile_error().into(),

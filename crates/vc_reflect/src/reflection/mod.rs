@@ -29,7 +29,7 @@ pub use reflect::Reflect;
 /// # let _ = fixed_hash(&1);
 /// ```
 ///
-/// See more infomation in [`FixedHashState`](vc_utils::hash::FixedHashState) .
+/// See [`FixedHashState`](vc_utils::hash::FixedHashState) for details.
 #[inline(always)]
 pub fn reflect_hasher() -> vc_utils::hash::FixedHasher {
     core::hash::BuildHasher::build_hasher(&vc_utils::hash::FixedHashState)

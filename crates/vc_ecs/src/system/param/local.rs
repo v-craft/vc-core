@@ -48,4 +48,3 @@ unsafe impl<T: Default + Send + Sync + 'static> SystemParam for Local<'_, T> {
         Local(state)
     }
 }
-

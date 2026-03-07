@@ -38,5 +38,5 @@ use tuple_struct_kind::impl_tuple_struct;
 use unit_kind::impl_unit;
 
 pub(crate) use opaque_kind::impl_opaque;
-pub(crate) use reflect_trait::impl_reflect_trait;
+pub(crate) use reflect_trait::impl_reflect_cast;
 pub(crate) use trait_type_path::impl_trait_type_path;

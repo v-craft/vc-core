@@ -15,25 +15,25 @@ use crate::{FromReflect, Reflect};
 /// # Examples
 ///
 /// ```
-/// # use vc_reflect::{Reflect, registry::{TypeRegistry, TypeTraitFromReflect}};
+/// # use vc_reflect::{Reflect, registry::{TypeRegistry, ReflectFromReflect}};
 /// let s: Box<dyn Reflect> = Box::new("123".to_string());
 ///
 /// let registry = TypeRegistry::new(); // `new` will register some basic type
 /// let meta = registry.get_with_type_name("String").unwrap();
-/// let from_reflect = meta.get_trait::<TypeTraitFromReflect>().unwrap();
+/// let from_reflect = meta.get_trait::<ReflectFromReflect>().unwrap();
 ///
 /// let s2 = from_reflect.from_reflect(&*s).unwrap();
 /// assert_eq!(s2.take::<String>().unwrap(), "123");
 /// ```
 #[derive(Clone)]
-pub struct TypeTraitFromReflect {
+pub struct ReflectFromReflect {
     func: fn(&dyn Reflect) -> Option<Box<dyn Reflect>>,
 }
 
-impl TypeTraitFromReflect {
+impl ReflectFromReflect {
     /// Call T's [`Reflect`]
     ///
-    /// [`TypeTraitFromReflect`] does not have a type flag,
+    /// [`ReflectFromReflect`] does not have a type flag,
     /// but the functions used internally are type specific.
     #[inline(always)]
     pub fn from_reflect(&self, param_1: &dyn Reflect) -> Option<Box<dyn Reflect>> {
@@ -41,7 +41,7 @@ impl TypeTraitFromReflect {
     }
 }
 
-impl<T: Typed + FromReflect> FromType<T> for TypeTraitFromReflect {
+impl<T: Typed + FromReflect> FromType<T> for ReflectFromReflect {
     fn from_type() -> Self {
         Self {
             func: |param_1| T::from_reflect(param_1).map(Reflect::into_boxed_reflect),
@@ -51,20 +51,20 @@ impl<T: Typed + FromReflect> FromType<T> for TypeTraitFromReflect {
 
 // Explicitly implemented here so that code readers do not need
 // to ponder the principles of proc-macros in advance.
-impl TypePath for TypeTraitFromReflect {
+impl TypePath for ReflectFromReflect {
     #[inline(always)]
     fn type_path() -> &'static str {
-        "vc_reflect::registry::TypeTraitFromReflect"
+        "vc_reflect::registry::ReflectFromReflect"
     }
 
     #[inline(always)]
     fn type_name() -> &'static str {
-        "TypeTraitFromReflect"
+        "ReflectFromReflect"
     }
 
     #[inline(always)]
     fn type_ident() -> &'static str {
-        "TypeTraitFromReflect"
+        "ReflectFromReflect"
     }
 
     #[inline(always)]
@@ -78,14 +78,14 @@ impl TypePath for TypeTraitFromReflect {
 
 #[cfg(test)]
 mod tests {
-    use super::TypeTraitFromReflect;
+    use super::ReflectFromReflect;
     use crate::info::TypePath;
 
     #[test]
     fn type_path() {
-        assert!(TypeTraitFromReflect::type_path() == "vc_reflect::registry::TypeTraitFromReflect");
-        assert!(TypeTraitFromReflect::module_path() == Some("vc_reflect::registry"));
-        assert!(TypeTraitFromReflect::type_ident() == "TypeTraitFromReflect");
-        assert!(TypeTraitFromReflect::type_name() == "TypeTraitFromReflect");
+        assert!(ReflectFromReflect::type_path() == "vc_reflect::registry::ReflectFromReflect");
+        assert!(ReflectFromReflect::module_path() == Some("vc_reflect::registry"));
+        assert!(ReflectFromReflect::type_ident() == "ReflectFromReflect");
+        assert!(ReflectFromReflect::type_name() == "ReflectFromReflect");
     }
 }

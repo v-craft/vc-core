@@ -8,9 +8,9 @@ use crate::impls::{GenericTypeInfoCell, NonGenericTypeInfoCell};
 use crate::info::{ListInfo, OpaqueInfo, TypeInfo, TypePath, Typed};
 use crate::ops::{ApplyError, List, ListItemIter};
 use crate::registry::{
-    FromType, GetTypeMeta, TypeMeta, TypeRegistry, TypeTraitDefault, TypeTraitFromPtr,
+    FromType, GetTypeMeta, ReflectDefault, ReflectFromPtr, TypeMeta, TypeRegistry,
 };
-use crate::registry::{TypeTraitDeserialize, TypeTraitFromReflect, TypeTraitSerialize};
+use crate::registry::{ReflectDeserialize, ReflectFromReflect, ReflectSerialize};
 use crate::{FromReflect, Reflect};
 
 // -----------------------------------------------------------------------------
@@ -76,11 +76,11 @@ impl Reflect for Cow<'static, str> {
 impl GetTypeMeta for Cow<'static, str> {
     fn get_type_meta() -> TypeMeta {
         let mut meta = TypeMeta::with_capacity::<Self>(5);
-        meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
-        meta.insert_trait::<TypeTraitDefault>(FromType::<Self>::from_type());
-        meta.insert_trait::<TypeTraitSerialize>(FromType::<Self>::from_type());
-        meta.insert_trait::<TypeTraitDeserialize>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectDefault>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectSerialize>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectDeserialize>(FromType::<Self>::from_type());
         meta
     }
 }
@@ -214,8 +214,8 @@ impl<T: FromReflect + Typed + Clone> FromReflect for Cow<'static, [T]> {
 impl<T: FromReflect + Typed + Clone + GetTypeMeta> GetTypeMeta for Cow<'static, [T]> {
     fn get_type_meta() -> TypeMeta {
         let mut meta = TypeMeta::with_capacity::<Self>(2);
-        meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
         meta
     }
 

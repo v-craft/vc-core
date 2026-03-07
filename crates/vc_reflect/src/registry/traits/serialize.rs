@@ -9,8 +9,8 @@ use crate::registry::FromType;
 /// Internally stores function pointers corresponding to specific types. When given a reflected type,
 /// it downcasts to the concrete type and invokes the `serde` serialization functions.
 ///
-/// This is usually used for the internal implementation of [`vc_reflect::serde`],
-/// see more infomation in [`ReflectSerializeDriver`](vc_reflect::serde::ReflectSerializeDriver).
+/// This is typically used by the internal implementation of [`vc_reflect::serde`].
+/// See [`ReflectSerializeDriver`](vc_reflect::serde::ReflectSerializeDriver) for details.
 ///
 /// # Safety
 ///
@@ -20,7 +20,7 @@ use crate::registry::FromType;
 ///
 /// ```
 /// use core::any::TypeId;
-/// use vc_reflect::registry::{TypeTraitSerialize, TypeRegistry};
+/// use vc_reflect::registry::{ReflectSerialize, TypeRegistry};
 /// use vc_reflect::{Reflect, derive::Reflect};
 /// use serde::Serialize;
 ///
@@ -35,7 +35,7 @@ use crate::registry::FromType;
 ///
 /// let input = MyStruct { value: 123 };
 ///
-/// let processor = registry.get_type_trait::<TypeTraitSerialize>(TypeId::of::<MyStruct>()).unwrap();
+/// let processor = registry.get_type_trait::<ReflectSerialize>(TypeId::of::<MyStruct>()).unwrap();
 ///
 /// let mut output = String::new();
 /// let mut serializer = ron::Serializer::new(&mut output, None).unwrap();
@@ -45,11 +45,11 @@ use crate::registry::FromType;
 /// assert_eq!(output, r#"(value:123)"#);
 /// ```
 #[derive(Clone)]
-pub struct TypeTraitSerialize {
+pub struct ReflectSerialize {
     fun: fn(value: &dyn Reflect) -> &dyn erased_serde::Serialize,
 }
 
-impl<T: Serialize + Typed + Reflect> FromType<T> for TypeTraitSerialize {
+impl<T: Serialize + Typed + Reflect> FromType<T> for ReflectSerialize {
     fn from_type() -> Self {
         Self {
             fun: |value| match value.downcast_ref::<T>() {
@@ -66,10 +66,10 @@ impl<T: Serialize + Typed + Reflect> FromType<T> for TypeTraitSerialize {
     }
 }
 
-impl TypeTraitSerialize {
+impl ReflectSerialize {
     /// Serializes a reflected value.
     ///
-    /// See [`TypeTraitSerialize`] for examples.
+    /// See [`ReflectSerialize`] for examples.
     ///
     /// # Panic
     ///
@@ -86,20 +86,20 @@ impl TypeTraitSerialize {
 
 // Explicitly implemented here so that code readers do not need
 // to ponder the principles of proc-macros in advance.
-impl TypePath for TypeTraitSerialize {
+impl TypePath for ReflectSerialize {
     #[inline(always)]
     fn type_path() -> &'static str {
-        "vc_reflect::registry::TypeTraitSerialize"
+        "vc_reflect::registry::ReflectSerialize"
     }
 
     #[inline(always)]
     fn type_name() -> &'static str {
-        "TypeTraitSerialize"
+        "ReflectSerialize"
     }
 
     #[inline(always)]
     fn type_ident() -> &'static str {
-        "TypeTraitSerialize"
+        "ReflectSerialize"
     }
 
     #[inline(always)]
@@ -113,14 +113,14 @@ impl TypePath for TypeTraitSerialize {
 
 #[cfg(test)]
 mod tests {
-    use super::TypeTraitSerialize;
+    use super::ReflectSerialize;
     use crate::info::TypePath;
 
     #[test]
     fn type_path() {
-        assert!(TypeTraitSerialize::type_path() == "vc_reflect::registry::TypeTraitSerialize");
-        assert!(TypeTraitSerialize::module_path() == Some("vc_reflect::registry"));
-        assert!(TypeTraitSerialize::type_ident() == "TypeTraitSerialize");
-        assert!(TypeTraitSerialize::type_name() == "TypeTraitSerialize");
+        assert!(ReflectSerialize::type_path() == "vc_reflect::registry::ReflectSerialize");
+        assert!(ReflectSerialize::module_path() == Some("vc_reflect::registry"));
+        assert!(ReflectSerialize::type_ident() == "ReflectSerialize");
+        assert!(ReflectSerialize::type_name() == "ReflectSerialize");
     }
 }

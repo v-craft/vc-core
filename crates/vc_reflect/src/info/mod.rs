@@ -1,57 +1,57 @@
-//! Provide compile-time type infomation implementations.
+//! Provides compile-time type information and metadata APIs.
 //!
 //! ## Menu
 //!
-//! - [`TypeId`]: `core::any::TypeId`, a 16 Bytes value representing a single type, but it's uncertain before running.
+//! - [`TypeId`]: `core::any::TypeId`, a 16-byte value that uniquely identifies a type at runtime.
 //!
-//! - [`TypePath`]: A trait for obtaining type names, without prefix `::`.
+//! - [`TypePath`]: A trait for obtaining canonical type names without a leading `::`.
 //!     - [`type_path`](TypePath::type_path): Full name, a fixed and unique identifier for the type.
 //!     - [`type_name`](TypePath::type_name): The name without module path, may be duplicated.
 //!     - [`type_ident`](TypePath::type_ident): The name without generics and module path.
-//!     - [`module_path`](TypePath::module_path): optional module path(e.g. "vc_reflect::info").
+//!     - [`module_path`](TypePath::module_path): Optional module path, for example `vc_reflect::info`.
 //!
-//! - [`DynamicTypePath`]: Provide dynamic dispatch for `TypePath`.
+//! - [`DynamicTypePath`]: Dynamic dispatch support for `TypePath`.
 //!
-//! - [`TypePathTable`]: A struct, storaging 4 function pointer for a single type's `TypePath` implementation.
+//! - [`TypePathTable`]: A struct storing four function pointers for a single type's `TypePath` implementation.
 //!
-//! - [`Type`]: A struct contains a `TypeId` and a `TypePathTable`, 48 Bytes.
+//! - [`Type`]: A compact type descriptor containing a `TypeId` and a `TypePathTable`.
 //!
-//! - [`CustomAttributes`]: A attribute container, just like `Map<TypeId, Box<dyn Any>>`.
+//! - [`CustomAttributes`]: An attribute container similar to `Map<TypeId, Box<dyn Any>>`.
 //!
-//! - [`Generics`]: A list of `GenericInfo`, representing instantiated generics infomations.
-//!     - [`GenericInfo`]: A enum of `TypeParamInfo` and `ConstParamInfo`, 72 Bytes.
-//!     - [`TypeParamInfo`]: Type generic infomation, including param name, `Type` and optional default `Type`.
-//!     - [`ConstParamInfo`]: Const generic infomation, including param name, `Type` and const param value.
+//! - [`Generics`]: A list of `GenericInfo` values describing instantiated generic parameters.
+//!     - [`GenericInfo`]: An enum over `TypeParamInfo` and `ConstParamInfo`.
+//!     - [`TypeParamInfo`]: Type-parameter metadata, including parameter name, `Type`, and optional default `Type`.
+//!     - [`ConstParamInfo`]: Const-parameter metadata, including parameter name, `Type`, and const value.
 //!
-//! - [`TypeInfo`]: A enum representing compile-time type infomations, the inner is one of following:
-//!     - Note: The following types all contain Self's `Type` and generic information.
-//!     - [`ArrayInfo`]: For array(e.g. `[i32;5]`) infomation, including array capacity and item type info .
-//!     - [`ListInfo`]: For list-like(e.g. `Vec<i32>`) infomation, including item type info.
-//!     - [`TupleInfo`]: For tuple(e.g. `(i32, f32)`) infomation, including items(fields) type info.
-//!     - [`StructInfo`]: For struct(e.g. `A{..}`)  infomation, including field names, fields type info and custom attrirbutes.
-//!     - [`TupleStructInfo`]: For tuple-struct(e.g. `A(..)`) infomation, including fields type info and custom attrirbutes.
-//!     - [`EnumInfo`]: For enum infomation, including variants infomation and custom attrirbutes.
-//!     - [`MapInfo`]: For map-like(e.g. `HashMap<K, V>`) infomation, including key type info and value type info.
-//!     - [`SetInfo`]: For set-like(e.g. `HashSet<T>`) infomation, including value type info.
-//!     - [`OpaqueInfo`]: For Internal invisible types(e.g. `struct A;`, `String`), including custom attrirbutes.
+//! - [`TypeInfo`]: An enum representing compile-time type metadata. Variants include:
+//!     - Note: Each of the following types contains the type's own `Type` and generic metadata.
+//!     - [`ArrayInfo`]: Array metadata, such as `[i32; 5]`, including capacity and item type information.
+//!     - [`ListInfo`]: List-like metadata, such as `Vec<i32>`, including item type information.
+//!     - [`TupleInfo`]: Tuple metadata, such as `(i32, f32)`, including per-field type information.
+//!     - [`StructInfo`]: Struct metadata, such as `A { .. }`, including field names, field types, and custom attributes.
+//!     - [`TupleStructInfo`]: Tuple-struct metadata, such as `A(..)`, including field types and custom attributes.
+//!     - [`EnumInfo`]: Enum metadata, including variant metadata and custom attributes.
+//!     - [`MapInfo`]: Map-like metadata, such as `HashMap<K, V>`, including key and value type information.
+//!     - [`SetInfo`]: Set-like metadata, such as `HashSet<T>`, including value type information.
+//!     - [`OpaqueInfo`]: Metadata for opaque types, such as `struct A;` or `String`.
 //!
-//! - [`VariantInfo`]: A enum representing a enum variant infomation, the inner is one of following:
-//!     - Note: The following types all contain Self's variant name and custom attributes,
-//!     - [`StructVariantInfo`]: Similiar to `StructInfo`, but without generic info.
-//!     - [`TupleVariantInfo`]: Similiar to `TupleInfo`,
+//! - [`VariantInfo`]: An enum representing enum variant metadata. Variants include:
+//!     - Note: Each of the following types contains the variant name and custom attributes.
+//!     - [`StructVariantInfo`]: Similar to `StructInfo`, but without generic metadata.
+//!     - [`TupleVariantInfo`]: Similar to `TupleInfo`.
 //!     - [`UnitVariantInfo`]: No more content.
 //!
 //! - Field Info:
-//!     - [`NamedField`]: For struct's field, including field name, field type info and custom attributes.
-//!     - [`UnnamedField`]: For tuple(or tuple-struct)'s field, including field index, field type info and custom attributes.
+//!     - [`NamedField`]: Metadata for struct fields, including name, field type, and custom attributes.
+//!     - [`UnnamedField`]: Metadata for tuple and tuple-struct fields, including index, field type, and custom attributes.
 //!
 //! - Kind:
-//!     - [`ReflectKind`]: representing reflect type kind, for example `Struct`, `Array`, `Opaque` .
-//!     - [`VariantKind`]: representing enum variant kind, one of `Struct`, `Tuple` and `Unit`.
+//!     - [`ReflectKind`]: The broad reflection kind, such as `Struct`, `Array`, or `Opaque`.
+//!     - [`VariantKind`]: The enum variant kind: `Struct`, `Tuple`, or `Unit`.
 //!
-//! - [`Typed`]: A trait for obtaining `TypeInfo` data.
+//! - [`Typed`]: A trait for obtaining `TypeInfo` for a concrete type.
 //!
-//! - [`DynamicTyped`]: Provide dynamic dispatch for `Typed`.
+//! - [`DynamicTyped`]: Dynamic dispatch support for `Typed`.
 //!
 //! [`TypeId`]: core::any::TypeId
 

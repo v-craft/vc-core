@@ -32,34 +32,34 @@ pub(crate) fn type_registry_(vc_reflect_path: &syn::Path) -> TokenStream {
 #[inline]
 pub(crate) fn type_trait_default_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::registry::TypeTraitDefault
+        #vc_reflect_path::registry::ReflectDefault
     }
 }
 
 #[inline]
 pub(crate) fn type_trait_from_ptr_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::registry::TypeTraitFromPtr
+        #vc_reflect_path::registry::ReflectFromPtr
     }
 }
 
 #[inline]
 pub(crate) fn type_trait_from_reflect_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::registry::TypeTraitFromReflect
+        #vc_reflect_path::registry::ReflectFromReflect
     }
 }
 
 #[inline]
 pub(crate) fn type_trait_serialize_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::registry::TypeTraitSerialize
+        #vc_reflect_path::registry::ReflectSerialize
     }
 }
 
 #[inline]
 pub(crate) fn type_trait_deserialize_(vc_reflect_path: &syn::Path) -> TokenStream {
     quote! {
-        #vc_reflect_path::registry::TypeTraitDeserialize
+        #vc_reflect_path::registry::ReflectDeserialize
     }
 }

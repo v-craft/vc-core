@@ -19,7 +19,7 @@ crate::cfg::debug! {
 
 use crate::Reflect;
 use crate::ops::ReflectRef;
-use crate::registry::{TypeRegistry, TypeTraitSerialize};
+use crate::registry::{ReflectSerialize, TypeRegistry};
 
 // -----------------------------------------------------------------------------
 // SerializeDriver
@@ -33,7 +33,7 @@ use crate::registry::{TypeRegistry, TypeTraitSerialize};
 /// 1. **Processor Priority**: First attempts to use the provided [`SerializeProcessor`].
 ///    If the processor handles the type (successfully or with an error), its result is returned immediately.
 ///
-/// 2. **Trait Fallback**: If no processor is available, looks for [`TypeTraitSerialize`]
+/// 2. **Trait Fallback**: If no processor is available, looks for [`ReflectSerialize`]
 ///    in the type metadata and uses its implementation.
 ///
 /// 3. **Reflection Default**: As a last resort, uses the reflection system's default serialization method.
@@ -164,16 +164,16 @@ impl<'a, P: SerializeProcessor> Serialize for SerializeDriver<'a, P> {
         let serializer = if let Some(processor) = self.processor {
             match processor.try_serialize(self.value, self.registry, serializer) {
                 Ok(result) => return result,
-                Err(serializer) => serializer, // Not support serialize, it's not a error.
+                Err(serializer) => serializer, // Processor did not handle this value.
             }
         } else {
             serializer
         };
 
-        // Try to get the Serializ impl of the type itself
+        // Prefer the type's registered serde serializer when available.
         if let Some(p) = self
             .registry
-            .get_type_trait::<TypeTraitSerialize>(self.value.type_id())
+            .get_type_trait::<ReflectSerialize>(self.value.type_id())
         {
             return p.serialize(self.value, serializer);
         }
@@ -236,7 +236,7 @@ impl<'a, P: SerializeProcessor> Serialize for SerializeDriver<'a, P> {
             }
             .serialize(serializer),
             ReflectRef::Opaque(_) => Err(ser::Error::custom(format!(
-                "No serialization method available for this Opauqe type was found: `{}` .",
+                "No serialization method is available for this opaque type: `{}`.",
                 self.value.reflect_type_path(),
             ))),
         };
@@ -263,7 +263,7 @@ impl<'a, P: SerializeProcessor> Serialize for SerializeDriver<'a, P> {
 /// 1. **Processor Priority**: First attempts to use the provided [`SerializeProcessor`].
 ///    If the processor handles the type (successfully or with an error), its result is returned immediately.
 ///
-/// 2. **Trait Fallback**: If no processor is available, looks for [`TypeTraitSerialize`]
+/// 2. **Trait Fallback**: If no processor is available, looks for [`ReflectSerialize`]
 ///    in the type registry and uses its implementation.
 ///
 /// 3. **Reflection Default**: As a last resort, uses the reflection system's default serialization method.

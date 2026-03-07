@@ -193,9 +193,9 @@ macro_rules! impl_reflect_for_hashmap {
         {
             fn get_type_meta() -> $crate::registry::TypeMeta {
                 let mut type_meta = $crate::registry::TypeMeta::with_capacity::<Self>(3);
-                type_meta.insert_trait::<$crate::registry::TypeTraitFromPtr>($crate::registry::FromType::<Self>::from_type());
-                type_meta.insert_trait::<$crate::registry::TypeTraitFromReflect>($crate::registry::FromType::<Self>::from_type());
-                type_meta.insert_trait::<$crate::registry::TypeTraitDefault>($crate::registry::FromType::<Self>::from_type());
+                type_meta.insert_trait::<$crate::registry::ReflectFromPtr>($crate::registry::FromType::<Self>::from_type());
+                type_meta.insert_trait::<$crate::registry::ReflectFromReflect>($crate::registry::FromType::<Self>::from_type());
+                type_meta.insert_trait::<$crate::registry::ReflectDefault>($crate::registry::FromType::<Self>::from_type());
                 type_meta
             }
 
@@ -450,13 +450,13 @@ macro_rules! impl_reflect_for_fixedhashmap {
         {
             fn get_type_meta() -> $crate::registry::TypeMeta {
                 let mut type_meta = $crate::registry::TypeMeta::with_capacity::<Self>(3);
-                type_meta.insert_trait::<$crate::registry::TypeTraitFromPtr>(
+                type_meta.insert_trait::<$crate::registry::ReflectFromPtr>(
                     $crate::registry::FromType::<Self>::from_type(),
                 );
-                type_meta.insert_trait::<$crate::registry::TypeTraitFromReflect>(
+                type_meta.insert_trait::<$crate::registry::ReflectFromReflect>(
                     $crate::registry::FromType::<Self>::from_type(),
                 );
-                type_meta.insert_trait::<$crate::registry::TypeTraitDefault>(
+                type_meta.insert_trait::<$crate::registry::ReflectDefault>(
                     $crate::registry::FromType::<Self>::from_type(),
                 );
                 type_meta

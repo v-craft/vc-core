@@ -242,7 +242,7 @@ pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
 
     /// Returns the [`TypeInfo`] of the type **represented** by this value.
     ///
-    /// For most types, this will simply return their own [`TypeInfo`], as same as [`reflect_type_info`].
+    /// For most types, this simply returns their own [`TypeInfo`], just like [`reflect_type_info`].
     ///
     /// However, for dynamic types, such as [`DynamicStruct`] or [`DynamicList`],
     /// this will return the type they represent
@@ -339,7 +339,7 @@ pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
     /// This method will panic if the [kind] is [opaque] and the call to [`reflect_clone`] fails.
     ///
     /// By default, [`#[derive(Reflect)]`](crate::derive::Reflect) requires the
-    /// `reflecct(clone)` flag for Opaque type, so this function will hardly panic.
+    /// `#[reflect(clone)]` flag for opaque types, so this function rarely panics.
     ///
     /// # Example
     ///
@@ -380,16 +380,16 @@ pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
         to_dynamic_internal(&self.reflect_ref())
     }
 
-    /// Try applies a reflected value to this value.
+    /// Tries to apply a reflected value to this value.
     ///
     /// # Apply Rules
     ///
     /// If `self.type_id` == `value.type_id`:
     ///
-    /// - If the type support `Clone`, try `Reflect::downcast_ref` + `Clone::clone` + assignment.
+    /// - If the type supports `Clone`, try `Reflect::downcast_ref` + `Clone::clone` + assignment.
     /// - Otherwise, try `Reflect::reflect_clone` + `Reflect::take` + assignment.
     ///
-    /// Otherwise, call following method, depend on [`ReflectKind`]:
+    /// Otherwise, dispatch to one of the following helpers based on [`ReflectKind`]:
     ///
     /// - [`crate::impls::array_apply`]
     /// - [`crate::impls::list_apply`]
@@ -400,32 +400,32 @@ pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
     /// - [`crate::impls::set_apply`]
     /// - [`crate::impls::map_apply`]
     ///
-    /// The only special kind is `Enum`, the same type but different variant
-    /// cannot `apply` through `enum_apply` directly,
+    /// The only special kind is `Enum`: values of the same type but different variants
+    /// cannot `apply` through `enum_apply` directly.
     /// The default implementation may depend on [`FromReflect`](crate::FromReflect).
     ///
     /// # Fail Reason
-    /// - Defferent [`ReflectKind`].
-    /// - Defferent Item/Field size in `Array`, `Tuple`, `TupleStruct` and `Enum`'s tuple variant.
-    /// - Incompatible type in any apply.
-    /// - Opaque type but do not support `Clone` or reflect clone.
+    /// - Different [`ReflectKind`] values.
+    /// - Different item/field counts in `Array`, `Tuple`, `TupleStruct`, and `Enum` tuple variants.
+    /// - An incompatible type encountered during application.
+    /// - Opaque types that do not support `Clone` or `reflect_clone`.
     ///
     /// # Handling Errors
     ///
-    /// This function may leave `self` in a partially mutated state if a error was encountered on the way.
-    /// consider maintaining a cloned instance of this data you can switch to if a error is encountered.
+    /// This function may leave `self` in a partially mutated state if an error is encountered.
+    /// Consider keeping a cloned backup if you need rollback semantics.
     fn apply(&mut self, value: &dyn Reflect) -> Result<(), ApplyError>;
 
     /// Attempts to clone `Self` using reflection.
     ///
     /// Unlike [`to_dynamic`], which generally returns a dynamic representation of `Self`,
-    /// this method attempts create a clone of `Self` directly, if possible.
+    /// this method attempts to create a clone of `Self` directly, if possible.
     ///
     /// This function normally succeeds, except for certain types that explicitly prohibit cloning.
     /// But if the clone cannot be performed, an appropriate [`ReflectCloneError`] is returned.
     ///
     /// Note that when cloning successfully, the returned value
-    /// must with the same type, otherwise the program may panic in some functions.
+    /// must have the same type, otherwise some APIs may panic.
     ///
     /// # Example
     ///
@@ -440,9 +440,9 @@ pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
     ///
     /// 1. If the `reflect(Clone)` flag is enabled, this function will call [`Clone::clone`] directly.
     /// 2. Otherwise:
-    ///     1. If the type is unit struct and without `reflect(Opauqe)` flag, crate a new value directly.
-    ///     2. If the type is not Opaque, try to clone fields and create a new value.
-    ///     3. return `Err`
+    ///     1. If the type is a unit struct without the `reflect(Opaque)` flag, create a new value directly.
+    ///     2. If the type is not opaque, try to clone its fields and construct a new value.
+    ///     3. Return `Err`.
     ///
     /// Therefore, it's generally recommended to implement [`Clone`] for your type and
     /// mark it with the `#[reflect(clone)]` attribute.
@@ -828,3 +828,44 @@ macro_rules! impl_reflect_cast_fn {
 }
 
 pub(crate) use impl_reflect_cast_fn;
+
+// -----------------------------------------------------------------------------
+// tests
+
+#[cfg(test)]
+mod tests {
+    use crate::derive::Reflect;
+    use crate::info::TypePath;
+    use crate::{FromReflect, Reflect};
+
+    #[derive(Reflect, Clone, PartialEq, Debug)]
+    #[reflect(clone)]
+    struct Sample {
+        value: i32,
+    }
+
+    #[test]
+    fn core_methods() {
+        let mut value = Sample { value: 1 };
+
+        assert_eq!(value.as_reflect().reflect_type_path(), Sample::type_path());
+
+        value.apply(&Sample { value: 2 }).unwrap();
+        assert_eq!(value.value, 2);
+
+        let boxed = value.clone().into_boxed_reflect();
+        let mut target = Sample { value: 0 };
+        target.set(boxed).unwrap();
+        assert_eq!(target.value, 2);
+
+        let dynamic = target.to_dynamic();
+        assert!(dynamic.is_dynamic());
+        assert!(dynamic.represents::<Sample>());
+
+        let cloned = target.reflect_clone().unwrap().take::<Sample>().unwrap();
+        assert_eq!(cloned, target);
+
+        let rebuilt = Sample::from_reflect(dynamic.as_ref()).unwrap();
+        assert_eq!(rebuilt, target);
+    }
+}

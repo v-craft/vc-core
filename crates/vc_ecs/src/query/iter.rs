@@ -1,6 +1,6 @@
 use core::iter::FusedIterator;
 
-use super::{QueryData, QueryFilter, QueryState, ReadOnlyQueryData, Query};
+use super::{Query, QueryData, QueryFilter, QueryState, ReadOnlyQueryData};
 use crate::entity::{Entity, StorageId};
 use crate::storage::TableRow;
 use crate::tick::Tick;
@@ -148,18 +148,14 @@ impl<'w, 's, D: QueryData, F: QueryFilter> IntoIterator for Query<'w, 's, D, F> 
 
 impl<'s, D: QueryData, F: QueryFilter> Query<'_, 's, D, F> {
     pub fn iter_mut(&mut self) -> QueryIter<'_, 's, D, F> {
-        unsafe {
-            QueryIter::new(self.world, self.state, self.last_run, self.this_run)
-        }
+        unsafe { QueryIter::new(self.world, self.state, self.last_run, self.this_run) }
     }
 
     pub fn iter(&mut self) -> QueryIter<'_, 's, D, F>
     where
         D: ReadOnlyQueryData,
     {
-        unsafe {
-            QueryIter::new(self.world, self.state, self.last_run, self.this_run)
-        }
+        unsafe { QueryIter::new(self.world, self.state, self.last_run, self.this_run) }
     }
 }
 
@@ -168,9 +164,7 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
         let last_run = world.last_run;
         let this_run = Tick::new(*world.this_run.get_mut());
         let world = world.unsafe_world();
-        unsafe {
-            QueryIter::new(world, self, last_run, this_run)
-        }
+        unsafe { QueryIter::new(world, self, last_run, this_run) }
     }
 
     pub fn iter<'s, 'w>(&'s self, world: &'w World) -> QueryIter<'w, 's, D, F>
@@ -180,8 +174,6 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
         let last_run = world.last_run();
         let this_run = world.this_run();
         let world = world.unsafe_world();
-        unsafe {
-            QueryIter::new(world, self, last_run, this_run)
-        }
+        unsafe { QueryIter::new(world, self, last_run, this_run) }
     }
 }

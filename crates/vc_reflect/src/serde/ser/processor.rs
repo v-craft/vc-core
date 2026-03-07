@@ -22,11 +22,11 @@ use crate::registry::TypeRegistry;
 /// (indicating no support for any type).
 ///
 /// This does not mean that serialization is not supported, [`SerializeDriver`] will still
-/// try using [`TypeTraitSerialize`] and default serialization methods.
+/// try using [`ReflectSerialize`] and default serialization methods.
 ///
 /// See serialization rules in [`SerializeDriver`] .
 ///
-/// [`TypeTraitSerialize`]: crate::registry::TypeTraitSerialize
+/// [`ReflectSerialize`]: crate::registry::ReflectSerialize
 /// [`SerializeDriver`]: crate::serde::SerializeDriver
 /// [`&dyn Reflect`]: crate::Reflect
 /// [`&TypeRegistry`]: crate::registry::TypeRegistry

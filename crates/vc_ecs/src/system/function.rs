@@ -1,12 +1,12 @@
 use core::marker::PhantomData;
 
 use super::{AccessTable, System, SystemFlags, SystemIn, SystemMeta};
-use crate::utils::DebugName;
-use crate::world::{World, WorldId};
 use crate::error::ECSError;
 use crate::tick::Tick;
+use crate::utils::DebugName;
+use crate::world::{World, WorldId};
 
-use super::{SystemParam, SystemInput};
+use super::{SystemInput, SystemParam};
 
 // -----------------------------------------------------------------------------
 // SystemFunction
@@ -273,11 +273,9 @@ where
 
     fn initialize(&mut self, world: &mut World) -> AccessTable {
         let mut table = AccessTable::new();
-        let state = self.state.get_or_insert_with(|| {
-            FunctionState {
-                param: <F::Param as SystemParam>::init_state(world),
-                world_id: world.id(),
-            }
+        let state = self.state.get_or_insert_with(|| FunctionState {
+            param: <F::Param as SystemParam>::init_state(world),
+            world_id: world.id(),
         });
         let validation = <F::Param as SystemParam>::mark_access(&mut table, &state.param);
         assert!(validation, "invalid system {}", self.meta.name());
@@ -304,4 +302,3 @@ where
         Ok(output)
     }
 }
-

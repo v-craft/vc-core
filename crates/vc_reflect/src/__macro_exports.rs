@@ -5,7 +5,7 @@
 // -----------------------------------------------------------------------------
 // Macro tools
 
-/// A internal module provided for proc-macro implementation.
+/// An internal module provided for proc-macro implementation.
 pub mod macro_utils {
     // When generating code, using `std` or `alloc` directly is unsafe.
     // Users may be in a `no_std` env or not displaying imported `alloc`.
@@ -20,7 +20,7 @@ pub mod macro_utils {
     // An efficient string concatenation function.
     pub use crate::impls::concat as __concat;
 
-    // use for `reflect_clone` impl
+    // Shared helper for generated `reflect_clone` implementations.
     pub fn __reflect_clone_field<T: crate::Reflect + crate::info::TypePath>(
         source: &T,
     ) -> Result<T, crate::ops::ReflectCloneError> {
@@ -39,9 +39,9 @@ pub mod macro_utils {
 // -----------------------------------------------------------------------------
 // auto_register support
 
-/// A internal module provided for auto_register implementation.
+/// An internal module provided for auto-register implementation.
 ///
-/// See more infomation in [`TypeRegistry::auto_register`];
+/// See [`TypeRegistry::auto_register`] for details.
 ///
 /// [`TypeRegistry::auto_register`]: crate::registry::TypeRegistry::auto_register
 #[cfg(feature = "auto_register")]
@@ -49,10 +49,10 @@ pub mod auto_register {
     use crate::derive::Reflect;
     use crate::registry::{GetTypeMeta, TypeMeta, TypeRegistry};
 
-    /// We use `inventory` crate to implement static registration.
+    /// Re-exported because auto-registration is implemented through `inventory`.
     pub use inventory;
 
-    /// We will collect all registration function through this wrapper.
+    /// Wraps a collected auto-registration function.
     pub struct __AutoRegisterFunc(pub fn(&mut TypeRegistry));
 
     inventory::collect!(__AutoRegisterFunc);
@@ -78,7 +78,7 @@ pub mod auto_register {
         }
     }
 
-    /// A register function provides for [`TypeRegistry::auto_register`].
+    /// A registration function used by [`TypeRegistry::auto_register`].
     pub fn __register_types(registry: &mut TypeRegistry) {
         #[cfg(target_family = "wasm")]
         wasm_support::init();
@@ -97,15 +97,15 @@ pub mod auto_register {
             fn __wasm_call_ctors();
         }
 
-        /// This function must be called before using [`inventory::iter`]
-        /// on [`AutomaticReflectRegistrations`] to run constructors on all platforms.
+        /// Must be called before using [`inventory::iter`] on wasm platforms
+        /// so global constructors are executed.
         pub fn init() {
             static ONCE: Once = Once::new();
             // SAFETY:
             // This will call constructors on wasm platforms at most once.
             //
             // See: https://docs.rs/inventory/latest/inventory/#webassembly-and-constructors
-            #[expect(unsafe_code, reason = "This function must be called to on wasm.")]
+            #[expect(unsafe_code, reason = "This function must be called on wasm.")]
             ONCE.call_once(|| unsafe {
                 __wasm_call_ctors();
             });

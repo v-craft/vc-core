@@ -11,7 +11,7 @@ use crate::info::{GenericInfo, Generics, TypeParamInfo};
 use crate::info::{MapInfo, SetInfo, TypeInfo, TypePath, Typed};
 use crate::ops::{ApplyError, Map, ReflectCloneError, Set};
 use crate::registry::{FromType, GetTypeMeta, TypeMeta, TypeRegistry};
-use crate::registry::{TypeTraitDefault, TypeTraitFromPtr, TypeTraitFromReflect};
+use crate::registry::{ReflectDefault, ReflectFromPtr, ReflectFromReflect};
 use crate::{FromReflect, Reflect};
 
 // -----------------------------------------------------------------------------
@@ -187,9 +187,9 @@ where
 {
     fn get_type_meta() -> TypeMeta {
         let mut type_meta = TypeMeta::with_capacity::<Self>(3);
-        type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitDefault>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectDefault>(FromType::<Self>::from_type());
         type_meta
     }
 
@@ -402,9 +402,9 @@ where
 {
     fn get_type_meta() -> TypeMeta {
         let mut type_meta = TypeMeta::with_capacity::<Self>(3);
-        type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitDefault>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectDefault>(FromType::<Self>::from_type());
         type_meta
     }
 
@@ -579,9 +579,9 @@ where
 {
     fn get_type_meta() -> TypeMeta {
         let mut type_meta = TypeMeta::with_capacity::<Self>(3);
-        type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitDefault>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectDefault>(FromType::<Self>::from_type());
         type_meta
     }
 
@@ -788,9 +788,9 @@ where
 {
     fn get_type_meta() -> TypeMeta {
         let mut type_meta = TypeMeta::with_capacity::<Self>(3);
-        type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitDefault>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectDefault>(FromType::<Self>::from_type());
         type_meta
     }
 

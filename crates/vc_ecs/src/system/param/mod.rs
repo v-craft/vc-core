@@ -3,17 +3,17 @@
 // -----------------------------------------------------------------------------
 // Modules
 
+mod local;
 mod marker;
 mod resource;
-mod world;
 mod tuples;
-mod local;
+mod world;
 
 // -----------------------------------------------------------------------------
 // marker
 
-pub use marker::{MainThread, NonSend, Exclusive};
 pub use local::Local;
+pub use marker::{Exclusive, MainThread, NonSend};
 
 // -----------------------------------------------------------------------------
 // SystemParam

@@ -11,7 +11,7 @@ use crate::registry::TypeRegistry;
 use crate::serde::SkipSerde;
 
 // -----------------------------------------------------------------------------
-// Infomation trait
+// Tuple-like metadata access
 
 pub(super) trait TupleLikeInfo {
     fn field_at<E: Error>(&self, index: usize) -> Result<&UnnamedField, E>;
@@ -73,7 +73,7 @@ impl TupleLikeInfo for TupleVariantInfo {
 }
 
 // -----------------------------------------------------------------------------
-// tuple visitor
+// Tuple visitor
 
 /// Deserializes a [tuple-like] type from a sequence of elements, returning a [`DynamicTuple`].
 ///
@@ -95,7 +95,7 @@ where
     for index in 0..len {
         let field_info = info.field_at::<V::Error>(index)?;
 
-        // skip serde fields
+        // Skip fields annotated with `SkipSerde`.
         if let Some(skip_serde) = field_info.get_attribute::<SkipSerde>() {
             if let Some(val) = skip_serde.get(field_info.type_id(), registry)? {
                 dynamic_tuple.extend_boxed(val);

@@ -8,10 +8,10 @@ use crate::info::Typed;
 /// # Example
 ///
 /// ```
-/// # use vc_reflect::registry::{TypeMeta, TypeTraitDefault, FromType};
+/// # use vc_reflect::registry::{TypeMeta, ReflectDefault, FromType};
 /// let mut meta = TypeMeta::of::<String>();
 ///
-/// meta.insert_trait::<TypeTraitDefault>(FromType::<String>::from_type());
+/// meta.insert_trait::<ReflectDefault>(FromType::<String>::from_type());
 /// ```
 ///
 /// [`TypeTrait`]: crate::registry::TypeTrait

@@ -10,13 +10,13 @@
 //!
 //! ## Serialization
 //!
-//! - [`TypeTraitSerialize`]: Stores function pointers that enable dynamic types to invoke
+//! - [`ReflectSerialize`]: Stores function pointers that enable dynamic types to invoke
 //!   `serde`'s serialization implementations.
 //! - [`SerializeProcessor`]: Serialization processor that allows users to customize
 //!   serialization behavior.
 //! - [`SerializeDriver`]: Standard serializer that follows a priority-based dispatch strategy.
 //!     - First attempts to use [`SerializeProcessor`]; if supported, returns its result immediately.
-//!     - Then queries and invokes [`TypeTraitSerialize`] if available.
+//!     - Then queries and invokes [`ReflectSerialize`] if available.
 //!     - Finally falls back to reflection-based serialization (unavailable for Opaque types).
 //! - [`ReflectSerializeDriver`]: Wraps serialized data with type path mapping to preserve type information.
 //!     - Only the outermost layer includes type paths; inner data types are inferred from field names,
@@ -26,13 +26,13 @@
 //!
 //! ## Deserialization
 //!
-//! - [`TypeTraitDeserialize`]: Stores function pointers that enable dynamic types to invoke
+//! - [`ReflectDeserialize`]: Stores function pointers that enable dynamic types to invoke
 //!   `serde`'s deserialization implementations.
 //! - [`DeserializeProcessor`]: Deserialization processor that allows users to customize
 //!   deserialization behavior.
 //! - [`DeserializeDriver`]: Standard deserializer that follows a priority-based dispatch strategy.
 //!     - First attempts to use [`DeserializeProcessor`]; if supported, returns its result immediately.
-//!     - Then queries and invokes [`TypeTraitDeserialize`] if available.
+//!     - Then queries and invokes [`ReflectDeserialize`] if available.
 //!     - Finally falls back to reflection-based deserialization (unavailable for Opaque types).
 //!     - Corresponds to [`SerializeDriver`]; requires explicit [`TypeMeta`] since data lacks type information.
 //! - [`ReflectDeserializeDriver`]: Parses data with type path mapping (corresponds to [`ReflectSerializeDriver`]).
@@ -63,8 +63,8 @@
 //! See code examples in [`SkipSerde`].
 //!
 //! [`TypeMeta`]: crate::registry::TypeMeta
-//! [`TypeTraitDeserialize`]: crate::registry::TypeTraitDeserialize
-//! [`TypeTraitSerialize`]: crate::registry::TypeTraitSerialize
+//! [`ReflectDeserialize`]: crate::registry::ReflectDeserialize
+//! [`ReflectSerialize`]: crate::registry::ReflectSerialize
 
 // -----------------------------------------------------------------------------
 // Debug utils

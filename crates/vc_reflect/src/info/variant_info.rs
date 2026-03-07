@@ -7,7 +7,7 @@ use crate::info::{CustomAttributes, NamedField, UnnamedField, impl_docs_fn};
 use crate::info::{impl_custom_attributes_fn, impl_with_custom_attributes};
 
 // -----------------------------------------------------------------------------
-// Enum Varient Kind
+// Enum Variant Kind
 
 /// Represents the kind/form of an enum variant.
 ///
@@ -58,7 +58,7 @@ impl error::Error for VariantKindError {}
 // -----------------------------------------------------------------------------
 // Struct-like variant
 
-/// Infomation for struct style enum variants.
+/// Information for struct-style enum variants.
 ///
 /// # Examples
 ///
@@ -160,7 +160,7 @@ impl StructVariantInfo {
 // -----------------------------------------------------------------------------
 // Tuple-like variant
 
-/// Infomation for tuple style enum variants.
+/// Information for tuple-style enum variants.
 ///
 /// # Examples
 ///
@@ -236,7 +236,7 @@ impl TupleVariantInfo {
 // -----------------------------------------------------------------------------
 // Unit variant
 
-/// Infomation for unit enum variants.
+/// Information for unit enum variants.
 ///
 /// # Examples
 ///

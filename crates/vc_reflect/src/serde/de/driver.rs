@@ -19,7 +19,7 @@ use super::tuple_visitor::TupleVisitor;
 use crate::Reflect;
 use crate::info::{TypeInfo, Typed};
 use crate::registry::{GetTypeMeta, TypeMeta, TypeRegistry};
-use crate::registry::{TypeTraitDeserialize, TypeTraitFromReflect};
+use crate::registry::{ReflectDeserialize, ReflectFromReflect};
 
 crate::cfg::debug! {
     use super::error_utils::TYPE_INFO_STACK;
@@ -39,7 +39,7 @@ crate::cfg::debug! {
 /// 1. **Processor First**: Attempt to use the [`DeserializeProcessor`] if provided.
 ///    If the processor supports the type (successfully or with an error), return its result immediately.
 ///
-/// 2. **Type Trait Fallback**: If no processor is available, look for [`TypeTraitDeserialize`]
+/// 2. **Type Trait Fallback**: If no processor is available, look for [`ReflectDeserialize`]
 ///    in the [`TypeMeta`] and use its implementation.
 ///
 /// 3. **Reflection Default**: As a last resort, use the reflection system's default deserialization method,
@@ -50,7 +50,7 @@ crate::cfg::debug! {
 ///
 /// ## Why Default Method Returns Dynamic Type
 ///
-/// [`TypeTraitFromReflect`] copies data rather than moving it.
+/// [`ReflectFromReflect`] copies data rather than moving it.
 /// If automatic type conversion were attempted after each parsing step,
 /// it would result in copying data at every level (exponential cost based on type nesting depth).
 ///
@@ -106,7 +106,7 @@ crate::cfg::debug! {
 /// # use core::any::TypeId;
 /// # use serde_core::de::DeserializeSeed;
 /// # use vc_reflect::{derive::Reflect, Reflect, FromReflect, serde::DeserializeDriver};
-/// # use vc_reflect::{ops::DynamicStruct, registry::{TypeRegistry, TypeTraitFromReflect}};
+/// # use vc_reflect::{ops::DynamicStruct, registry::{TypeRegistry, ReflectFromReflect}};
 /// #[derive(Reflect, PartialEq, Debug)]
 /// struct MyStruct {
 ///   value: i32
@@ -135,9 +135,9 @@ crate::cfg::debug! {
 /// let value: MyStruct = <MyStruct as FromReflect>::from_reflect(&*output).unwrap();
 /// assert_eq!(value, MyStruct { value: 123 });
 ///
-/// // We can also do this dynamically with `TypeTraitFromReflect`.
+/// // We can also do this dynamically with `ReflectFromReflect`.
 /// let type_id = output.represented_type_info().unwrap().type_id();
-/// let from_reflect = registry.get_type_trait::<TypeTraitFromReflect>(type_id).unwrap();
+/// let from_reflect = registry.get_type_trait::<ReflectFromReflect>(type_id).unwrap();
 /// let value: Box<dyn Reflect> = from_reflect.from_reflect(&*output).unwrap();
 /// assert!(value.is::<MyStruct>());
 /// assert_eq!(value.take::<MyStruct>().unwrap(), MyStruct { value: 123 });
@@ -235,7 +235,7 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for DeserializeDriver<'_
             deserializer
         };
 
-        if let Some(deserialize_reflect) = self.type_meta.get_trait::<TypeTraitDeserialize>() {
+        if let Some(deserialize_reflect) = self.type_meta.get_trait::<ReflectDeserialize>() {
             return deserialize_reflect.deserialize(deserializer);
         }
 
@@ -356,7 +356,7 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for DeserializeDriver<'_
                 Ok(Box::new(dynamic_enum))
             }
             TypeInfo::Opaque(_) => Err(Error::custom(
-                "No deserialization method available for this Opauqe was found.",
+                "No deserialization method is available for this opaque type.",
             )),
         };
 
@@ -384,11 +384,11 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for DeserializeDriver<'_
 /// 1. **Processor First**: Attempt to use the [`DeserializeProcessor`] if provided.
 ///    If the processor supports the type (successfully or with an error), return its result immediately.
 ///
-/// 2. **Type Trait Fallback**: If no processor is available, look for [`TypeTraitDeserialize`]
+/// 2. **Type Trait Fallback**: If no processor is available, look for [`ReflectDeserialize`]
 ///    in the [`TypeMeta`] and use its implementation.
 ///
 /// 3. **Reflection Default**: As a last resort, use the reflection system's default deserialization method.
-///    Finally, try using the [`TypeTraitFromReflect`] conversion type.
+///    Finally, try using the [`ReflectFromReflect`] conversion type.
 ///
 /// For custom `Opaque` types, the reflection system does **not** provide a default deserialization implementation.
 /// Users must annotate the type with `#[reflect(deserialize)]` to supply a serde-based `Deserialize` implementation.
@@ -414,14 +414,14 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for DeserializeDriver<'_
 ///
 /// This deserializer will return a [`Box<dyn Reflect>`] containing the deserialized data.
 ///
-/// For the types that registered [`TypeTraitDeserialize`] type trait, this `Box` will contain the expected type
+/// For the types that registered [`ReflectDeserialize`] type trait, this `Box` will contain the expected type
 /// **if feasible**. For example, deserializing an `i32` will return a `Box<i32>` (as a `Box<dyn Reflect>`).
 ///
 /// Otherwise, this `Box` will contain the dynamic equivalent.
 /// For example, a deserialized struct might return a [`Box<DynamicStruct>`].
 ///
 /// This means that if the actual type is needed, these dynamic representations will need to
-/// be converted to the concrete type using [`FromReflect`] or [`TypeTraitFromReflect`] manually.
+/// be converted to the concrete type using [`FromReflect`] or [`ReflectFromReflect`] manually.
 ///
 /// # Example
 ///
@@ -450,7 +450,7 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for DeserializeDriver<'_
 /// let output: Box<dyn Reflect> = deserializer.deserialize(&mut data).unwrap();
 ///
 /// // Because A implements FromReflect, the parser will attempt to convert the type once
-/// // through `TypeTraitFromReflect` at the end, and this will inevitably succeed
+/// // through `ReflectFromReflect` at the end, and this will inevitably succeed
 /// // when the data is accurate.
 /// assert!(output.is::<MyStruct>());
 ///
@@ -508,7 +508,7 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for ReflectDeserializeDr
             where
                 A: MapAccess<'de>,
             {
-                // Get `TypeMeta` from registry
+                // Resolve the target type metadata from the registry.
                 let type_meta = map
                     .next_key_seed(TypePathDeserializer::new(self.registry))?
                     .ok_or_else(|| Error::invalid_length(0, &"a single entry"))?;
@@ -524,7 +524,7 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for ReflectDeserializeDr
                 }
 
                 if (*value).type_id() != type_meta.type_id()
-                    && let Some(from_reflect) = type_meta.get_trait::<TypeTraitFromReflect>()
+                    && let Some(from_reflect) = type_meta.get_trait::<ReflectFromReflect>()
                     && let Some(target_value) = from_reflect.from_reflect(&*value)
                 {
                     return Ok(target_value);
@@ -535,7 +535,7 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for ReflectDeserializeDr
         }
 
         crate::cfg::debug! {
-            // Perhaps useless, it can be cleared by `pop` usually.
+            // Defensive cleanup for early-return paths in debug builds.
             TYPE_INFO_STACK.with_borrow_mut(|stack|stack.clear());
         }
 
@@ -546,7 +546,7 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for ReflectDeserializeDr
     }
 }
 
-/// A tools that parse [`TypeMeta`] from given type path string.
+/// A helper that resolves [`TypeMeta`] from a type-path string.
 struct TypePathDeserializer<'a> {
     registry: &'a TypeRegistry,
 }

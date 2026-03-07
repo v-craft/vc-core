@@ -14,7 +14,7 @@ use crate::registry::TypeRegistry;
 use crate::serde::SkipSerde;
 
 // -----------------------------------------------------------------------------
-// Infomation trait
+// Struct-like metadata access
 
 /// A helper trait for accessing type information from struct-like types.
 pub(super) trait StructLikeInfo {

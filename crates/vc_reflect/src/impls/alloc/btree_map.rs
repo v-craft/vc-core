@@ -5,8 +5,8 @@ use crate::derive::impl_type_path;
 use crate::impls::GenericTypeInfoCell;
 use crate::info::{GenericInfo, Generics, MapInfo, TypeInfo, TypeParamInfo, Typed};
 use crate::ops::{ApplyError, Map, ReflectCloneError};
-use crate::registry::{FromType, GetTypeMeta, TypeMeta, TypeTraitDefault};
-use crate::registry::{TypeTraitFromPtr, TypeTraitFromReflect};
+use crate::registry::{FromType, GetTypeMeta, ReflectDefault, TypeMeta};
+use crate::registry::{ReflectFromPtr, ReflectFromReflect};
 use crate::{FromReflect, Reflect};
 
 impl_type_path!(::alloc::collections::BTreeMap<K, V>);
@@ -202,9 +202,9 @@ where
 {
     fn get_type_meta() -> TypeMeta {
         let mut type_meta = TypeMeta::with_capacity::<Self>(3);
-        type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitDefault>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectDefault>(FromType::<Self>::from_type());
         type_meta
     }
 

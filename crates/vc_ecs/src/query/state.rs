@@ -145,7 +145,7 @@ fn updata_dense_state(
     }
 
     // storages is partially sorted,
-    // so we choose `sort` instead of `unstable_sort`. 
+    // so we choose `sort` instead of `unstable_sort`.
     storages.sort();
     storages.dedup();
 

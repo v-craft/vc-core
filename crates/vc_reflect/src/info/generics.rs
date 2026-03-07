@@ -368,9 +368,9 @@ macro_rules! impl_generic_fn {
         }
     };
     ($self:ident => $expr:expr) => {
-        /// Get generic infomation.
+        /// Returns generic metadata.
         ///
-        /// See [`Generics`](crate::info::Generics) .
+        /// See [`Generics`](crate::info::Generics).
         #[inline]
         pub const fn generics($self: &Self) -> &$crate::info::Generics {
             $expr

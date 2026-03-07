@@ -10,8 +10,8 @@ mod serialize;
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use default::TypeTraitDefault;
-pub use deserialize::TypeTraitDeserialize;
-pub use from_ptr::TypeTraitFromPtr;
-pub use from_reflect::TypeTraitFromReflect;
-pub use serialize::TypeTraitSerialize;
+pub use default::ReflectDefault;
+pub use deserialize::ReflectDeserialize;
+pub use from_ptr::ReflectFromPtr;
+pub use from_reflect::ReflectFromReflect;
+pub use serialize::ReflectSerialize;

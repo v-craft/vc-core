@@ -1,7 +1,7 @@
 use crate::impls::NonGenericTypeInfoCell;
 use crate::info::{OpaqueInfo, TypeInfo, TypePath, Typed};
 use crate::registry::{FromType, GetTypeMeta, TypeMeta};
-use crate::registry::{TypeTraitFromPtr, TypeTraitFromReflect, TypeTraitSerialize};
+use crate::registry::{ReflectFromPtr, ReflectFromReflect, ReflectSerialize};
 use crate::{FromReflect, Reflect};
 
 impl TypePath for str {
@@ -36,9 +36,9 @@ impl Reflect for &'static str {
 impl GetTypeMeta for &'static str {
     fn get_type_meta() -> TypeMeta {
         let mut type_meta = TypeMeta::with_capacity::<Self>(3);
-        type_meta.insert_trait::<TypeTraitFromPtr>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitFromReflect>(FromType::<Self>::from_type());
-        type_meta.insert_trait::<TypeTraitSerialize>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
+        type_meta.insert_trait::<ReflectSerialize>(FromType::<Self>::from_type());
         type_meta
     }
 }

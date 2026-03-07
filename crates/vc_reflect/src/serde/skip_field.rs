@@ -7,7 +7,7 @@ use crate::derive::TypePath;
 use crate::impls::NonGenericTypeInfoCell;
 use crate::info::{OpaqueInfo, TypeInfo, TypePath, Typed};
 use crate::ops::{ApplyError, ReflectCloneError};
-use crate::registry::{TypeRegistry, TypeTraitDefault};
+use crate::registry::{ReflectDefault, TypeRegistry};
 
 /// # `SkipSerde` - Field Serialization Control
 ///
@@ -47,7 +47,7 @@ use crate::registry::{TypeRegistry, TypeTraitDefault};
 ///
 /// Skips serialization and uses the default value during deserialization.
 ///
-/// **Requirement**: The field's type must implement `TypeTraitDefault` (marked with `#[reflect(default)]`).
+/// **Requirement**: The field's type must implement `ReflectDefault` (marked with `#[reflect(default)]`).
 ///
 /// ```no_run
 /// # use core::marker::PhantomData;
@@ -86,11 +86,13 @@ use crate::registry::{TypeRegistry, TypeTraitDefault};
 #[derive(TypePath)]
 #[reflect(type_path = "vc_reflect::serde::SkipSerde")]
 pub enum SkipSerde {
-    /// Skip directly when deserializing
+    /// Skip the field entirely during deserialization.
     None,
-    /// Use default values when deserializing, The type needs to register `TypeTraitDefault`
+    /// Use a default value during deserialization.
+    /// The field type must register `ReflectDefault`.
     Default,
-    /// Clone a value when deserializing, need to support reflect_clone and have the correct type.
+    /// Clone a stored value during deserialization.
+    /// The value must support `reflect_clone` and match the target field type.
     Clone(Box<dyn Reflect>),
 }
 
@@ -119,11 +121,11 @@ impl SkipSerde {
         match self {
             SkipSerde::None => Ok(None),
             SkipSerde::Default => {
-                if let Some(generator) = registry.get_type_trait::<TypeTraitDefault>(id) {
+                if let Some(generator) = registry.get_type_trait::<ReflectDefault>(id) {
                     Ok(Some(generator.default()))
                 } else {
                     Err(E::custom(
-                        "`SkipSerde::Default` but `TypeTraitDefault` was not found.",
+                        "`SkipSerde::Default` but `ReflectDefault` was not found.",
                     ))
                 }
             }
@@ -189,5 +191,48 @@ impl Reflect for SkipSerde {
                 f.write_str(")")
             }
         }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// tests
+
+#[cfg(test)]
+mod tests {
+    use core::any::TypeId;
+
+    use super::SkipSerde;
+    use crate::derive::Reflect;
+    use crate::registry::TypeRegistry;
+
+    #[derive(Reflect, Default, PartialEq, Debug)]
+    #[reflect(default)]
+    struct Defaulted {
+        value: i32,
+    }
+
+    #[test]
+    fn skip_serde() {
+        let mut registry = TypeRegistry::default();
+        registry.register::<Defaulted>();
+
+        let none = SkipSerde::None;
+        assert!(
+            none.get::<serde_core::de::value::Error>(TypeId::of::<Defaulted>(), &registry)
+                .unwrap()
+                .is_none()
+        );
+
+        let defaulted = SkipSerde::Default
+            .get::<serde_core::de::value::Error>(TypeId::of::<Defaulted>(), &registry)
+            .unwrap()
+            .unwrap();
+        assert_eq!(defaulted.take::<Defaulted>().unwrap(), Defaulted::default());
+
+        let cloned = SkipSerde::clone(9_i32)
+            .get::<serde_core::de::value::Error>(TypeId::of::<i32>(), &registry)
+            .unwrap()
+            .unwrap();
+        assert_eq!(cloned.take::<i32>().unwrap(), 9);
     }
 }

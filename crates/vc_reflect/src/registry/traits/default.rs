@@ -11,13 +11,13 @@ use crate::registry::FromType;
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{Reflect, registry::{TypeRegistry, TypeTraitDefault}};
+/// use vc_reflect::{Reflect, registry::{TypeRegistry, ReflectDefault}};
 ///
 /// let registry = TypeRegistry::new(); // `new` will register some basic type
 ///
 /// let generator = registry
 ///     .get_with_type_name("String").unwrap()
-///     .get_trait::<TypeTraitDefault>().unwrap();
+///     .get_trait::<ReflectDefault>().unwrap();
 ///
 /// let s: Box<dyn Reflect> = generator.default();
 ///
@@ -28,14 +28,14 @@ use crate::registry::FromType;
 /// [`TypeRegistry`]: crate::registry::TypeRegistry
 /// [`TypeId`]: core::any::TypeId
 #[derive(Clone)]
-pub struct TypeTraitDefault {
+pub struct ReflectDefault {
     func: fn() -> Box<dyn Reflect>,
 }
 
-impl TypeTraitDefault {
+impl ReflectDefault {
     /// Call T's [`Default`]
     ///
-    /// [`TypeTraitDefault`] does not have a type flag,
+    /// [`ReflectDefault`] does not have a type flag,
     /// but the functions used internally are type specific.
     #[inline(always)]
     pub fn default(&self) -> Box<dyn Reflect> {
@@ -43,7 +43,7 @@ impl TypeTraitDefault {
     }
 }
 
-impl<T: Default + Typed + Reflect> FromType<T> for TypeTraitDefault {
+impl<T: Default + Typed + Reflect> FromType<T> for ReflectDefault {
     fn from_type() -> Self {
         Self {
             func: || Box::<T>::default(),
@@ -53,20 +53,20 @@ impl<T: Default + Typed + Reflect> FromType<T> for TypeTraitDefault {
 
 // Explicitly implemented here so that code readers do not need
 // to ponder the principles of proc-macros in advance.
-impl TypePath for TypeTraitDefault {
+impl TypePath for ReflectDefault {
     #[inline(always)]
     fn type_path() -> &'static str {
-        "vc_reflect::registry::TypeTraitDefault"
+        "vc_reflect::registry::ReflectDefault"
     }
 
     #[inline(always)]
     fn type_name() -> &'static str {
-        "TypeTraitDefault"
+        "ReflectDefault"
     }
 
     #[inline(always)]
     fn type_ident() -> &'static str {
-        "TypeTraitDefault"
+        "ReflectDefault"
     }
 
     #[inline(always)]
@@ -80,14 +80,14 @@ impl TypePath for TypeTraitDefault {
 
 #[cfg(test)]
 mod tests {
-    use super::TypeTraitDefault;
+    use super::ReflectDefault;
     use crate::info::TypePath;
 
     #[test]
     fn type_path() {
-        assert!(TypeTraitDefault::type_path() == "vc_reflect::registry::TypeTraitDefault");
-        assert!(TypeTraitDefault::module_path() == Some("vc_reflect::registry"));
-        assert!(TypeTraitDefault::type_ident() == "TypeTraitDefault");
-        assert!(TypeTraitDefault::type_name() == "TypeTraitDefault");
+        assert!(ReflectDefault::type_path() == "vc_reflect::registry::ReflectDefault");
+        assert!(ReflectDefault::module_path() == Some("vc_reflect::registry"));
+        assert!(ReflectDefault::type_ident() == "ReflectDefault");
+        assert!(ReflectDefault::type_name() == "ReflectDefault");
     }
 }

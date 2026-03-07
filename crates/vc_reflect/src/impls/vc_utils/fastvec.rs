@@ -44,13 +44,13 @@ macro_rules! impl_fast_vec_for {
         {
             fn get_type_meta() -> $crate::registry::TypeMeta {
                 let mut meta = $crate::registry::TypeMeta::with_capacity::<Self>(3);
-                meta.insert_trait::<$crate::registry::TypeTraitFromPtr>(
+                meta.insert_trait::<$crate::registry::ReflectFromPtr>(
                     $crate::registry::FromType::<Self>::from_type(),
                 );
-                meta.insert_trait::<$crate::registry::TypeTraitFromReflect>(
+                meta.insert_trait::<$crate::registry::ReflectFromReflect>(
                     $crate::registry::FromType::<Self>::from_type(),
                 );
-                meta.insert_trait::<$crate::registry::TypeTraitDefault>(
+                meta.insert_trait::<$crate::registry::ReflectDefault>(
                     $crate::registry::FromType::<Self>::from_type(),
                 );
                 meta

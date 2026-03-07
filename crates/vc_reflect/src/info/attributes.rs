@@ -199,3 +199,30 @@ macro_rules! impl_with_custom_attributes {
 
 pub(super) use impl_custom_attributes_fn;
 pub(super) use impl_with_custom_attributes;
+
+// -----------------------------------------------------------------------------
+// tests
+
+#[cfg(test)]
+mod tests {
+    use core::any::TypeId;
+
+    use super::CustomAttributes;
+
+    #[test]
+    fn store_and_overwrite() {
+        let attrs = CustomAttributes::with_capacity(2)
+            .with_attribute(false)
+            .with_attribute(1_u32)
+            .with_attribute(2_u32);
+
+        assert_eq!(attrs.len(), 2);
+        assert_eq!(attrs.get::<u32>(), Some(&2_u32));
+        assert_eq!(attrs.get::<bool>(), Some(&false));
+        assert!(attrs.contains_by_id(TypeId::of::<u32>()));
+        assert!(!attrs.is_empty());
+
+        let collected = attrs.iter().count();
+        assert_eq!(collected, 2);
+    }
+}
