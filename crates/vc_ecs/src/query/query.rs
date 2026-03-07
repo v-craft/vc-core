@@ -21,11 +21,11 @@ unsafe impl<D: QueryData + 'static, F: QueryFilter + 'static> SystemParam for Qu
     const NON_SEND: bool = false;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         QueryState::new(world)
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         state.mark_assess(table)
     }
 

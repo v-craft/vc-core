@@ -16,9 +16,9 @@ unsafe impl SystemParam for MainThread {
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(_: &mut World) -> Self::State {}
+    fn init_state(_: &mut World) -> Self::State {}
 
-    unsafe fn mark_access(_: &mut AccessTable, _: &Self::State) -> bool {
+    fn mark_access(_: &mut AccessTable, _: &Self::State) -> bool {
         true
     }
 
@@ -45,9 +45,9 @@ unsafe impl SystemParam for NonSend {
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(_: &mut World) -> Self::State {}
+    fn init_state(_: &mut World) -> Self::State {}
 
-    unsafe fn mark_access(_: &mut AccessTable, _: &Self::State) -> bool {
+    fn mark_access(_: &mut AccessTable, _: &Self::State) -> bool {
         true
     }
 
@@ -74,9 +74,9 @@ unsafe impl SystemParam for Exclusive {
     const NON_SEND: bool = false;
     const EXCLUSIVE: bool = true;
 
-    unsafe fn init_state(_: &mut World) -> Self::State {}
+    fn init_state(_: &mut World) -> Self::State {}
 
-    unsafe fn mark_access(_: &mut AccessTable, _: &Self::State) -> bool {
+    fn mark_access(_: &mut AccessTable, _: &Self::State) -> bool {
         true
     }
 

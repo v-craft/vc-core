@@ -3,7 +3,7 @@
 use core::fmt::Debug;
 
 use crate::error::ECSError;
-use crate::system::{AccessTable, SystemFlags};
+use crate::system::{AccessTable, FunctionSystem, SystemFlags, SystemFunction};
 use crate::tick::Tick;
 use crate::utils::DebugName;
 use crate::world::{UnsafeWorld, World};
@@ -16,9 +16,9 @@ use super::SystemInput;
 #[diagnostic::on_unimplemented(message = "`{Self}` is not a system", label = "invalid system")]
 pub unsafe trait System: Send + Sync + 'static {
     /// The system's input.
-    type In: SystemInput;
+    type Input: SystemInput;
     /// The system's output.
-    type Out;
+    type Output;
 
     fn name(&self) -> DebugName;
 
@@ -31,9 +31,9 @@ pub unsafe trait System: Send + Sync + 'static {
 
     unsafe fn run(
         &mut self,
-        input: <Self::In as SystemInput>::Inner<'_>,
+        input: <Self::Input as SystemInput>::Data<'_>,
         world: UnsafeWorld<'_>,
-    ) -> Result<Self::Out, ECSError>;
+    ) -> Result<Self::Output, ECSError>;
 
     #[inline]
     fn is_non_send(&self) -> bool {
@@ -46,10 +46,10 @@ pub unsafe trait System: Send + Sync + 'static {
     }
 }
 
-impl<In, Out> Debug for dyn System<In = In, Out = Out>
+impl<I, O> Debug for dyn System<Input = I, Output = O>
 where
-    In: SystemInput + 'static,
-    Out: 'static,
+    I: SystemInput + 'static,
+    O: 'static,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("System")
@@ -60,20 +60,30 @@ where
     }
 }
 
-// -----------------------------------------------------------------------------
-// IntoSystem
+// // -----------------------------------------------------------------------------
+// // IntoSystem
 
-pub trait IntoSystem<In: SystemInput, Out, Marker>: Sized {
-    type System: System<In = In, Out = Out>;
+pub trait IntoSystem<I: SystemInput, O, Marker>: Sized {
+    type System: System<Input = I, Output = O>;
 
     fn into_system(this: Self) -> Self::System;
 }
 
 
-impl<T: System> IntoSystem<T::In, T::Out, ()> for T {
+impl<T: System> IntoSystem<T::Input, T::Output, ()> for T {
     type System = T;
-    fn into_system(this: Self) -> Self {
+    fn into_system(this: Self) -> Self::System {
         this
     }
 }
+
+pub struct FunctionMarker;
+
+impl<T: SystemFunction> IntoSystem<T::Input, T::Output, FunctionMarker> for T {
+    type System = FunctionSystem<T::Input, T::Output, T>;
+    fn into_system(this: Self) -> Self::System {
+        FunctionSystem::new(this)
+    }
+}
+
 

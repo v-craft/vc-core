@@ -1,20 +1,25 @@
-pub trait SystemInput: Sized {
-    type Inner<'i>;
-    type Param<'i>: SystemInput;
 
-    fn wrap(this: Self::Inner<'_>) -> Self::Param<'_>;
+pub trait SystemInput: Sized {
+    type Data<'i>;
+    type Item<'i>: SystemInput;
+
+    fn wrap(this: Self::Data<'_>) -> Self::Item<'_>;
 }
+
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct SystemIn<T: SystemInput>(pub T);
 
 #[derive(Debug)]
 #[repr(transparent)]
 pub struct In<T>(pub T);
 
 impl<T: 'static> SystemInput for In<T> {
-    type Inner<'i> = T;
-    type Param<'i> = In<T>;
+    type Data<'i> = T;
+    type Item<'i> = In<T>;
 
     #[inline(always)]
-    fn wrap(this: Self::Inner<'_>) -> Self::Param<'_> {
+    fn wrap(this: Self::Data<'_>) -> Self::Item<'_> {
         In(this)
     }
 }
@@ -24,11 +29,11 @@ impl<T: 'static> SystemInput for In<T> {
 pub struct InRef<'i, T: ?Sized>(pub &'i T);
 
 impl<T: ?Sized + 'static> SystemInput for InRef<'_, T> {
-    type Inner<'i> = &'i T;
-    type Param<'i> = InRef<'i, T>;
+    type Data<'i> = &'i T;
+    type Item<'i> = InRef<'i, T>;
 
     #[inline(always)]
-    fn wrap(this: Self::Inner<'_>) -> Self::Param<'_> {
+    fn wrap(this: Self::Data<'_>) -> Self::Item<'_> {
         InRef(this)
     }
 }
@@ -38,11 +43,11 @@ impl<T: ?Sized + 'static> SystemInput for InRef<'_, T> {
 pub struct InMut<'a, T: ?Sized>(pub &'a mut T);
 
 impl<T: ?Sized + 'static> SystemInput for InMut<'_, T> {
-    type Inner<'i> = &'i mut T;
-    type Param<'i> = InMut<'i, T>;
+    type Data<'i> = &'i mut T;
+    type Item<'i> = InMut<'i, T>;
 
     #[inline(always)]
-    fn wrap(this: Self::Inner<'_>) -> Self::Param<'_> {
+    fn wrap(this: Self::Data<'_>) -> Self::Item<'_> {
         InMut(this)
     }
 }
@@ -50,21 +55,21 @@ impl<T: ?Sized + 'static> SystemInput for InMut<'_, T> {
 macro_rules! impl_tuple {
     (0: []) => {
         impl SystemInput for () {
-            type Inner<'i> = ();
-            type Param<'i> = ();
+            type Data<'i> = ();
+            type Item<'i> = ();
 
             #[inline(always)]
-            fn wrap(_: Self::Inner<'_>) -> Self::Param<'_> {}
+            fn wrap(_: Self::Data<'_>) -> Self::Item<'_> {}
         }
     };
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
         #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 8 items long.")]
         impl<$name: SystemInput> SystemInput for ($name,) {
-            type Inner<'i> = ( <$name>::Inner<'i>, );
-            type Param<'i> = ( <$name>::Param<'i>, );
+            type Data<'i> = ( <$name>::Data<'i>, );
+            type Item<'i> = ( <$name>::Item<'i>, );
 
-            fn wrap(this: Self::Inner<'_>) -> Self::Param<'_> {
+            fn wrap(this: Self::Data<'_>) -> Self::Item<'_> {
                 ( <$name as SystemInput>::wrap(this.0), )
             }
         }
@@ -72,10 +77,10 @@ macro_rules! impl_tuple {
     ($num:literal : [$($index:tt : $name:ident),*]) => {
         #[cfg_attr(docsrs, doc(hidden))]
         impl<$($name: SystemInput),*> SystemInput for ($($name),*) {
-            type Inner<'i> = ( $( <$name>::Inner<'i> ),* );
-            type Param<'i> = ( $( <$name>::Param<'i> ),* );
+            type Data<'i> = ( $( <$name>::Data<'i> ),* );
+            type Item<'i> = ( $( <$name>::Item<'i> ),* );
 
-            fn wrap(this: Self::Inner<'_>) -> Self::Param<'_> {
+            fn wrap(this: Self::Data<'_>) -> Self::Item<'_> {
                 ( $( <$name as SystemInput>::wrap(this.$index) ),* )
             }
         }

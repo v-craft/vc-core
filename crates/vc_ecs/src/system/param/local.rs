@@ -31,11 +31,11 @@ unsafe impl<T: Default + Send + Sync + 'static> SystemParam for Local<'_, T> {
     const NON_SEND: bool = false;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(_world: &mut World) -> Self::State {
+    fn init_state(_world: &mut World) -> Self::State {
         T::default()
     }
 
-    unsafe fn mark_access(_table: &mut AccessTable, _state: &Self::State) -> bool {
+    fn mark_access(_table: &mut AccessTable, _state: &Self::State) -> bool {
         true
     }
 

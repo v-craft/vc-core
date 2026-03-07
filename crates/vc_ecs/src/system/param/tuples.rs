@@ -15,9 +15,9 @@ macro_rules! impl_tuple {
             const NON_SEND: bool = false;
             const EXCLUSIVE: bool = false;
 
-            unsafe fn init_state(_world: &mut World) -> Self::State {}
+            fn init_state(_world: &mut World) -> Self::State {}
 
-            unsafe fn mark_access(_table: &mut AccessTable, _state: &Self::State) -> bool { true }
+            fn mark_access(_table: &mut AccessTable, _state: &Self::State) -> bool { true }
 
             unsafe fn get_param<'w, 's>(
                 _world: UnsafeWorld<'w>,
@@ -41,12 +41,12 @@ macro_rules! impl_tuple {
             const NON_SEND: bool = <$name>::NON_SEND;
             const EXCLUSIVE: bool = <$name>::EXCLUSIVE;
 
-            unsafe fn init_state(world: &mut World) -> Self::State {
-                unsafe { <$name>::init_state(world) }
+            fn init_state(world: &mut World) -> Self::State {
+                <$name>::init_state(world)
             }
 
-            unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-                unsafe { <$name>::mark_access(table, state) }
+            fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+                <$name>::mark_access(table, state)
             }
 
             unsafe fn get_param<'w, 's>(
@@ -71,12 +71,12 @@ macro_rules! impl_tuple {
             const NON_SEND: bool = { false $( || <$name>::NON_SEND )* };
             const EXCLUSIVE: bool = { false $( || <$name>::EXCLUSIVE )* };
 
-            unsafe fn init_state(world: &mut World) -> Self::State {
-                unsafe { ( $( <$name>::init_state(world) ),* ) }
+            fn init_state(world: &mut World) -> Self::State {
+                ( $( <$name>::init_state(world) ),* )
             }
 
-            unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
-                unsafe { true $( && <$name>::mark_access(table, &state.$index) )* }
+            fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+                true $( && <$name>::mark_access(table, &state.$index) )*
             }
 
             unsafe fn get_param<'w, 's>(

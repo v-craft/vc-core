@@ -28,8 +28,8 @@ pub unsafe trait SystemParam: Sized {
     const NON_SEND: bool;
     const EXCLUSIVE: bool;
 
-    unsafe fn init_state(world: &mut World) -> Self::State;
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool;
+    fn init_state(world: &mut World) -> Self::State;
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool;
 
     unsafe fn get_param<'w, 's>(
         world: UnsafeWorld<'w>,

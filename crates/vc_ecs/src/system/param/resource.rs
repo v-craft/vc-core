@@ -27,11 +27,11 @@ unsafe impl<T: Resource + Sync> SystemParam for Res<'_, T> {
     const NON_SEND: bool = false;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_reading_res(*state)
     }
 
@@ -68,11 +68,11 @@ unsafe impl<T: Resource + Sync> SystemParam for ResRef<'_, T> {
     const NON_SEND: bool = false;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_reading_res(*state)
     }
 
@@ -104,11 +104,11 @@ unsafe impl<T: Resource + Sync> SystemParam for ResMut<'_, T> {
     const NON_SEND: bool = false;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_writing_res(*state)
     }
 
@@ -142,11 +142,11 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<Res<'_, T>> {
     const NON_SEND: bool = false;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_reading_res(*state)
     }
 
@@ -179,11 +179,11 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<ResRef<'_, T>> {
     const NON_SEND: bool = false;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_reading_res(*state)
     }
 
@@ -210,11 +210,11 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<ResMut<'_, T>> {
     const NON_SEND: bool = false;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_writing_res(*state)
     }
 
@@ -245,11 +245,11 @@ unsafe impl<T: Resource> SystemParam for NonSync<'_, T> {
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_reading_res(*state)
     }
 
@@ -288,13 +288,13 @@ unsafe impl<T: Resource> SystemParam for NonSyncRef<'_, T> {
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
         // We do not prepare resource here,
         // thereby delaying memory allocation.
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_reading_res(*state)
     }
 
@@ -328,11 +328,11 @@ unsafe impl<T: Resource> SystemParam for NonSyncMut<'_, T> {
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_writing_res(*state)
     }
 
@@ -368,11 +368,11 @@ unsafe impl<T: Resource> SystemParam for Option<NonSync<'_, T>> {
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_reading_res(*state)
     }
 
@@ -407,11 +407,11 @@ unsafe impl<T: Resource> SystemParam for Option<NonSyncRef<'_, T>> {
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_reading_res(*state)
     }
 
@@ -440,11 +440,11 @@ unsafe impl<T: Resource> SystemParam for Option<NonSyncMut<'_, T>> {
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(world: &mut World) -> Self::State {
+    fn init_state(world: &mut World) -> Self::State {
         world.register_resource::<T>()
     }
 
-    unsafe fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool {
         table.set_writing_res(*state)
     }
 

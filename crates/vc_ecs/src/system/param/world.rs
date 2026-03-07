@@ -12,9 +12,9 @@ unsafe impl SystemParam for &World {
     const NON_SEND: bool = false;
     const EXCLUSIVE: bool = false;
 
-    unsafe fn init_state(_world: &mut World) -> Self::State {}
+    fn init_state(_world: &mut World) -> Self::State {}
 
-    unsafe fn mark_access(table: &mut AccessTable, _state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, _state: &Self::State) -> bool {
         table.set_world_ref()
     }
 
@@ -36,9 +36,9 @@ unsafe impl SystemParam for &mut World {
     // so we cannot parallelize with other systems.
     const EXCLUSIVE: bool = true;
 
-    unsafe fn init_state(_world: &mut World) -> Self::State {}
+    fn init_state(_world: &mut World) -> Self::State {}
 
-    unsafe fn mark_access(table: &mut AccessTable, _state: &Self::State) -> bool {
+    fn mark_access(table: &mut AccessTable, _state: &Self::State) -> bool {
         table.set_world_mut()
     }
 
