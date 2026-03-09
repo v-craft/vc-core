@@ -205,14 +205,13 @@ impl<T: UnwindSafe, F: UnwindSafe> UnwindSafe for LazyLock<T, F> {}
 #[cfg(all(test, feature = "std"))]
 mod tests {
     use core::ops::DerefMut;
-    use std::format;
-    use std::prelude::v1::*;
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
+    use alloc::format;
+    use alloc::string::String;
+    use alloc::vec::Vec;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
     use std::thread;
-    use std::time::Duration;
+    use core::time::Duration;
 
     use super::LazyLock;
     use crate::utils::tests::test_unwind_panic;

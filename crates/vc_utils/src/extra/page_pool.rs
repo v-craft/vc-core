@@ -41,14 +41,15 @@ impl Drop for Page {
 /// `PagePool` allocates memory in fixed-size pages and bump-allocates within each page.
 /// It does not call `Drop::drop` on allocated objects, requiring manual resource
 /// management when necessary.
-/// 
+///
 /// This is a small memory pool that is typically not used for large data.
 ///
 /// # Safety
 ///
 /// - **Not thread-safe**: Can only be used on the thread that created it.
+///   (Except for explicit synchronization, such as wrapping with `Mutex`.)
 /// - **No automatic cleanup**: Does not call destructors; users must manually
-///   manage resources for types that require cleanup.
+///   manage resources for types that require `Drop`.
 ///
 /// # Performance Characteristics
 ///
@@ -59,17 +60,33 @@ impl Drop for Page {
 /// # Examples
 ///
 /// ```
+/// use core::alloc::Layout;
+/// use core::ptr::NonNull;
 /// use vc_utils::extra::PagePool;
 ///
-/// let pool = PagePool::new();
+/// let pool = <PagePool>::new();
 ///
 /// // Allocate an integer
-/// let x = pool.alloc(42);
+/// let x: &mut i32 = pool.alloc_value(42_i32);
 /// assert_eq!(*x, 42);
 ///
 /// // Allocate a string slice
-/// let s = pool.alloc_str("hello");
-/// assert_eq!(s, "hello");
+/// let y: &str = pool.alloc_str("hello");
+/// assert_eq!(y, "hello");
+///
+/// // Dynamic allocation
+/// let z: NonNull<u8> = pool.alloc(Layout::new::<String>());
+/// let z: NonNull<String> = z.cast::<String>();
+/// unsafe {
+///     z.write("world".to_string());
+/// }
+///
+/// // ...
+///
+/// unsafe {
+///     // clear resources
+///     z.drop_in_place();
+/// }
 /// ```
 #[derive(Debug)]
 pub struct PagePool<const PAGE_SIZE: usize = 1024> {
@@ -77,10 +94,10 @@ pub struct PagePool<const PAGE_SIZE: usize = 1024> {
     _marker: PhantomData<*mut u8>,
 }
 
-impl UnwindSafe for PagePool {}
-impl RefUnwindSafe for PagePool {}
+impl<const PAGE_SIZE: usize> UnwindSafe for PagePool<PAGE_SIZE> {}
+impl<const PAGE_SIZE: usize> RefUnwindSafe for PagePool<PAGE_SIZE> {}
 
-impl Default for PagePool {
+impl<const PAGE_SIZE: usize> Default for PagePool<PAGE_SIZE> {
     #[inline(always)]
     fn default() -> Self {
         Self::new()
@@ -116,7 +133,7 @@ impl<const PAGE_SIZE: usize> PagePool<PAGE_SIZE> {
     /// use vc_utils::extra::PagePool;
     /// use core::alloc::Layout;
     ///
-    /// let pool = PagePool::new();
+    /// let pool = <PagePool>::new();
     /// let layout = Layout::new::<i32>();
     /// let ptr = pool.alloc(layout);
     ///
@@ -148,7 +165,7 @@ impl<const PAGE_SIZE: usize> PagePool<PAGE_SIZE> {
                     return aligned_ptr;
                 }
             }
-        } 
+        }
 
         self.alloc_layout_slow(layout)
     }
@@ -167,7 +184,7 @@ impl<const PAGE_SIZE: usize> PagePool<PAGE_SIZE> {
     /// ```
     /// use vc_utils::extra::PagePool;
     ///
-    /// let pool = PagePool::new();
+    /// let pool = <PagePool>::new();
     /// let s = pool.alloc_str("Hello, world!");
     /// assert_eq!(s, "Hello, world!");
     /// ```
@@ -181,10 +198,10 @@ impl<const PAGE_SIZE: usize> PagePool<PAGE_SIZE> {
     }
 
     /// Allocates a value of type `T` in the pool and returns a mutable reference.
-    /// 
+    ///
     /// The value is moved into the pool's memory. The returned reference is valid
     /// until the pool is cleared or destroyed.
-    /// 
+    ///
     /// This is safe because `T` implements `Copy` and does not require `Drop`.
     ///
     /// # Panics
@@ -196,7 +213,7 @@ impl<const PAGE_SIZE: usize> PagePool<PAGE_SIZE> {
     /// ```
     /// use vc_utils::extra::PagePool;
     ///
-    /// let pool = PagePool::new();
+    /// let pool = <PagePool>::new();
     /// let v1 = pool.alloc_value(123);
     /// let v2 = pool.alloc_value([1, 2, 3, 4]);
     ///
@@ -230,7 +247,7 @@ impl<const PAGE_SIZE: usize> PagePool<PAGE_SIZE> {
     /// ```
     /// use vc_utils::extra::PagePool;
     ///
-    /// let pool = PagePool::new();
+    /// let pool = <PagePool>::new();
     /// let original = [1, 2, 3, 4, 5];
     /// let slice = pool.alloc_slice(&original);
     ///

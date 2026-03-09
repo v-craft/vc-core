@@ -270,10 +270,10 @@ impl Default for Condvar {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use std::prelude::v1::*;
-    use std::sync::{Arc, mpsc::channel};
+    use std::sync::Arc;
+    use core::time::Duration;
+    use std::sync::mpsc::channel;
     use std::thread;
-    use std::time::Duration;
 
     use super::Condvar;
     use crate::sync::__fallback::Mutex;

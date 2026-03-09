@@ -469,10 +469,10 @@ impl<T> fmt::Debug for Receiver<T> {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
+    use alloc::vec::Vec;
     use alloc::vec;
-    use std::prelude::v1::*;
+    use core::time::Duration;
     use std::thread;
-    use std::time::Duration;
 
     use super::{RecvTimeoutError, TryRecvError, TrySendError, channel, sync_channel};
 

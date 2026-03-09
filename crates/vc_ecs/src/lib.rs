@@ -37,7 +37,9 @@ pub mod storage;
 pub mod archetype;
 pub mod entity;
 
+pub mod label;
 pub mod query;
+pub mod schedule;
 pub mod system;
 
 pub mod world;

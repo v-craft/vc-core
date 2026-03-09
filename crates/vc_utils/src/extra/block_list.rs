@@ -15,7 +15,7 @@ use core::mem::MaybeUninit;
 use core::panic::{RefUnwindSafe, UnwindSafe};
 use core::ptr;
 
-use crate::vec::StackVec;
+use crate::vec::ArrayVec;
 
 // -----------------------------------------------------------------------------
 // Config
@@ -122,7 +122,7 @@ pub struct BlockList<T> {
     head_ptr: *mut Block<T>,
     tail_ptr: *mut Block<T>,
     block_num: usize,
-    idle: StackVec<Box<Block<T>>, MAX_IDLE>,
+    idle: ArrayVec<Box<Block<T>>, MAX_IDLE>,
     _marker: PhantomData<T>,
 }
 
@@ -186,7 +186,7 @@ impl<T> BlockList<T> {
             head_ptr: ptr::null_mut(),
             tail_ptr: ptr::null_mut(),
             block_num: 0,
-            idle: StackVec::new(),
+            idle: ArrayVec::new(),
             _marker: PhantomData,
         }
     }

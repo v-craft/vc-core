@@ -57,6 +57,8 @@ pub unsafe trait SystemParam: Sized {
     fn init_state(world: &mut World) -> Self::State;
     fn mark_access(table: &mut AccessTable, state: &Self::State) -> bool;
 
+    /// # Safety
+    /// TODO
     unsafe fn get_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
@@ -69,4 +71,7 @@ pub unsafe trait SystemParam: Sized {
 ///
 /// Read-only parameters can participate in systems that run concurrently with
 /// other readers of the same data.
+///
+/// # Safety
+/// Ensure by caller.
 pub unsafe trait ReadOnlySystemParam: SystemParam {}

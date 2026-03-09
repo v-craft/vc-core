@@ -121,13 +121,11 @@ impl fmt::Debug for BarrierWaitResult {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use std::prelude::v1::*;
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-        mpsc::{channel, TryRecvError},
-    };
+    use alloc::vec::Vec;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
     use std::thread;
+    use std::sync::mpsc::{channel, TryRecvError};
 
     use super::Barrier;
 

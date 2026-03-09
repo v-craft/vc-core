@@ -46,7 +46,7 @@ use core::sync::atomic::Ordering;
 use vc_os::sync::Arc;
 use vc_os::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicU64};
 use vc_os::utils::Backoff;
-use vc_utils::vec::StackVec;
+use vc_utils::vec::ArrayVec;
 
 use crate::entity::Entity;
 use crate::entity::EntityId;
@@ -772,8 +772,8 @@ const LOCAL_CAP: usize = 127;
 /// which can cause generation counters to advance
 /// quickly and increase the risk of id reuse/collision.
 struct LocalBuffer {
-    free: StackVec<Entity, LOCAL_CAP>,
-    alloc: StackVec<Entity, LOCAL_CAP>,
+    free: ArrayVec<Entity, LOCAL_CAP>,
+    alloc: ArrayVec<Entity, LOCAL_CAP>,
 }
 
 /// Primary entity allocator bound to a `World` instance.
@@ -821,8 +821,8 @@ impl EntityAllocator {
                 is_closed: AtomicBool::new(false),
             }),
             local: Box::new(LocalBuffer {
-                free: StackVec::new(),
-                alloc: StackVec::new(),
+                free: ArrayVec::new(),
+                alloc: ArrayVec::new(),
             }),
         }
     }

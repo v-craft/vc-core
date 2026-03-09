@@ -19,10 +19,10 @@ pub mod hash;
 pub mod index;
 pub mod num;
 
+pub mod vec;
+
 // -----------------------------------------------------------------------------
 // Top-level exports
-
-pub use fastvec as vec;
 
 pub use default::default;
 pub use unsafe_deref::UnsafeCellDeref;

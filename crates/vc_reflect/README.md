@@ -81,16 +81,16 @@ struct Inventory {
 }
 
 let inventory = Inventory {
-    coins: 42,
+    coins: 1234,
     slots: vec![Some("Sword"), None],
 };
 
 // Once access
-assert_eq!(*inventory.access_as::<u32>(".coins").unwrap(), 42);
+assert_eq!(*inventory.access_as::<u32>(".coins").unwrap(), 1234);
 
 // Reuseable accessor
 let accessor = PathAccessor::parse_static(".slots[0]").unwrap();
-let first_slot = accessor.access_as::<Option<String>>(&inventory).unwrap();
+let first_slot = *accessor.access_as::<Option<&str>>(&inventory).unwrap();
 assert_eq!(first_slot, Some("Sword"));
 ```
 

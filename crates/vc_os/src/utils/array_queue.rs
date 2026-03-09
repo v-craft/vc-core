@@ -435,11 +435,11 @@ impl<T> fmt::Debug for ArrayQueue<T> {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
+    use alloc::vec::Vec;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::vec::Vec;
+    use std::thread::scope;
 
     use super::ArrayQueue;
-    use std::thread::scope;
 
     #[test]
     fn smoke() {

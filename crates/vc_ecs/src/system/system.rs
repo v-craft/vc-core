@@ -1,4 +1,5 @@
 #![expect(clippy::module_inception, reason = "For better structure.")]
+#![expect(clippy::missing_safety_doc, reason = "TODO")]
 
 use core::fmt::Debug;
 

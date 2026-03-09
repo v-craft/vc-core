@@ -213,11 +213,11 @@ pub struct FunctionSystem<I, O, F: SystemFunction> {
 
 impl<I, O, F> Clone for FunctionSystem<I, O, F>
 where
-    F: SystemFunction + Clone,
+    F: SystemFunction,
 {
     fn clone(&self) -> Self {
         Self {
-            func: self.func.clone(),
+            func: self.func,
             state: None,
             meta: SystemMeta::new::<F>(),
             _marker: PhantomData,
@@ -237,6 +237,7 @@ where
         if <F::Param as SystemParam>::NON_SEND {
             meta.set_non_send();
         }
+
         Self {
             func,
             meta,
@@ -277,8 +278,8 @@ where
             param: <F::Param as SystemParam>::init_state(world),
             world_id: world.id(),
         });
-        let validation = <F::Param as SystemParam>::mark_access(&mut table, &state.param);
-        assert!(validation, "invalid system {}", self.meta.name());
+        let validity = <F::Param as SystemParam>::mark_access(&mut table, &state.param);
+        assert!(validity, "invalid system {}", self.meta.name());
         table
     }
 

@@ -1,7 +1,7 @@
 //! Containers for static storage of type information.
 //!
 //! This is usually used to implement [`Typed`] and [`TypePath`].
-//! 
+//!
 //! [`Typed`]: crate::info::Typed
 //! [`TypePath`]: crate::info::TypePath
 
@@ -19,7 +19,7 @@ use crate::info::TypeInfo;
 /// Container for static storage of non-generic type information.
 ///
 /// This is usually used to implement [`Typed`](crate::info::Typed).
-/// 
+///
 /// Notr: There is no `NonGenericTypePathCell` because it can be replaced
 /// by a static string literal.
 ///
@@ -68,7 +68,7 @@ impl NonGenericTypeInfoCell {
     where
         F: FnOnce() -> TypeInfo,
     {
-        *self.0.get_or_init(|| pool::leak_info(f()))
+        self.0.get_or_init(|| pool::leak_info(f()))
     }
 }
 
@@ -136,7 +136,6 @@ pub struct GenericTypeInfoCell(RwLock<TypeIdMap<&'static TypeInfo>>);
 /// ```
 pub struct GenericTypePathCell(RwLock<TypeIdMap<&'static str>>);
 
-
 macro_rules! impl_generic_cell {
     ($name:ty , $leak:ident : $data:ty , $ret: ty) => {
         impl $name {
@@ -158,7 +157,11 @@ macro_rules! impl_generic_cell {
 
             // Separate to reduce code compilation times
             #[inline(never)]
-            fn get_or_insert_by_type_id(&self, type_id: TypeId, f: impl FnOnce() -> $data) -> &$ret {
+            fn get_or_insert_by_type_id(
+                &self,
+                type_id: TypeId,
+                f: impl FnOnce() -> $data,
+            ) -> &$ret {
                 match self.get_by_type_id(type_id) {
                     Some(info) => info,
                     None => self.insert_by_type_id(type_id, f()),
@@ -168,7 +171,8 @@ macro_rules! impl_generic_cell {
             // Separate to reduce code compilation times
             #[inline(never)]
             fn get_by_type_id(&self, type_id: TypeId) -> Option<&$ret> {
-                self.0.read()
+                self.0
+                    .read()
                     .unwrap_or_else(PoisonError::into_inner)
                     .get(&type_id)
                     .copied()
@@ -178,7 +182,8 @@ macro_rules! impl_generic_cell {
             #[cold]
             #[inline(never)]
             fn insert_by_type_id(&self, type_id: TypeId, value: $data) -> &$ret {
-                self.0.write()
+                self.0
+                    .write()
                     .unwrap_or_else(PoisonError::into_inner)
                     .get_or_insert(type_id, || pool::$leak(value))
             }
@@ -195,7 +200,7 @@ impl_generic_cell!(GenericTypePathCell , leak_path : String , str);
 #[expect(unsafe_code, reason = "sealed implementation")]
 mod pool {
     use alloc::string::String;
-    use alloc::alloc::Layout;
+    use core::alloc::Layout;
 
     use vc_os::sync::{Mutex, PoisonError};
     use vc_utils::extra::PagePool;
@@ -203,10 +208,10 @@ mod pool {
     use crate::info::TypeInfo;
 
     /// A wrapper around `PagePool`.
-    /// 
+    ///
     /// Since we only wrap it with `Mutex` as a static variable, marking it as
     /// `Sync` and `Send` is safe.
-    /// 
+    ///
     /// Since a `TypeInfo` is about 128/144 bytes, `PAGE_SIZE = 2048` is appropriate.
     struct MemoryPool(PagePool<2048>);
 
@@ -218,7 +223,8 @@ mod pool {
 
     /// Similar to [`Box::leak`](alloc::boxed::Box), but leaking in memory pool.
     pub fn leak_info(value: TypeInfo) -> &'static TypeInfo {
-        let ptr = INFO_POOL.lock()
+        let ptr = INFO_POOL
+            .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .0
             .alloc(Layout::new::<TypeInfo>());
@@ -232,15 +238,10 @@ mod pool {
 
     /// Similar to [`Box::leak`](alloc::boxed::Box), but leaking in memory pool.
     pub fn leak_path(value: String) -> &'static str {
-        let guard = PATH_POOL
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let guard = PATH_POOL.lock().unwrap_or_else(PoisonError::into_inner);
         unsafe {
             let ref_str = guard.0.alloc_str(&value);
             core::mem::transmute::<&str, &'static str>(ref_str)
         }
     }
 }
-
-
-

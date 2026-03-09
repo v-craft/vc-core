@@ -601,11 +601,9 @@ impl<T> Drop for OnceLock<T> {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use std::prelude::v1::*;
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
+    use alloc::vec::Vec;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
     use std::thread;
 
     use super::{Once, OnceLock};

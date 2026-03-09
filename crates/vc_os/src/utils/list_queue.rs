@@ -694,11 +694,11 @@ pub struct PushLockGuard<'a, T>(SpinLockGuard<'a, (*mut Block<T>, usize)>);
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
+    use alloc::vec::Vec;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::vec::Vec;
+    use std::thread::scope;
 
     use super::ListQueue;
-    use std::thread::scope;
 
     #[test]
     fn smoke() {
