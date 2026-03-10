@@ -153,7 +153,7 @@ where
 
         if let Some(w) = node_v.pending.take() {
             let node_index_w = self.graph.to_index(w);
-            if self.nodes[node_index_w].root < self.nodes[node_index_v].root {
+            if self.nodes[node_index_v].root > self.nodes[node_index_w].root {
                 self.nodes[node_index_v].root = self.nodes[node_index_w].root;
                 v_is_local_root = false;
             }
@@ -173,7 +173,7 @@ where
                 return None;
             }
 
-            if self.nodes[node_index_w].root < self.nodes[node_index_v].root {
+            if self.nodes[node_index_v].root > self.nodes[node_index_w].root {
                 self.nodes[node_index_v].root = self.nodes[node_index_w].root;
                 v_is_local_root = false;
             }

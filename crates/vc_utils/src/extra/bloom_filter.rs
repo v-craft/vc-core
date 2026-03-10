@@ -45,13 +45,6 @@ pub struct BloomFilter<const N: usize, const K: usize = 2> {
 }
 
 impl<const N: usize, const K: usize> BloomFilter<N, K> {
-    const _STATIC_ASSERT_: () = const {
-        assert!(
-            N.is_power_of_two(),
-            "BloomFilter size N must be a power of two.",
-        );
-    };
-
     /// Bitmask for mapping hash values to bit positions.
     const MASK: u64 = (N * 64 - 1) as u64;
 
@@ -65,6 +58,14 @@ impl<const N: usize, const K: usize> BloomFilter<N, K> {
     /// assert!(!filter.contains(&"anything"));
     /// ```
     pub const fn new() -> Self {
+        const {
+            // Due to generic types, static assertions cannot be
+            // placed in the initialization of static fields (useless).
+            assert!(
+                N.is_power_of_two(),
+                "BloomFilter size N must be a power of two.",
+            );
+        }
         Self { bits: [0; N] }
     }
 

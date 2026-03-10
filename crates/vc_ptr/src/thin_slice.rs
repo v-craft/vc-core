@@ -69,7 +69,7 @@ impl<T> Clone for ThinSlice<'_, T> {
 }
 
 // -----------------------------------------------------------------------------
-// Modules
+// From
 
 impl<'a, T> From<&'a [T]> for ThinSlice<'a, T> {
     #[inline]
