@@ -8,10 +8,9 @@ use thiserror::Error;
 use vc_utils::hash::{HashMap, HashSet};
 use vc_utils::index::IndexSet;
 
-use crate::schedule::{DiGraphToposortError, UnGraph};
-
+use super::{ToposortError, UnGraph, DiGraph, GraphNode};
 use super::Direction::{Incoming, Outgoing};
-use super::{DiGraph, GraphNode, flatten_index, unflatten_index};
+use super::{flatten_index, unflatten_index};
 
 // -----------------------------------------------------------------------------
 // Dag
@@ -69,7 +68,7 @@ impl<N: GraphNode> Dag<N> {
         !self.dirty
     }
 
-    pub fn ensure_toposorted(&mut self) -> Result<(), DiGraphToposortError<N>> {
+    pub fn ensure_toposorted(&mut self) -> Result<(), ToposortError<N>> {
         if self.dirty {
             // recompute the toposort, reusing the existing allocation
             self.toposort = self.graph.toposort(core::mem::take(&mut self.toposort))?;
@@ -89,12 +88,12 @@ impl<N: GraphNode> Dag<N> {
         }
     }
 
-    pub fn toposort(&mut self) -> Result<&[N], DiGraphToposortError<N>> {
+    pub fn toposort(&mut self) -> Result<&[N], ToposortError<N>> {
         self.ensure_toposorted()?;
         Ok(&self.toposort)
     }
 
-    pub fn toposort_and_graph(&mut self) -> Result<(&[N], &DiGraph<N>), DiGraphToposortError<N>> {
+    pub fn toposort_and_graph(&mut self) -> Result<(&[N], &DiGraph<N>), ToposortError<N>> {
         self.ensure_toposorted()?;
         Ok((&self.toposort, &self.graph))
     }
@@ -321,6 +320,21 @@ impl<K: GraphNode, V: GraphNode> DagGroups<K, V> {
         }
 
         flattened
+    }
+}
+
+impl<N: GraphNode> Dag<N> {
+    pub fn group_by_key<K, V>(
+        &mut self,
+        num_groups: usize,
+    ) -> Result<DagGroups<K, V>, ToposortError<N>>
+    where
+        N: TryInto<K, Error = V>,
+        K: Eq + Hash,
+        V: Clone + Eq + Hash,
+    {
+        let (toposort, graph) = self.toposort_and_graph()?;
+        Ok(DagGroups::with_capacity(num_groups, graph, toposort))
     }
 }
 
@@ -574,6 +588,19 @@ impl<N: GraphNode> DagAnalysis<N> {
     }
 }
 
+impl<N: GraphNode> Dag<N> {
+    pub fn analyze(&mut self) -> Result<DagAnalysis<N>, ToposortError<N>> {
+        let (toposort, graph) = self.toposort_and_graph()?;
+        Ok(DagAnalysis::new(graph, toposort))
+    }
+
+    pub fn remove_redundant_edges(&mut self, analysis: &DagAnalysis<N>) {
+        // We don't need to mark the graph as dirty, since transitive reduction
+        // is guaranteed to have the same topological ordering as the original graph.
+        self.graph = analysis.transitive_reduction.clone();
+    }
+}
+
 /// Error indicating that the graph has redundant edges.
 #[derive(Error, Debug)]
 #[error("DAG has redundant edges: {0:?}")]
@@ -588,3 +615,296 @@ pub struct DagCrossDependencyError<N>(pub N, pub N);
 #[derive(Error, Debug)]
 #[error("DAG has overlapping groups between keys {0:?} and {1:?}")]
 pub struct DagOverlappingGroupError<K>(pub K, pub K);
+
+#[cfg(test)]
+mod tests {
+    use core::ops::DerefMut;
+
+    use crate::schedule::graph::{flatten_index, Dag, Direction, GraphNode, UnGraph};
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    struct Node(u32);
+
+    impl GraphNode for Node {
+        type Link = (Node, Direction);
+        type Edge = (Node, Node);
+
+        fn name(&self) -> &'static str {
+            "Node"
+        }
+    }
+
+    #[test]
+    fn mark_dirty() {
+        {
+            let mut dag = Dag::<Node>::new();
+            dag.insert_node(Node(1));
+            assert!(dag.is_dirty());
+        }
+        {
+            let mut dag = Dag::<Node>::new();
+            dag.insert_edge(Node(1), Node(2));
+            assert!(dag.is_dirty());
+        }
+        {
+            let mut dag = Dag::<Node>::new();
+            dag.deref_mut();
+            assert!(dag.is_dirty());
+        }
+        {
+            let mut dag = Dag::<Node>::new();
+            let _ = dag.graph_mut();
+            assert!(dag.is_dirty());
+        }
+    }
+
+    #[test]
+    fn toposort() {
+        let mut dag = Dag::<Node>::new();
+        dag.insert_edge(Node(1), Node(2));
+        dag.insert_edge(Node(2), Node(3));
+        dag.insert_edge(Node(1), Node(3));
+
+        assert_eq!(
+            dag.toposort().unwrap(),
+            &[Node(1), Node(2), Node(3)]
+        );
+        assert_eq!(
+            dag.get_toposort().unwrap(),
+            &[Node(1), Node(2), Node(3)]
+        );
+    }
+
+    #[test]
+    fn analyze() {
+        let mut dag1 = Dag::<Node>::new();
+        dag1.insert_edge(Node(1), Node(2));
+        dag1.insert_edge(Node(2), Node(3));
+        dag1.insert_edge(Node(1), Node(3)); // redundant edge
+
+        let analysis1 = dag1.analyze().unwrap();
+
+        assert!(analysis1.reachable().contains(flatten_index(0, 1, 3)));
+        assert!(analysis1.reachable().contains(flatten_index(1, 2, 3)));
+        assert!(analysis1.reachable().contains(flatten_index(0, 2, 3)));
+
+        assert!(analysis1.connected().contains(&(Node(1), Node(2))));
+        assert!(analysis1.connected().contains(&(Node(2), Node(3))));
+        assert!(analysis1.connected().contains(&(Node(1), Node(3))));
+
+        assert!(!analysis1
+            .disconnected()
+            .contains(&(Node(2), Node(1))));
+        assert!(!analysis1
+            .disconnected()
+            .contains(&(Node(3), Node(2))));
+        assert!(!analysis1
+            .disconnected()
+            .contains(&(Node(3), Node(1))));
+
+        assert!(analysis1
+            .transitive_edges()
+            .contains(&(Node(1), Node(3))));
+
+        assert!(analysis1.check_for_redundant_edges().is_err());
+
+        let mut dag2 = Dag::<Node>::new();
+        dag2.insert_edge(Node(3), Node(4));
+
+        let analysis2 = dag2.analyze().unwrap();
+
+        assert!(analysis2.check_for_redundant_edges().is_ok());
+        assert!(analysis1.check_for_cross_dependencies(&analysis2).is_ok());
+
+        let mut dag3 = Dag::<Node>::new();
+        dag3.insert_edge(Node(1), Node(2));
+
+        let analysis3 = dag3.analyze().unwrap();
+
+        assert!(analysis1.check_for_cross_dependencies(&analysis3).is_err());
+
+        dag1.remove_redundant_edges(&analysis1);
+        let analysis1 = dag1.analyze().unwrap();
+        assert!(analysis1.check_for_redundant_edges().is_ok());
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    enum Union {
+        Key(Key),
+        Value(Value),
+    }
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    struct Key(u32);
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    struct Value(u32);
+
+    impl GraphNode for Union {
+        type Link = (Union, Direction);
+        type Edge = (Union, Union);
+
+        fn name(&self) -> &'static str {
+            "union"
+        }
+    }
+
+    impl TryInto<Key> for Union {
+        type Error = Value;
+
+        fn try_into(self) -> Result<Key, Value> {
+            match self {
+                Union::Key(k) => Ok(k),
+                Union::Value(v) => Err(v),
+            }
+        }
+    }
+
+    impl TryInto<Value> for Union {
+        type Error = Key;
+
+        fn try_into(self) -> Result<Value, Key> {
+            match self {
+                Union::Value(v) => Ok(v),
+                Union::Key(k) => Err(k),
+            }
+        }
+    }
+
+    impl GraphNode for Key {
+        type Link = (Key, Direction);
+        type Edge = (Key, Key);
+
+        fn name(&self) -> &'static str {
+            "key"
+        }
+    }
+
+    impl GraphNode for Value {
+        type Link = (Value, Direction);
+        type Edge = (Value, Value);
+
+        fn name(&self) -> &'static str {
+            "value"
+        }
+    }
+
+    impl From<Key> for Union {
+        fn from(key: Key) -> Self {
+            Union::Key(key)
+        }
+    }
+
+    impl From<Value> for Union {
+        fn from(value: Value) -> Self {
+            Union::Value(value)
+        }
+    }
+
+    #[test]
+    fn group_by_key() {
+        let mut dag = Dag::<Union>::new();
+        dag.insert_edge(Union::Key(Key(1)), Union::Value(Value(10)));
+        dag.insert_edge(Union::Key(Key(1)), Union::Value(Value(11)));
+        dag.insert_edge(Union::Key(Key(2)), Union::Value(Value(20)));
+        dag.insert_edge(Union::Key(Key(2)), Union::Key(Key(1)));
+        dag.insert_edge(Union::Value(Value(10)), Union::Value(Value(11)));
+
+        let groups = dag.group_by_key::<Key, Value>(2).unwrap();
+        assert_eq!(groups.len(), 2);
+
+        let group_key1 = groups.get(&Key(1)).unwrap();
+        assert!(group_key1.contains(&Value(10)));
+        assert!(group_key1.contains(&Value(11)));
+
+        let group_key2 = groups.get(&Key(2)).unwrap();
+        assert!(group_key2.contains(&Value(10)));
+        assert!(group_key2.contains(&Value(11)));
+        assert!(group_key2.contains(&Value(20)));
+    }
+
+    #[test]
+    fn flatten() {
+        let mut dag = Dag::<Union>::new();
+        dag.insert_edge(Union::Key(Key(1)), Union::Value(Value(10)));
+        dag.insert_edge(Union::Key(Key(1)), Union::Value(Value(11)));
+        dag.insert_edge(Union::Key(Key(2)), Union::Value(Value(20)));
+        dag.insert_edge(Union::Key(Key(2)), Union::Value(Value(21)));
+        dag.insert_edge(Union::Value(Value(30)), Union::Key(Key(1)));
+        dag.insert_edge(Union::Key(Key(1)), Union::Value(Value(40)));
+
+        let groups = dag.group_by_key::<Key, Value>(2).unwrap();
+        let flattened = groups.flatten(dag, |_key, _values, _dag, _temp| {});
+
+        assert!(flattened.contains_node(Value(10)));
+        assert!(flattened.contains_node(Value(11)));
+        assert!(flattened.contains_node(Value(20)));
+        assert!(flattened.contains_node(Value(21)));
+        assert!(flattened.contains_node(Value(30)));
+        assert!(flattened.contains_node(Value(40)));
+
+        assert!(flattened.contains_edge(Value(30), Value(10)));
+        assert!(flattened.contains_edge(Value(30), Value(11)));
+        assert!(flattened.contains_edge(Value(10), Value(40)));
+        assert!(flattened.contains_edge(Value(11), Value(40)));
+    }
+
+    #[test]
+    fn flatten_undirected() {
+        let mut dag = Dag::<Union>::new();
+        dag.insert_edge(Union::Key(Key(1)), Union::Value(Value(10)));
+        dag.insert_edge(Union::Key(Key(1)), Union::Value(Value(11)));
+        dag.insert_edge(Union::Key(Key(2)), Union::Value(Value(20)));
+        dag.insert_edge(Union::Key(Key(2)), Union::Value(Value(21)));
+
+        let groups = dag.group_by_key::<Key, Value>(2).unwrap();
+
+        let mut ungraph = UnGraph::<Union>::default();
+        ungraph.insert_edge(Union::Value(Value(10)), Union::Value(Value(11)));
+        ungraph.insert_edge(Union::Key(Key(1)), Union::Value(Value(30)));
+        ungraph.insert_edge(Union::Value(Value(40)), Union::Key(Key(2)));
+        ungraph.insert_edge(Union::Key(Key(1)), Union::Key(Key(2)));
+
+        let flattened = groups.flatten_undirected(&ungraph);
+
+        assert!(flattened.contains_edge(Value(10), Value(11)));
+        assert!(flattened.contains_edge(Value(10), Value(30)));
+        assert!(flattened.contains_edge(Value(11), Value(30)));
+        assert!(flattened.contains_edge(Value(40), Value(20)));
+        assert!(flattened.contains_edge(Value(40), Value(21)));
+        assert!(flattened.contains_edge(Value(10), Value(20)));
+        assert!(flattened.contains_edge(Value(10), Value(21)));
+        assert!(flattened.contains_edge(Value(11), Value(20)));
+        assert!(flattened.contains_edge(Value(11), Value(21)));
+    }
+
+    #[test]
+    fn overlapping_groups() {
+        let mut dag = Dag::<Union>::new();
+        dag.insert_edge(Union::Key(Key(1)), Union::Value(Value(10)));
+        dag.insert_edge(Union::Key(Key(1)), Union::Value(Value(11)));
+        dag.insert_edge(Union::Key(Key(2)), Union::Value(Value(11))); // overlap
+        dag.insert_edge(Union::Key(Key(2)), Union::Value(Value(20)));
+        dag.insert_edge(Union::Key(Key(1)), Union::Key(Key(2)));
+
+        let groups = dag.group_by_key::<Key, Value>(2).unwrap();
+        let analysis = dag.analyze().unwrap();
+
+        let result = analysis.check_for_overlapping_groups(&groups);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn disjoint_groups() {
+        let mut dag = Dag::<Union>::new();
+        dag.insert_edge(Union::Key(Key(1)), Union::Value(Value(10)));
+        dag.insert_edge(Union::Key(Key(1)), Union::Value(Value(11)));
+        dag.insert_edge(Union::Key(Key(2)), Union::Value(Value(20)));
+        dag.insert_edge(Union::Key(Key(2)), Union::Value(Value(21)));
+
+        let groups = dag.group_by_key::<Key, Value>(2).unwrap();
+        let analysis = dag.analyze().unwrap();
+
+        let result = analysis.check_for_overlapping_groups(&groups);
+        assert!(result.is_ok());
+    }
+}
+

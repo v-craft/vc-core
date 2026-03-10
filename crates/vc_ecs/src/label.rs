@@ -85,6 +85,8 @@ impl<T: ?Sized + Internable> PartialEq for Interned<T> {
     }
 }
 
+impl<T: ?Sized + Internable> Eq for Interned<T> {}
+
 impl<T: ?Sized + Internable> Hash for Interned<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.ref_hash(state);

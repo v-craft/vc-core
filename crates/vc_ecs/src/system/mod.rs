@@ -19,4 +19,4 @@ pub use input::{In, InMut, InRef, SystemIn, SystemInput};
 pub use meta::{SystemFlags, SystemMeta};
 pub use param::{Exclusive, Local, MainThread, NonSend};
 pub use param::{ReadOnlySystemParam, SystemParam};
-pub use system::{IntoSystem, System};
+pub use system::{IntoSystem, System, ReadOnlySystem, BoxedSystem, BoxedReadOnlySystem};

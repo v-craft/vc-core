@@ -247,7 +247,7 @@ where
     }
 }
 
-unsafe impl<I, O, F> System for FunctionSystem<I, O, F>
+impl<I, O, F> System for FunctionSystem<I, O, F>
 where
     I: 'static,
     O: 'static,
