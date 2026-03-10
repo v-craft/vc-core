@@ -76,7 +76,7 @@ taskpool! {
     /// "woken" state)
     ///
     /// See [`TaskPool`] documentation for details on Bevy tasks.
-    (IO_TASK_POOL, IOTaskPool)
+    (IO_TASK_POOL, IoTaskPool)
 }
 
 /// A function used to tick the global tasks pools on the main thread.

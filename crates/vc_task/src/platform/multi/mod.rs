@@ -65,7 +65,7 @@ taskpool! {
     /// (i.e. tasks that spend very little time in a "woken" state)
     ///
     /// See [`TaskPool`] documentation for details.
-    (IO_TASK_POOL, IOTaskPool)
+    (IO_TASK_POOL, IoTaskPool)
 }
 
 /// A function used to tick the global tasks pools on the main thread.

@@ -18,7 +18,7 @@ cfg::switch! {
 }
 
 pub use impls::tick_local_executor_on_main_thread;
-pub use impls::{AsyncComputeTaskPool, ComputeTaskPool, IOTaskPool};
+pub use impls::{AsyncComputeTaskPool, ComputeTaskPool, IoTaskPool};
 pub use impls::{Scope, TaskPool, TaskPoolBuilder};
 pub use impls::{ScopeExecutor, ScopeExecutorTicker};
 pub use impls::{Task, block_on};

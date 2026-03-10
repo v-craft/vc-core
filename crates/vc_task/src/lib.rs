@@ -45,7 +45,7 @@ pub mod futures;
 pub use cond_send::{BoxedFuture, CondSendFuture};
 
 pub use platform::tick_local_executor_on_main_thread;
-pub use platform::{AsyncComputeTaskPool, ComputeTaskPool, IOTaskPool};
+pub use platform::{AsyncComputeTaskPool, ComputeTaskPool, IoTaskPool};
 pub use platform::{Scope, TaskPool, TaskPoolBuilder};
 pub use platform::{ScopeExecutor, ScopeExecutorTicker};
 pub use platform::{Task, block_on};
