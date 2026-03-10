@@ -8,7 +8,7 @@ use super::{DiGraph, GraphNode};
 // SccIterator
 
 /// A node set in a *strongly connected components*.
-/// 
+///
 /// A valid scheduling graph in ECS should not contain cycles,
 /// meaning all SCCs are single nodes. Therefore we use `SmallVec`
 /// for optimization, avoiding heap allocation in most scene.
@@ -31,7 +31,7 @@ pub trait SccIterator<N: GraphNode>: FusedIterator<Item = SccNodes<N>> {
 
 impl<N: GraphNode> DiGraph<N> {
     /// Create an iterator over *strongly connected components*.
-    /// 
+    ///
     /// Using Algorithm in [A Space-Efficient Algorithm for Finding Strongly Connected Components][1]
     /// by David J. Pierce, which is a memory-efficient variation of [Tarjan's algorithm][2].
     ///
@@ -42,7 +42,7 @@ impl<N: GraphNode> DiGraph<N> {
     /// - Each yielded item is a strongly connected component.
     /// - The order of nodes within each SCC is arbitrary but deterministic for a given graph.
     /// - The order of SCCs themselves is their postorder (reverse topological sort).
-    /// 
+    ///
     /// # Complexity
     /// Let `N` be the number of nodes and `M` the number of edges:
     /// - Time: O(N + M)
@@ -56,15 +56,13 @@ impl<N: GraphNode> DiGraph<N> {
 // Tarjan SCC
 
 mod tarjan_scc {
-    use core::{iter::FusedIterator, num::NonZeroUsize};
     use alloc::vec::Vec;
-    
-    use crate::schedule::{GraphNode, DiGraph};
-    use super::{SccNodes, SccIterator};
+    use core::{iter::FusedIterator, num::NonZeroUsize};
 
-    pub(super) fn new_tarjan_scc<N: GraphNode>(
-        graph: &DiGraph<N>,
-    ) -> impl SccIterator<N> + '_ {
+    use super::{SccIterator, SccNodes};
+    use crate::schedule::{DiGraph, GraphNode};
+
+    pub(super) fn new_tarjan_scc<N: GraphNode>(graph: &DiGraph<N>) -> impl SccIterator<N> + '_ {
         let unchecked_nodes = graph.nodes();
 
         let nodes = graph
@@ -365,4 +363,3 @@ mod tests {
         );
     }
 }
-

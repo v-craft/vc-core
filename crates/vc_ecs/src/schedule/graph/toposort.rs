@@ -1,10 +1,9 @@
+use crate::schedule::SccIterator;
 use alloc::vec::Vec;
 use thiserror::Error;
 use vc_utils::hash::{HashMap, HashSet};
-use crate::schedule::SccIterator;
 
 use super::{DiGraph, GraphNode};
-
 
 // -----------------------------------------------------------------------------
 // toposort
@@ -38,7 +37,7 @@ impl<N: GraphNode> DiGraph<N> {
         // who can all reach each other through one or more paths.
         let mut scc_iter = self.iter_sccs();
         // `SccIterator::next_scc` is faster then `Iterator::next`,
-        // Because we do not need copy data to `SmallVec`. 
+        // Because we do not need copy data to `SmallVec`.
         while let Some(scc) = scc_iter.next_scc() {
             top_sorted_nodes.extend_from_slice(scc);
             // If an SCC contains more than one node,
@@ -182,8 +181,8 @@ impl<N: GraphNode> DiGraph<N> {
 #[cfg(test)]
 mod tests {
     use crate::schedule::{DiGraph, Direction, GraphNode, ToposortError};
-    use alloc::vec::Vec;
     use alloc::vec;
+    use alloc::vec::Vec;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
     struct Node(usize);
@@ -191,7 +190,7 @@ mod tests {
     impl GraphNode for Node {
         type Link = (Node, Direction);
         type Edge = (Node, Node);
-    
+
         fn name(&self) -> &'static str {
             "node"
         }
@@ -219,7 +218,7 @@ mod tests {
     fn detects_self_loop() {
         let mut graph = build_graph(&[(1, 2)]);
         graph.insert_edge(Node(1), Node(1));
-        
+
         let err = graph.toposort(Vec::new()).unwrap_err();
         match err {
             ToposortError::Loop(node) => assert_eq!(node, Node(1)),
@@ -231,7 +230,7 @@ mod tests {
     fn detects_simple_cycle() {
         let graph = build_graph(&[(1, 2), (2, 1)]);
         let err = graph.toposort(Vec::new()).unwrap_err();
-        
+
         match err {
             ToposortError::Cycle(cycles) => {
                 assert_eq!(cycles.len(), 1);
@@ -252,7 +251,7 @@ mod tests {
     fn single_node() {
         let mut graph = DiGraph::new();
         graph.insert_node(Node(1));
-        
+
         let result = graph.toposort(Vec::new()).unwrap();
         assert_eq!(result, vec![Node(1)]);
     }

@@ -1,10 +1,10 @@
 #![expect(clippy::module_inception, reason = "For better structure.")]
 #![expect(clippy::missing_safety_doc, reason = "TODO")]
 
-use core::fmt::Debug;
 use alloc::boxed::Box;
+use core::fmt::Debug;
 
-use crate::error::ECSError;
+use crate::error::EcsError;
 use crate::system::{AccessTable, FunctionSystem, SystemFlags, SystemFunction};
 use crate::tick::Tick;
 use crate::utils::DebugName;
@@ -35,7 +35,7 @@ pub trait System: Send + Sync + 'static {
         &mut self,
         input: <Self::Input as SystemInput>::Data<'_>,
         world: UnsafeWorld<'_>,
-    ) -> Result<Self::Output, ECSError>;
+    ) -> Result<Self::Output, EcsError>;
 
     #[inline]
     fn is_non_send(&self) -> bool {

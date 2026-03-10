@@ -8,8 +8,8 @@ use thiserror::Error;
 use vc_utils::hash::{HashMap, HashSet};
 use vc_utils::index::IndexSet;
 
-use super::{ToposortError, UnGraph, DiGraph, GraphNode};
 use super::Direction::{Incoming, Outgoing};
+use super::{DiGraph, GraphNode, ToposortError, UnGraph};
 use super::{flatten_index, unflatten_index};
 
 // -----------------------------------------------------------------------------
@@ -620,7 +620,7 @@ pub struct DagOverlappingGroupError<K>(pub K, pub K);
 mod tests {
     use core::ops::DerefMut;
 
-    use crate::schedule::graph::{flatten_index, Dag, Direction, GraphNode, UnGraph};
+    use crate::schedule::graph::{Dag, Direction, GraphNode, UnGraph, flatten_index};
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
     struct Node(u32);
@@ -665,14 +665,8 @@ mod tests {
         dag.insert_edge(Node(2), Node(3));
         dag.insert_edge(Node(1), Node(3));
 
-        assert_eq!(
-            dag.toposort().unwrap(),
-            &[Node(1), Node(2), Node(3)]
-        );
-        assert_eq!(
-            dag.get_toposort().unwrap(),
-            &[Node(1), Node(2), Node(3)]
-        );
+        assert_eq!(dag.toposort().unwrap(), &[Node(1), Node(2), Node(3)]);
+        assert_eq!(dag.get_toposort().unwrap(), &[Node(1), Node(2), Node(3)]);
     }
 
     #[test]
@@ -692,19 +686,11 @@ mod tests {
         assert!(analysis1.connected().contains(&(Node(2), Node(3))));
         assert!(analysis1.connected().contains(&(Node(1), Node(3))));
 
-        assert!(!analysis1
-            .disconnected()
-            .contains(&(Node(2), Node(1))));
-        assert!(!analysis1
-            .disconnected()
-            .contains(&(Node(3), Node(2))));
-        assert!(!analysis1
-            .disconnected()
-            .contains(&(Node(3), Node(1))));
+        assert!(!analysis1.disconnected().contains(&(Node(2), Node(1))));
+        assert!(!analysis1.disconnected().contains(&(Node(3), Node(2))));
+        assert!(!analysis1.disconnected().contains(&(Node(3), Node(1))));
 
-        assert!(analysis1
-            .transitive_edges()
-            .contains(&(Node(1), Node(3))));
+        assert!(analysis1.transitive_edges().contains(&(Node(1), Node(3))));
 
         assert!(analysis1.check_for_redundant_edges().is_err());
 
@@ -907,4 +893,3 @@ mod tests {
         assert!(result.is_ok());
     }
 }
-

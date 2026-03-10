@@ -6,10 +6,10 @@ mod toposort;
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use toposort::ToposortError;
-pub use graphs::{DiGraph, Direction, Graph, GraphNode, UnGraph};
 pub use dag::{Dag, DagAnalysis, DagGroups};
+pub use graphs::{DiGraph, Direction, Graph, GraphNode, UnGraph};
 pub use scc::{SccIterator, SccNodes};
+pub use toposort::ToposortError;
 
 // -----------------------------------------------------------------------------
 // Helper
@@ -24,4 +24,3 @@ fn flatten_index(row: usize, col: usize, num_cols: usize) -> usize {
 fn unflatten_index(index: usize, num_cols: usize) -> (usize, usize) {
     (index / num_cols, index % num_cols)
 }
-

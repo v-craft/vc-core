@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 
 use super::{AccessTable, System, SystemFlags, SystemIn, SystemMeta};
-use crate::error::ECSError;
+use crate::error::EcsError;
 use crate::tick::Tick;
 use crate::utils::DebugName;
 use crate::world::{World, WorldId};
@@ -287,7 +287,7 @@ where
         &mut self,
         input: <Self::Input as SystemInput>::Data<'_>,
         world: crate::world::UnsafeWorld<'_>,
-    ) -> Result<Self::Output, ECSError> {
+    ) -> Result<Self::Output, EcsError> {
         let Some(state) = &mut self.state else {
             todo!()
         };

@@ -2,8 +2,8 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::hash::Hash;
 
-use vc_utils::index::IndexMap;
 use vc_utils::hash::HashSet;
+use vc_utils::index::IndexMap;
 
 use Direction::{Incoming, Outgoing};
 
@@ -303,4 +303,3 @@ impl<const DIRECTED: bool, N: GraphNode> Graph<DIRECTED, N> {
         self.nodes.get_index_of(&ix).unwrap()
     }
 }
-
