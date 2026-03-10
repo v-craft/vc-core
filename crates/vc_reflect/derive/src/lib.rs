@@ -6,7 +6,7 @@
 //! - [`impl_reflect_opaque`]
 //! - [`impl_type_path`]
 //! - [`impl_auto_register`]
-//! - [`reflect_cast`]
+//! - [`reflect_trait`]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(clippy::std_instead_of_core, reason = "proc-macro lib")]
 #![allow(clippy::std_instead_of_alloc, reason = "proc-macro lib")]
@@ -507,9 +507,9 @@ pub fn impl_auto_register(input: TokenStream) -> TokenStream {
 
 /// Impl `TypeTrait` for specific trait with a new struct.
 ///
-/// This macro will generate a `ReflectCast{trait_name}` struct, which implements `TypeTrait` and `TypePath`.
+/// This macro will generate a `{trait_name}FromReflect` struct, which implements `TypeTrait` and `TypePath`.
 ///
-/// For example, for `Display`, this will generate `ReflectCastDisplay`.
+/// For example, for `Display`, this will generate `DisplayReflect`.
 ///
 /// It only contains three methods internally:
 /// - `cast_ref`: cast `&dyn Reflect` to `&dyn {trait_name}`
@@ -519,7 +519,7 @@ pub fn impl_auto_register(input: TokenStream) -> TokenStream {
 /// ## Example
 ///
 /// ```ignore
-/// #[reflect_cast]
+/// #[reflect_trait]
 /// pub trait MyDebug {
 ///     fn debug(&self);
 /// }
@@ -528,15 +528,15 @@ pub fn impl_auto_register(input: TokenStream) -> TokenStream {
 ///
 /// let reg = TypeRegistry::new()
 ///     .register::<String>()
-///     .register_type_trait::<String, ReflectCastMyDebug>();
+///     .register_type_trait::<String, MyDebugFromReflect>();
 ///
 /// let x: Box<dyn Reflect> = Box::new(String::from("123"));
 ///
-/// let cast_my_debug = reg.get_type_trait::<ReflectCastMyDebug>::((*x).type_id()).unwrap();
-/// let x: Box<dyn MyDebug> = cast_my_debug.cast_boxed(x);
+/// let my_debug_from = reg.get_type_trait::<MyDebugFromReflect>::((*x).type_id()).unwrap();
+/// let x: Box<dyn MyDebug> = my_debug_from.from_boxed(x);
 /// x.debug();
 /// ```
 #[proc_macro_attribute]
-pub fn reflect_cast(_args: TokenStream, input: TokenStream) -> TokenStream {
-    impls::impl_reflect_cast(input)
+pub fn reflect_trait(_args: TokenStream, input: TokenStream) -> TokenStream {
+    impls::impl_reflect_trait(input)
 }

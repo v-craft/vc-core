@@ -409,15 +409,15 @@ fn get_enum_clone_impl(info: &ReflectEnum) -> TokenStream {
                         variant.fields().iter().find(|f| f.attrs.ignore.is_some())
                     {
                         let span = ignored_field.attrs.ignore.unwrap();
-                        let field_id = ignored_field.field_id(vc_reflect_path);
+                        let field_name = ignored_field.field_name();
 
                         let field_not_cloneable = Ident::new("FieldNotCloneable", span);
 
                         match_tokens.extend(quote! {
                             #variant_path_ => #ResultFP::Err(#reflect_clone_error_::#field_not_cloneable {
-                                type_path:  #macro_utils_::Cow::Borrowed(<Self as #type_path_>::type_path())
-                                field: #field_id,
-                                variant: #OptionFP::Some(#macro_utils_::Cow::Borrowed(#variant_name_)),
+                                type_path:  <Self as #type_path_>::type_path()
+                                field: #field_name,
+                                variant: #OptionFP::Some(#variant_name_),
                             }),
                         });
                         continue;

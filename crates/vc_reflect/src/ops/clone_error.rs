@@ -1,4 +1,4 @@
-use alloc::{borrow::Cow, format};
+use alloc::format;
 use core::fmt;
 
 /// A enumeration of all error outcomes that might happen when
@@ -6,12 +6,12 @@ use core::fmt;
 #[derive(Debug)]
 pub enum ReflectCloneError {
     /// The type does not support clone.
-    NotSupport { type_path: Cow<'static, str> },
+    NotSupport { type_path: &'static str },
     /// The field cannot be cloned.
     FieldNotCloneable {
-        type_path: Cow<'static, str>,
-        field: Cow<'static, str>,
-        variant: Option<Cow<'static, str>>,
+        type_path: &'static str,
+        field: &'static str,
+        variant: Option<&'static str>,
     },
 }
 
@@ -29,7 +29,7 @@ impl fmt::Display for ReflectCloneError {
                 write!(
                     f,
                     "field `{}` cannot be made cloneable for `reflect_clone`",
-                    match variant.as_deref() {
+                    match variant {
                         Some(variant) => format!("{type_path}::{variant}::{field}"),
                         None => format!("{type_path}::{field}"),
                     }

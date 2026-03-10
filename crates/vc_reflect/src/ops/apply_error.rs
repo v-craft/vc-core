@@ -8,7 +8,7 @@ use crate::info::{ReflectKind, ReflectKindError};
 #[derive(Debug)]
 pub enum ApplyError {
     /// Special reflection type, not allowed to apply.
-    NotSupport { type_path: Cow<'static, str> },
+    NotSupport { type_path: &'static str },
     /// Tried to apply incompatible types.
     MismatchedTypes {
         from_type: Cow<'static, str>,

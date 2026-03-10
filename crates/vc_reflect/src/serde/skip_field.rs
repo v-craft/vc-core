@@ -1,4 +1,3 @@
-use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::any::TypeId;
 
@@ -165,14 +164,14 @@ impl Reflect for SkipSerde {
     /// # Should not be used.
     fn apply(&mut self, _value: &dyn Reflect) -> Result<(), ApplyError> {
         Err(ApplyError::NotSupport {
-            type_path: Cow::Borrowed(Self::type_path()),
+            type_path: Self::type_path(),
         })
     }
 
     /// # Should not be used.
     fn reflect_clone(&self) -> Result<Box<dyn Reflect>, ReflectCloneError> {
         Err(ReflectCloneError::NotSupport {
-            type_path: Cow::Borrowed(Self::type_path()),
+            type_path: Self::type_path(),
         })
     }
 

@@ -1,6 +1,5 @@
 //! Even if the atomic variable uses `portable_atomic`, its type path is still `core::sync::atomic::...`.
 
-use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use core::sync::atomic::Ordering;
 
@@ -58,9 +57,9 @@ macro_rules! impl_reflect_for_atomic {
                     Ok(())
                 } else {
                     Err($crate::ops::ApplyError::MismatchedTypes {
-                        from_type: Into::into(
-                            $crate::info::DynamicTypePath::reflect_type_path(value).to_owned(),
-                        ),
+                        from_type: Into::into($crate::info::DynamicTypePath::reflect_type_path(
+                            value,
+                        )),
                         to_type: Into::into(<Self as $crate::info::TypePath>::type_path()),
                     })
                 }

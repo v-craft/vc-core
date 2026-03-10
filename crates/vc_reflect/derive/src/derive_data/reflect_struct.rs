@@ -63,17 +63,10 @@ impl<'a> StructField<'a> {
     }
 
     /// Returns a token stream for generating a `FieldId` for this field.
-    pub fn field_id(&self, vc_reflect_path: &syn::Path) -> proc_macro2::TokenStream {
-        let macro_utils_ = crate::path::macro_utils_(vc_reflect_path);
+    pub fn field_name(&self) -> proc_macro2::TokenStream {
         match &self.data.ident {
-            Some(ident) => {
-                let name = ident.to_string();
-                quote!(#macro_utils_::Cow::Borrowed(#name))
-            }
-            None => {
-                let index = self.declaration_index.to_string();
-                quote!(#macro_utils_::Cow::Borrowed(#index))
-            }
+            Some(ident) => ident.to_string().to_token_stream(),
+            None => self.declaration_index.to_string().to_token_stream(),
         }
     }
 

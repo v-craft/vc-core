@@ -273,9 +273,9 @@ impl core::fmt::Debug for TypeMeta {
 /// Add additional [`TypeTrait`]:
 ///
 /// ```
-/// use vc_reflect::{derive::{Reflect, reflect_cast}, registry::GetTypeMeta};
+/// use vc_reflect::{derive::{Reflect, reflect_trait}, registry::GetTypeMeta};
 ///
-/// #[reflect_cast]
+/// #[reflect_trait]
 /// trait MyDisplay {
 ///     fn display(&self) { /* ... */ }
 /// }
@@ -283,23 +283,22 @@ impl core::fmt::Debug for TypeMeta {
 /// impl MyDisplay for A{}
 ///
 /// #[derive(Reflect)]
-/// #[reflect(type_trait = ReflectCastMyDisplay)]
+/// #[reflect(type_trait = MyDisplayFromReflect)]
 /// struct A;
 ///
 /// let meta = A::get_type_meta();
-///
-/// assert!(meta.has_trait::<ReflectCastMyDisplay>());
+/// assert!(meta.has_trait::<MyDisplayFromReflect>());
 /// ```
 ///
-/// See [`derive::reflect_cast`](crate::derive::reflect_cast) for more details.
+/// See [`derive::reflect_trait`](crate::derive::reflect_trait) for more details.
 ///
 /// ## Manually
 ///
 /// ```
-/// use vc_reflect::derive::{Reflect, reflect_cast};
+/// use vc_reflect::derive::{Reflect, reflect_trait};
 /// use vc_reflect::registry::{GetTypeMeta, FromType, TypeMeta};
 ///
-/// #[reflect_cast]
+/// #[reflect_trait]
 /// trait MyDisplay {
 ///     fn display(&self) { /* ... */ }
 /// }
@@ -313,13 +312,13 @@ impl core::fmt::Debug for TypeMeta {
 /// impl GetTypeMeta for A {
 ///     fn get_type_meta() -> TypeMeta {
 ///         let mut meta = TypeMeta::of::<Self>();
-///         meta.insert_trait::<ReflectCastMyDisplay>(FromType::<Self>::from_type());
+///         meta.insert_trait::<MyDisplayFromReflect>(FromType::<Self>::from_type());
 ///         meta
 ///     }
 /// }
 ///
 /// let meta = A::get_type_meta();
-/// assert!(meta.has_trait::<ReflectCastMyDisplay>());
+/// assert!(meta.has_trait::<MyDisplayFromReflect>());
 /// ```
 ///
 /// [`TypeTrait`]: crate::registry::TypeTrait

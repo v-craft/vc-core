@@ -905,7 +905,7 @@ pub fn list_apply(x: &mut dyn List, y: &dyn Reflect) -> Result<(), ApplyError> {
             } else {
                 // Get item error.
                 return Err(ApplyError::NotSupport {
-                    type_path: Cow::Borrowed(x.reflect_type_path()),
+                    type_path: x.reflect_type_path(),
                 });
             }
         } else {

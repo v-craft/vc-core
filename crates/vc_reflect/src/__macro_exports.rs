@@ -30,7 +30,7 @@ pub mod macro_utils {
             Ok(val)
         } else {
             Err(crate::ops::ReflectCloneError::NotSupport {
-                type_path: T::type_path().into(),
+                type_path: T::type_path(),
             })
         }
     }

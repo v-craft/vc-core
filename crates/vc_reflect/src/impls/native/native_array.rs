@@ -83,7 +83,7 @@ impl<T: Reflect + Typed, const N: usize> Reflect for [T; N] {
             .collect::<Result<Vec<T>, ReflectCloneError>>()?;
 
         let res: Self = res.try_into().map_err(|_| ReflectCloneError::NotSupport {
-            type_path: T::type_path().into(),
+            type_path: T::type_path(),
         })?;
 
         Ok(Box::new(res))

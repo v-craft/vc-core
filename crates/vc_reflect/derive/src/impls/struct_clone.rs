@@ -48,14 +48,14 @@ pub(crate) fn get_struct_clone_impl(info: &ReflectStruct) -> TokenStream {
         for field in info.fields().iter() {
             if let Some(span) = field.attrs.ignore {
                 let field_not_cloneable = syn::Ident::new("FieldNotCloneable", span);
-                let field_id = field.field_id(vc_reflect_path);
+                let field_name = field.field_name();
 
                 return quote! {
                     #[inline]
                     fn reflect_clone(&self) -> #ResultFP<#macro_utils_::Box<dyn #reflect_>, #reflect_clone_error_> {
                         #ResultFP::Err(#reflect_clone_error_::#field_not_cloneable {
-                            type_path:  #macro_utils_::Cow::Borrowed(<Self as #type_path_>::type_path()),
-                            field: #field_id,
+                            type_path:  <Self as #type_path_>::type_path(),
+                            field: #field_name,
                             variant: #OptionFP::None,
                         })
                     }

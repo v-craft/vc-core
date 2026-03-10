@@ -13,7 +13,7 @@
 //!     - [`ReflectFromReflect`]: Provide [`FromReflect`] support for deserialization.
 //!     - [`ReflectSerialize`]: Provides serialization support for reflected types.
 //!     - [`ReflectDeserialize`]: Provides deserialization support for reflected types.
-//! - [`reflect_cast`]: An attribute macro that generates a `ReflectCast{Trait}` helper usable as a [`TypeTrait`].
+//! - [`reflect_trait`]: An attribute macro that generates a `{Trait}FromReflect` helper usable as a [`TypeTrait`].
 //!
 //! ## auto_register
 //!
@@ -39,7 +39,7 @@
 //! - "std" feature:
 //!   `OsString` `PathBuf` `Cow<'static, Path>` `&'static Path`
 //!
-//! [`reflect_cast`]: crate::derive::reflect_cast
+//! [`reflect_trait`]: crate::derive::reflect_trait
 //! [`FromReflect`]: crate::FromReflect
 //! [`TypeInfo`]: crate::info::TypeInfo
 

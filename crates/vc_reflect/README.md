@@ -32,7 +32,7 @@ As a dynamic reflection system, this library aims to support:
 
 - **Trait Reflection**:
     - Trait reflection based on registration system, enabling dynamic trait object retrieval
-    - See more information in [`registry::TypeTrait`] and [`derive::reflect_cast`]
+    - See more information in [`registry::TypeTrait`] and [`derive::reflect_trait`]
 
 - **Reflection Macros**:
     - Automatic generation of reflection implementations for types
