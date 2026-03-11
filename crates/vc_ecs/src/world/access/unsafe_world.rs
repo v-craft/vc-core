@@ -10,6 +10,11 @@ pub struct UnsafeWorld<'a> {
     _marker: PhantomData<&'a UnsafeCell<World>>,
 }
 
+// SAFETY: `&World` and `&mut World` are both `Send`
+unsafe impl Send for UnsafeWorld<'_> {}
+// SAFETY: `&World` and `&mut World` are both `Sync`
+unsafe impl Sync for UnsafeWorld<'_> {}
+
 // impl<'a> From<&'a World> for UnsafeWorld<'a> {
 //     fn from(value: &'a World) -> Self {
 //         UnsafeWorld {

@@ -81,11 +81,11 @@ impl<T> Block<T> {
 
     #[inline]
     fn reset(&mut self) {
+        self.next = ptr::null_mut();
         self.head_cache.0 = 0;
         self.head_cache.1 = 0;
         self.tail_state.0 = 0;
         self.tail_state.1.store(0, Release);
-        self.next = ptr::null_mut();
     }
 }
 

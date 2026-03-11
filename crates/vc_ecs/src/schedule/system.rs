@@ -70,8 +70,8 @@ pub struct ScheduleGraph {
 pub struct SystemSchedule {
     pub keys: Vec<SystemKey>,
     pub systems: Vec<SystemObject>,
-    pub incoming: Vec<usize>,
-    pub outgoing: Vec<Vec<usize>>,
+    pub incoming: Vec<u32>,
+    pub outgoing: Vec<Vec<u32>>,
 }
 
 // -----------------------------------------------------------------------------
@@ -244,6 +244,7 @@ impl ScheduleGraph {
 
         schedule.keys.extend(exec_dag.toposort().unwrap());
         let topo: &[SystemKey] = &schedule.keys;
+        assert!(topo.len() < u32::MAX as usize, "too many systems");
 
         schedule.systems.extend(
             topo.iter()
@@ -253,16 +254,16 @@ impl ScheduleGraph {
         schedule.incoming.resize(topo.len(), 0);
         schedule.outgoing.resize(topo.len(), Vec::new());
 
-        let mut key_index: HashMap<SystemKey, usize> = HashMap::with_capacity(topo.len());
+        let mut index_map: HashMap<SystemKey, usize> = HashMap::with_capacity(topo.len());
         topo.iter().enumerate().for_each(|(idx, &key)| {
-            key_index.insert(key, idx);
+            index_map.insert(key, idx);
         });
 
-        let reduced = exec_dag.transitive_reduction(topo, &key_index);
+        let reduced = exec_dag.transitive_reduction(topo, &index_map);
         topo.iter().enumerate().for_each(|(idx, &key)| {
             reduced.neighbors(key).for_each(|to| {
-                let neighbor_index = key_index[&to];
-                schedule.outgoing[idx].push(neighbor_index);
+                let neighbor_index = index_map[&to];
+                schedule.outgoing[idx].push(neighbor_index as u32);
                 schedule.incoming[neighbor_index] += 1;
             });
         });

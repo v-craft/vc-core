@@ -33,16 +33,12 @@ impl Schedule {
         self.label
     }
 
-    pub fn update_schedule(&mut self, world: &mut World) {
-        self.graph.recycle_schedule(&mut self.schedule);
-        self.graph.initialize(world);
-        self.graph.build_schedule(&mut self.schedule);
-    }
-
-    pub fn run(&mut self, world: &mut World) {
+    pub fn update(&mut self, world: &mut World) {
         if self.is_changed {
             vc_utils::cold_path();
-            self.update_schedule(world);
+            self.graph.recycle_schedule(&mut self.schedule);
+            self.graph.initialize(world);
+            self.graph.build_schedule(&mut self.schedule);
             self.is_changed = false;
         }
 
@@ -51,14 +47,18 @@ impl Schedule {
             self.executor.init(&self.schedule);
             self.executor_initialized = true;
         }
+    }
 
-        if let Some(handler) = world.get_resource::<DefaultErrorHandler>() {
-            self.executor.run(&self.schedule, world, handler.0);
+    pub fn run(&mut self, world: &mut World) {
+        self.update(world);
+
+        if let Some(&handler) = world.get_resource::<DefaultErrorHandler>() {
+            self.executor.run(&mut self.schedule, world, handler.0);
         } else {
             vc_utils::cold_path();
-            let default_handler = DefaultErrorHandler::default();
-            world.insert_resource(default_handler);
-            self.executor.run(&self.schedule, world, default_handler.0);
+            let handler = DefaultErrorHandler::default();
+            world.insert_resource(handler);
+            self.executor.run(&mut self.schedule, world, handler.0);
         }
     }
 }

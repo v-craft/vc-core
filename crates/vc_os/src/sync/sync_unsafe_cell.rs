@@ -71,6 +71,16 @@ impl<T: ?Sized> SyncUnsafeCell<T> {
         // See UnsafeCell::raw_get.
         this as *const T as *mut T
     }
+
+    #[inline]
+    /// Returns a `&mut SyncUnsafeCell<T>` from a `&mut T`.
+    pub fn from_mut(t: &mut T) -> &mut SyncUnsafeCell<T> {
+        let ptr = core::ptr::from_mut(t) as *mut SyncUnsafeCell<T>;
+        // SAFETY: `ptr` must be safe to mutably dereference, since it was originally
+        // obtained from a mutable reference. `SyncUnsafeCell` has the same representation
+        // as the original type `T`, since the former is annotated with #[repr(transparent)].
+        unsafe { &mut *ptr }
+    }
 }
 
 impl<T: Default> Default for SyncUnsafeCell<T> {
@@ -84,5 +94,30 @@ impl<T> From<T> for SyncUnsafeCell<T> {
     /// Creates a new `SyncUnsafeCell<T>` containing the given value.
     fn from(t: T) -> SyncUnsafeCell<T> {
         SyncUnsafeCell::new(t)
+    }
+}
+
+impl<T> SyncUnsafeCell<[T]> {
+    /// Returns a `&[SyncUnsafeCell<T>]` from a `&SyncUnsafeCell<[T]>`.
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_os::sync::SyncUnsafeCell;
+    ///
+    /// let slice: &mut [i32] = &mut [1, 2, 3];
+    /// let cell_slice: &SyncUnsafeCell<[i32]> = SyncUnsafeCell::from_mut(slice);
+    /// let slice_cell: &[SyncUnsafeCell<i32>] = cell_slice.as_slice_of_cells();
+    ///
+    /// assert_eq!(slice_cell.len(), 3);
+    /// ```
+    pub fn as_slice_of_cells(&self) -> &[SyncUnsafeCell<T>] {
+        let self_ptr: *const SyncUnsafeCell<[T]> = core::ptr::from_ref(self);
+        let slice_ptr = self_ptr as *const [SyncUnsafeCell<T>];
+        // SAFETY: `UnsafeCell<T>` and `SyncUnsafeCell<T>` have #[repr(transparent)]
+        // therefore:
+        // - `SyncUnsafeCell<T>` has the same layout as `T`
+        // - `SyncUnsafeCell<[T]>` has the same layout as `[T]`
+        // - `SyncUnsafeCell<[T]>` has the same layout as `[SyncUnsafeCell<T>]`
+        unsafe { &*slice_ptr }
     }
 }
