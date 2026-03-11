@@ -1,7 +1,9 @@
 use alloc::boxed::Box;
 use core::error::Error;
 use core::fmt::{Debug, Display};
+use core::ops::{Deref, DerefMut};
 
+use crate::resource::Resource;
 use crate::tick::Tick;
 use crate::utils::DebugName;
 
@@ -102,6 +104,32 @@ impl ErrorContext {
 
 // ----------------------------------------------------------
 // Handler
+
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct DefaultErrorHandler(pub ErrorHandler);
+
+unsafe impl Resource for DefaultErrorHandler {}
+
+impl Default for DefaultErrorHandler {
+    fn default() -> Self {
+        Self(panic)
+    }
+}
+
+impl Deref for DefaultErrorHandler {
+    type Target = ErrorHandler;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for DefaultErrorHandler {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 macro_rules! inner {
     ($call:path, $e:ident, $c:ident) => {

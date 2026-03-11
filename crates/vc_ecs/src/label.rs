@@ -9,30 +9,6 @@ use vc_utils::hash::HashSet;
 pub use alloc::boxed::Box;
 
 // -----------------------------------------------------------------------------
-// pool
-
-#[expect(unsafe_code, reason = "sealed")]
-mod pool {
-    use vc_os::sync::{Mutex, PoisonError};
-    use vc_utils::extra::PagePool;
-
-    struct MemoryPool(PagePool<1024>);
-
-    unsafe impl Sync for MemoryPool {}
-    unsafe impl Send for MemoryPool {}
-
-    static STR_POOL: Mutex<MemoryPool> = Mutex::new(MemoryPool(PagePool::new()));
-
-    pub fn leak_str(value: &str) -> &'static str {
-        let guard = STR_POOL.lock().unwrap_or_else(PoisonError::into_inner);
-        unsafe {
-            let ref_str = guard.0.alloc_str(value);
-            core::mem::transmute::<&str, &'static str>(ref_str)
-        }
-    }
-}
-
-// -----------------------------------------------------------------------------
 // Internable
 
 pub trait Internable: Hash + Eq + 'static {
@@ -42,21 +18,6 @@ pub trait Internable: Hash + Eq + 'static {
     fn ref_eq(&self, other: &Self) -> bool;
     /// Feeds the reference to the hasher.
     fn ref_hash<H: Hasher>(&self, state: &mut H);
-}
-
-impl Internable for str {
-    fn leak(&self) -> &'static Self {
-        pool::leak_str(self)
-    }
-
-    fn ref_eq(&self, other: &Self) -> bool {
-        self.as_ptr() == other.as_ptr() && self.len() == other.len()
-    }
-
-    fn ref_hash<H: Hasher>(&self, state: &mut H) {
-        self.len().hash(state);
-        self.as_ptr().hash(state);
-    }
 }
 
 // -----------------------------------------------------------------------------
@@ -283,10 +244,9 @@ macro_rules! define_label {
 
 #[cfg(test)]
 mod tests {
-    use core::hash::{BuildHasher, Hash, Hasher};
-    use vc_utils::hash::FixedHashState;
+    use core::hash::{Hash, Hasher};
 
-    use super::{Internable, Interned, Interner};
+    use super::{Internable, Interner};
 
     #[test]
     fn zero_sized_type() {
@@ -342,52 +302,5 @@ mod tests {
         let x = interner.intern(&A::X);
         let y = interner.intern(&A::Y);
         assert_ne!(x, y);
-    }
-
-    #[test]
-    fn static_sub_strings() {
-        let str = "ABC ABC";
-        let a = &str[0..3];
-        let b = &str[4..7];
-        // Same contents
-        assert_eq!(a, b);
-        let x = Interned(a);
-        let y = Interned(b);
-        // Different pointers
-        assert_ne!(x, y);
-        let interner = Interner::default();
-        let x = interner.intern(a);
-        let y = interner.intern(b);
-        // Same pointers returned by interner
-        assert_eq!(x, y);
-    }
-
-    #[test]
-    fn same_interned_instance() {
-        let a = Interned("A");
-        let b = a;
-
-        assert_eq!(a, b);
-
-        let hash_a = FixedHashState.hash_one(a);
-        let hash_b = FixedHashState.hash_one(b);
-
-        assert_eq!(hash_a, hash_b);
-    }
-
-    #[test]
-    fn same_interned_content() {
-        let a = Interned::<str>(Internable::leak("A"));
-        let b = Interned::<str>(Internable::leak("A"));
-
-        assert_ne!(a, b);
-    }
-
-    #[test]
-    fn different_interned_content() {
-        let a = Interned::<str>("A");
-        let b = Interned::<str>("B");
-
-        assert_ne!(a, b);
     }
 }

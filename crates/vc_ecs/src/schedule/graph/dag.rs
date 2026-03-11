@@ -42,6 +42,15 @@ impl<N: GraphNode> Dag<N> {
             dirty: false,
         }
     }
+
+    pub fn with_capacity(nodes: usize, edges: usize) -> Self {
+        Self {
+            graph: DiGraph::with_capacity(nodes, edges),
+            toposort: Vec::new(),
+            dirty: false,
+        }
+    }
+
     /// Read-only access to the underlying directed graph.
     #[must_use]
     pub fn graph(&self) -> &DiGraph<N> {

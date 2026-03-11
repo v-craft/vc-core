@@ -1,5 +1,6 @@
 mod dag;
 mod graphs;
+mod reduction;
 mod scc;
 mod toposort;
 
