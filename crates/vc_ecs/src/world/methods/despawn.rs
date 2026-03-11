@@ -43,3 +43,142 @@ impl World {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::component::{Component, ComponentStorage};
+    use crate::world::{World, WorldIdAllocator};
+    use alloc::string::String;
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct Foo;
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct Bar(u64);
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct Baz(String);
+
+    unsafe impl Component for Foo {}
+    unsafe impl Component for Bar {}
+    unsafe impl Component for Baz {
+        const STORAGE: ComponentStorage = ComponentStorage::Sparse;
+    }
+
+    #[test]
+    fn drop_dense() {
+        static DROP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+        struct DropTracker;
+
+        unsafe impl Component for DropTracker {
+            const STORAGE: ComponentStorage = ComponentStorage::Dense;
+        }
+        impl Drop for DropTracker {
+            fn drop(&mut self) {
+                DROP_COUNTER.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let mut world = World::new(WorldIdAllocator::new().alloc());
+
+        // Single
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+        let entity = world.spawn(DropTracker).entity;
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+        world.despawn(entity).unwrap();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 1);
+
+        // Combined
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+        let entity = world
+            .spawn((DropTracker, Bar(3), Baz(String::from("123"))))
+            .entity;
+        world.despawn(entity).unwrap();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 1);
+
+        // Repeated
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+        let entity = world.spawn((DropTracker, DropTracker, Foo)).entity;
+        world.despawn(entity).unwrap();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn drop_sparse() {
+        static DROP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+        struct DropTracker;
+
+        unsafe impl Component for DropTracker {
+            const STORAGE: ComponentStorage = ComponentStorage::Sparse;
+        }
+        impl Drop for DropTracker {
+            fn drop(&mut self) {
+                DROP_COUNTER.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let mut world = World::new(WorldIdAllocator::new().alloc());
+
+        // Single
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+        let entity = world.spawn(DropTracker).entity;
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+        world.despawn(entity).unwrap();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 1);
+
+        // Combined
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+        let entity = world
+            .spawn((DropTracker, Bar(3), Baz(String::from("123"))))
+            .entity;
+        world.despawn(entity).unwrap();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 1);
+
+        // Repeated
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+        let entity = world.spawn((DropTracker, DropTracker, Foo)).entity;
+        world.despawn(entity).unwrap();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn drop_world() {
+        static DENSE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+        static SPARSE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+        struct DenseTracker;
+        struct SparseTracker;
+
+        unsafe impl Component for DenseTracker {
+            const STORAGE: ComponentStorage = ComponentStorage::Dense;
+        }
+        unsafe impl Component for SparseTracker {
+            const STORAGE: ComponentStorage = ComponentStorage::Sparse;
+        }
+        impl Drop for DenseTracker {
+            fn drop(&mut self) {
+                DENSE_COUNTER.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        impl Drop for SparseTracker {
+            fn drop(&mut self) {
+                SPARSE_COUNTER.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let mut world = World::new(WorldIdAllocator::new().alloc());
+        DENSE_COUNTER.store(0, Ordering::SeqCst);
+        SPARSE_COUNTER.store(0, Ordering::SeqCst);
+
+        for _ in 0..100 {
+            world.spawn(DenseTracker);
+            world.spawn((DenseTracker, SparseTracker));
+            world.spawn(SparseTracker);
+        }
+
+        ::core::mem::drop(world);
+
+        assert_eq!(DENSE_COUNTER.load(Ordering::SeqCst), 200);
+        assert_eq!(SPARSE_COUNTER.load(Ordering::SeqCst), 200);
+    }
+}

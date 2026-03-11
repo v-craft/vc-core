@@ -22,6 +22,12 @@ impl WorldId {
     pub const fn index(self) -> usize {
         self.0.get() as usize
     }
+
+    /// Returns the raw index value of this id as a `u64`.
+    #[inline]
+    pub const fn get(self) -> u64 {
+        self.0.get()
+    }
 }
 
 impl Hash for WorldId {

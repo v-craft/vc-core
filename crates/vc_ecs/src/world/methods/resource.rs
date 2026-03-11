@@ -30,28 +30,7 @@ impl World {
     /// The resource is registered by type on first use. Once inserted, it can be
     /// accessed from systems through [`crate::borrow::Res`],
     /// [`crate::borrow::ResRef`], or [`crate::borrow::ResMut`].
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use vc_ecs::resource::Resource;
-    /// use vc_ecs::world::{World, WorldIdAllocator};
-    ///
-    /// static IDS: WorldIdAllocator = WorldIdAllocator::new();
-    ///
-    /// #[derive(Debug, PartialEq, Eq)]
-    /// struct Counter(u32);
-    ///
-    /// unsafe impl Resource for Counter {}
-    ///
-    /// let mut world = World::new(IDS.alloc());
-    /// let counter = world.insert_resource(Counter(1));
-    /// counter.0 += 1;
-    ///
-    /// assert_eq!(world.get_resource::<Counter>(), Some(&Counter(2)));
-    /// ```
     pub fn insert_resource<T: Resource + Send>(&mut self, value: T) -> &mut T {
-        // let id = self.register_resource::<T>();
         let id = self.resources.register::<T>();
         vc_ptr::into_owning!(value);
         unsafe { insert_internal(self, value, id).consume::<T>() }
@@ -132,26 +111,7 @@ impl World {
     /// resource is restricted to the thread that created the world.
     ///
     /// # Panics
-    ///
     /// Panics if called from a thread other than the world's main thread.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use core::cell::Cell;
-    /// use vc_ecs::resource::Resource;
-    /// use vc_ecs::world::{World, WorldIdAllocator};
-    ///
-    /// static IDS: WorldIdAllocator = WorldIdAllocator::new();
-    ///
-    /// struct LocalCounter(Cell<u32>);
-    ///
-    /// unsafe impl Resource for LocalCounter {}
-    ///
-    /// let mut world = World::new(IDS.alloc());
-    /// world.insert_non_send(LocalCounter(Cell::new(3)));
-    /// assert_eq!(world.get_non_send::<LocalCounter>().unwrap().0.get(), 3);
-    /// ```
     pub fn insert_non_send<T: Resource>(&mut self, value: T) -> &mut T {
         assert! {
             self.thread_hash == crate::utils::thread_hash(),
@@ -168,7 +128,6 @@ impl World {
     /// Removes and returns a main-thread resource if it exists.
     ///
     /// # Panics
-    ///
     /// Panics if called from a thread other than the world's main thread.
     pub fn remove_non_send<T: Resource>(&mut self) -> Option<T> {
         assert! {
@@ -190,7 +149,6 @@ impl World {
     /// This will be faster than removing, as there is no need to return data.
     ///
     /// # Panics
-    ///
     /// Panics if called from a thread other than the world's main thread.
     pub fn drop_non_send<T: Resource>(&mut self) {
         assert! {
@@ -208,7 +166,6 @@ impl World {
     /// Returns a shared reference to a main-thread resource without change detection.
     ///
     /// # Panics
-    ///
     /// Panics if called from a thread other than the world's main thread.
     pub fn get_non_send<T: Resource>(&mut self) -> Option<&T> {
         assert! {
@@ -232,7 +189,6 @@ impl World {
     /// This mirrors the behavior of the [`crate::borrow::NonSendRef`] system parameter.
     ///
     /// # Panics
-    ///
     /// Panics if called from a thread other than the world's main thread.
     pub fn get_non_send_ref<T: Resource>(&self) -> Option<NonSendRef<'_, T>> {
         assert! {
@@ -257,7 +213,6 @@ impl World {
     /// This mirrors the behavior of the [`crate::borrow::NonSendMut`] system parameter.
     ///
     /// # Panics
-    ///
     /// Panics if called from a thread other than the world's main thread.
     pub fn get_non_send_mut<T: Resource>(&mut self) -> Option<NonSendMut<'_, T>> {
         assert! {
@@ -280,9 +235,13 @@ impl World {
 
 #[cfg(test)]
 mod tests {
+    use alloc::boxed::Box;
     use core::num::NonZeroU64;
+    use core::sync::atomic::Ordering;
+    use vc_os::sync::atomic::AtomicUsize;
 
     use crate::resource::Resource;
+    use crate::tick::DetectChanges;
     use crate::world::{World, WorldId};
 
     #[derive(Debug, PartialEq, Eq)]
@@ -294,20 +253,198 @@ mod tests {
     unsafe impl Resource for Foo {}
     unsafe impl Resource for Bar {}
 
+    fn new_world() -> Box<World> {
+        let world_id = WorldId::new(NonZeroU64::new(1).unwrap());
+        World::new(world_id)
+    }
+
     #[test]
     fn insert_basic() {
-        let world_id = WorldId::new(NonZeroU64::new(1).unwrap());
-        let mut world = World::new(world_id);
+        let mut world = new_world();
+
         assert_eq!(*world.insert_resource(Foo), Foo);
         assert_eq!(*world.insert_resource(Bar(234)), Bar(234));
+
+        assert_eq!(world.get_resource::<Foo>(), Some(&Foo));
         assert_eq!(world.remove_resource::<Foo>(), Some(Foo));
         assert_eq!(world.get_resource::<Foo>(), None);
-        assert_eq!(world.get_resource::<Bar>(), Some(&Bar(234)));
+        assert_eq!(world.get_non_send::<Foo>(), None);
+        assert_eq!(world.remove_non_send::<Foo>(), None);
+        assert_eq!(world.remove_resource::<Foo>(), None);
 
-        // std::eprintln!(
-        //     "{:?} | {:?}",
-        //     get_res::<Foo>(&world),
-        //     get_non_send::<Bar>(&world),
-        // );
+        assert_eq!(world.get_resource::<Bar>(), Some(&Bar(234)));
+        assert_eq!(world.remove_non_send::<Bar>(), Some(Bar(234)));
+        assert_eq!(world.get_resource::<Bar>(), None);
+        assert_eq!(world.get_non_send::<Bar>(), None);
+        assert_eq!(world.remove_non_send::<Bar>(), None);
+        assert_eq!(world.remove_resource::<Bar>(), None);
+    }
+
+    #[test]
+    fn insert_replace() {
+        let mut world = new_world();
+
+        world.insert_resource(Bar(100));
+        assert_eq!(world.get_resource::<Bar>(), Some(&Bar(100)));
+        assert_eq!(world.get_non_send::<Bar>(), Some(&Bar(100)));
+
+        world.insert_resource(Bar(200));
+        assert_eq!(world.get_resource::<Bar>(), Some(&Bar(200)));
+        assert_eq!(world.get_non_send::<Bar>(), Some(&Bar(200)));
+
+        world.insert_non_send(Bar(800));
+        assert_eq!(world.get_resource::<Bar>(), Some(&Bar(800)));
+        assert_eq!(world.get_non_send::<Bar>(), Some(&Bar(800)));
+    }
+
+    #[test]
+    fn remove_nonexistent() {
+        let mut world = new_world();
+        assert!(world.remove_resource::<Foo>().is_none());
+        assert!(world.get_resource::<Foo>().is_none());
+        assert!(world.get_resource_ref::<Foo>().is_none());
+        assert!(world.get_resource_mut::<Foo>().is_none());
+
+        assert!(world.remove_non_send::<Foo>().is_none());
+        assert!(world.get_non_send::<Foo>().is_none());
+        assert!(world.get_non_send_ref::<Foo>().is_none());
+        assert!(world.get_non_send_mut::<Foo>().is_none());
+    }
+
+    #[test]
+    fn get_ref() {
+        let mut world = new_world();
+        world.insert_resource(Bar(20));
+
+        let res_ref = world.get_resource_ref::<Bar>().unwrap();
+        assert!(res_ref.is_changed());
+        assert!(res_ref.is_added());
+
+        world.update_tick();
+
+        let res_ref = world.get_resource_ref::<Bar>().unwrap();
+        assert_eq!(*res_ref, Bar(20));
+        assert!(!res_ref.is_changed());
+        assert!(!res_ref.is_added());
+
+        let res_ref = world.get_non_send_ref::<Bar>().unwrap();
+        assert_eq!(*res_ref, Bar(20));
+        assert!(!res_ref.is_changed());
+        assert!(!res_ref.is_added());
+    }
+
+    #[test]
+    fn get_mut() {
+        let mut world = new_world();
+        world.insert_resource(Bar(20));
+
+        let res_mut = world.get_resource_mut::<Bar>().unwrap();
+        assert!(res_mut.is_changed());
+        assert!(res_mut.is_added());
+
+        world.update_tick();
+        let mut res_mut = world.get_resource_mut::<Bar>().unwrap();
+        assert_eq!(*res_mut, Bar(20));
+        assert!(!res_mut.is_changed());
+        assert!(!res_mut.is_added());
+
+        *res_mut = Bar(100);
+        assert!(res_mut.is_changed());
+        assert!(!res_mut.is_added());
+
+        world.update_tick();
+        let mut res_mut = world.get_non_send_mut::<Bar>().unwrap();
+        assert_eq!(*res_mut, Bar(100));
+        assert!(!res_mut.is_changed());
+        assert!(!res_mut.is_added());
+
+        *res_mut = Bar(50);
+        assert!(res_mut.is_changed());
+        assert!(!res_mut.is_added());
+
+        assert_eq!(world.get_non_send::<Bar>(), Some(&Bar(50)));
+        assert_eq!(world.get_resource::<Bar>(), Some(&Bar(50)));
+    }
+
+    #[test]
+    fn drop_resource() {
+        static DROP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct DropTracker(usize);
+        unsafe impl Resource for DropTracker {}
+
+        impl Drop for DropTracker {
+            fn drop(&mut self) {
+                DROP_COUNTER.fetch_add(self.0, Ordering::SeqCst);
+            }
+        }
+
+        let mut world = new_world();
+
+        // ------------------ Drop ----------------------
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+        world.insert_resource(DropTracker(5));
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 0);
+        world.drop_resource::<DropTracker>();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 5);
+        world.insert_non_send(DropTracker(5));
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 5);
+        world.drop_non_send::<DropTracker>();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 10);
+
+        world.remove_non_send::<DropTracker>();
+        world.remove_resource::<DropTracker>();
+        world.drop_non_send::<DropTracker>();
+        world.drop_resource::<DropTracker>();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 10);
+
+        // ----------------- Remove  ----------------------
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+
+        world.insert_non_send(DropTracker(5));
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 0);
+        world.remove_non_send::<DropTracker>();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 5);
+
+        world.insert_resource(DropTracker(5));
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 5);
+        world.remove_resource::<DropTracker>();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 10);
+
+        world.remove_non_send::<DropTracker>();
+        world.remove_resource::<DropTracker>();
+        world.drop_non_send::<DropTracker>();
+        world.drop_resource::<DropTracker>();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 10);
+
+        // ---------------- Overwrite ----------------------
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+
+        world.insert_non_send(DropTracker(5));
+        world.insert_resource(DropTracker(5));
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 5);
+        world.drop_non_send::<DropTracker>();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 10);
+
+        world.remove_non_send::<DropTracker>();
+        world.remove_resource::<DropTracker>();
+        world.drop_non_send::<DropTracker>();
+        world.drop_resource::<DropTracker>();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 10);
+
+        // ---------------- Overwrite ----------------------
+        DROP_COUNTER.store(0, Ordering::SeqCst);
+
+        for _ in 0..10 {
+            world.insert_resource(DropTracker(1));
+        }
+        for _ in 0..10 {
+            world.insert_non_send(DropTracker(1));
+        }
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 19);
+
+        world.remove_resource::<DropTracker>();
+        assert_eq!(DROP_COUNTER.load(Ordering::SeqCst), 20);
     }
 }

@@ -2,7 +2,6 @@
 
 use core::any::TypeId;
 
-use crate::archetype::ArcheId;
 use crate::borrow::{Mut, Ref};
 use crate::component::{Component, ComponentStorage};
 use crate::entity::Entity;
@@ -10,62 +9,32 @@ use crate::storage::{TableId, TableRow};
 use crate::tick::Tick;
 use crate::world::UnsafeWorld;
 
-pub unsafe trait GetComponents {
-    type Raw<'a>;
-    type Ref<'a>;
-    type Mut<'a>;
+pub unsafe trait FetchComponents {
+    type Item<'a>;
 
-    unsafe fn contains(world: UnsafeWorld, arche_id: ArcheId) -> bool;
-
-    unsafe fn get<'a>(
-        world: UnsafeWorld<'a>,
-        entity: Entity,
-        table_id: TableId,
-        table_row: TableRow,
-    ) -> Option<Self::Raw<'a>>;
-
-    unsafe fn get_ref<'a>(
+    unsafe fn fetch<'a>(
+        mutable: bool,
         world: UnsafeWorld<'a>,
         entity: Entity,
         table_id: TableId,
         table_row: TableRow,
         last_run: Tick,
         this_run: Tick,
-    ) -> Option<Self::Ref<'a>>;
-
-    unsafe fn get_mut<'a>(
-        world: UnsafeWorld<'a>,
-        entity: Entity,
-        table_id: TableId,
-        table_row: TableRow,
-        last_run: Tick,
-        this_run: Tick,
-    ) -> Option<Self::Mut<'a>>;
+    ) -> Option<Self::Item<'a>>;
 }
 
-unsafe impl<T: Component> GetComponents for T {
-    type Raw<'a> = &'a T;
-    type Ref<'a> = Ref<'a, T>;
-    type Mut<'a> = Mut<'a, T>;
+unsafe impl<T: Component> FetchComponents for &T {
+    type Item<'a> = &'a T;
 
-    unsafe fn contains(world: UnsafeWorld, arche_id: ArcheId) -> bool {
-        let world = unsafe { world.read_only() };
-        let Some(id) = world.components.get_id(TypeId::of::<T>()) else {
-            return false;
-        };
-        let arche = unsafe { world.archetypes.get_unchecked(arche_id) };
-        match T::STORAGE {
-            ComponentStorage::Dense => arche.contains_dense_component(id),
-            ComponentStorage::Sparse => arche.contains_sparse_component(id),
-        }
-    }
-
-    unsafe fn get<'a>(
+    unsafe fn fetch<'a>(
+        _mutable: bool,
         world: UnsafeWorld<'a>,
         entity: Entity,
         table_id: TableId,
         table_row: TableRow,
-    ) -> Option<Self::Raw<'a>> {
+        _last_run: Tick,
+        _this_run: Tick,
+    ) -> Option<Self::Item<'a>> {
         let world = unsafe { world.read_only() };
         let id = world.components.get_id(TypeId::of::<T>())?;
         match T::STORAGE {
@@ -88,15 +57,58 @@ unsafe impl<T: Component> GetComponents for T {
             }
         }
     }
+}
 
-    unsafe fn get_ref<'a>(
+unsafe impl<T: Component> FetchComponents for &mut T {
+    type Item<'a> = &'a mut T;
+
+    unsafe fn fetch<'a>(
+        mutable: bool,
         world: UnsafeWorld<'a>,
         entity: Entity,
         table_id: TableId,
         table_row: TableRow,
         last_run: Tick,
         this_run: Tick,
-    ) -> Option<Self::Ref<'a>> {
+    ) -> Option<Self::Item<'a>> {
+        if !T::MUTABLE || !mutable {
+            return None;
+        }
+
+        let world = unsafe { world.data_mut() };
+        let id = world.components.get_id(TypeId::of::<T>())?;
+        match T::STORAGE {
+            ComponentStorage::Dense => {
+                let tables = &mut world.storages.tables;
+                let table = unsafe { tables.get_unchecked_mut(table_id) };
+                let table_col = table.get_table_col(id)?;
+                let untyped = unsafe { table.get_mut(table_row, table_col, last_run, this_run) };
+                Some(unsafe { untyped.with_type::<T>().into_inner() })
+            }
+            ComponentStorage::Sparse => {
+                let maps = &mut world.storages.maps;
+                let map_id = maps.get_id(id)?;
+                let map = unsafe { maps.get_unchecked_mut(map_id) };
+                let map_row = map.get_map_row(entity)?;
+                let untyped = unsafe { map.get_mut(map_row, last_run, this_run) };
+                Some(unsafe { untyped.with_type::<T>().into_inner() })
+            }
+        }
+    }
+}
+
+unsafe impl<T: Component> FetchComponents for Ref<'_, T> {
+    type Item<'a> = Ref<'a, T>;
+
+    unsafe fn fetch<'a>(
+        _mutable: bool,
+        world: UnsafeWorld<'a>,
+        entity: Entity,
+        table_id: TableId,
+        table_row: TableRow,
+        last_run: Tick,
+        this_run: Tick,
+    ) -> Option<Self::Item<'a>> {
         let world = unsafe { world.read_only() };
         let id = world.components.get_id(TypeId::of::<T>())?;
         match T::STORAGE {
@@ -117,16 +129,21 @@ unsafe impl<T: Component> GetComponents for T {
             }
         }
     }
+}
 
-    unsafe fn get_mut<'a>(
+unsafe impl<T: Component> FetchComponents for Mut<'_, T> {
+    type Item<'a> = Mut<'a, T>;
+
+    unsafe fn fetch<'a>(
+        mutable: bool,
         world: UnsafeWorld<'a>,
         entity: Entity,
         table_id: TableId,
         table_row: TableRow,
         last_run: Tick,
         this_run: Tick,
-    ) -> Option<Self::Mut<'a>> {
-        if !T::MUTABLE {
+    ) -> Option<Self::Item<'a>> {
+        if !T::MUTABLE || !mutable {
             return None;
         }
 
@@ -152,60 +169,45 @@ unsafe impl<T: Component> GetComponents for T {
     }
 }
 
+unsafe impl<T: FetchComponents> FetchComponents for Option<T> {
+    type Item<'a> = Option<T::Item<'a>>;
+
+    unsafe fn fetch<'a>(
+        mutable: bool,
+        world: UnsafeWorld<'a>,
+        entity: Entity,
+        table_id: TableId,
+        table_row: TableRow,
+        last_run: Tick,
+        this_run: Tick,
+    ) -> Option<Self::Item<'a>> {
+        unsafe {
+            Some(T::fetch(
+                mutable, world, entity, table_id, table_row, last_run, this_run,
+            ))
+        }
+    }
+}
+
 macro_rules! impl_tuple {
     (0: []) => {};
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
-        unsafe impl<$name: Component> GetComponents for ($name,) {
-            type Raw<'a> = ( &'a $name, );
-            type Ref<'a> = ( Ref<'a, $name>, );
-            type Mut<'a> = ( Mut<'a, $name>, );
+        unsafe impl<$name: FetchComponents> FetchComponents for ($name,) {
+            type Item<'a> = (<$name>::Item<'a>,);
 
-            unsafe fn contains(world: UnsafeWorld, arche_id: ArcheId) -> bool {
-                unsafe {
-                    <$name as GetComponents>::contains(world, arche_id)
-                }
-            }
-
-            unsafe fn get<'a>(
-                world: UnsafeWorld<'a>,
-                entity: Entity,
-                table_id: TableId,
-                table_row: TableRow,
-            ) -> Option<Self::Raw<'a>> {
-                unsafe {
-                    Some((
-                        <$name as GetComponents>::get(world, entity, table_id, table_row)?,
-                    ))
-                }
-            }
-
-            unsafe fn get_ref<'a>(
+            unsafe fn fetch<'a>(
+                mutable: bool,
                 world: UnsafeWorld<'a>,
                 entity: Entity,
                 table_id: TableId,
                 table_row: TableRow,
                 last_run: Tick,
                 this_run: Tick,
-            ) -> Option<Self::Ref<'a>> {
+            ) -> Option<Self::Item<'a>> {
                 unsafe {
                     Some((
-                        <$name as GetComponents>::get_ref(world, entity, table_id, table_row, last_run, this_run)?,
-                    ))
-                }
-            }
-
-            unsafe fn get_mut<'a>(
-                world: UnsafeWorld<'a>,
-                entity: Entity,
-                table_id: TableId,
-                table_row: TableRow,
-                last_run: Tick,
-                this_run: Tick,
-            ) -> Option<Self::Mut<'a>> {
-                unsafe {
-                    Some((
-                        <$name as GetComponents>::get_mut(world, entity, table_id, table_row, last_run, this_run)?,
+                        <$name>::fetch(mutable, world, entity, table_id, table_row, last_run, this_run)?,
                     ))
                 }
             }
@@ -213,56 +215,21 @@ macro_rules! impl_tuple {
     };
     ($num:literal : [$($index:tt : $name:ident),*]) => {
         #[cfg_attr(docsrs, doc(hidden))]
-        unsafe impl<$($name: Component),*> GetComponents for ($($name,)*) {
-            type Raw<'a> = ( $( &'a $name, )* );
-            type Ref<'a> = ( $( Ref<'a, $name>, )* );
-            type Mut<'a> = ( $( Mut<'a, $name>, )* );
+        unsafe impl<$($name: FetchComponents),*> FetchComponents for ($($name,)*) {
+            type Item<'a> = ( $( <$name>::Item<'a>, )* );
 
-            unsafe fn contains(world: UnsafeWorld, arche_id: ArcheId) -> bool {
-                unsafe {
-                    true $( && <$name as GetComponents>::contains(world, arche_id) )*
-                }
-            }
-
-            unsafe fn get<'a>(
-                world: UnsafeWorld<'a>,
-                entity: Entity,
-                table_id: TableId,
-                table_row: TableRow,
-            ) -> Option<Self::Raw<'a>> {
-                unsafe {
-                    Some((
-                        $( <$name as GetComponents>::get(world, entity, table_id, table_row)?, )*
-                    ))
-                }
-            }
-
-            unsafe fn get_ref<'a>(
+            unsafe fn fetch<'a>(
+                mutable: bool,
                 world: UnsafeWorld<'a>,
                 entity: Entity,
                 table_id: TableId,
                 table_row: TableRow,
                 last_run: Tick,
                 this_run: Tick,
-            ) -> Option<Self::Ref<'a>> {
+            ) -> Option<Self::Item<'a>> {
                 unsafe {
                     Some((
-                        $( <$name as GetComponents>::get_ref(world, entity, table_id, table_row, last_run, this_run)?, )*
-                    ))
-                }
-            }
-
-            unsafe fn get_mut<'a>(
-                world: UnsafeWorld<'a>,
-                entity: Entity,
-                table_id: TableId,
-                table_row: TableRow,
-                last_run: Tick,
-                this_run: Tick,
-            ) -> Option<Self::Mut<'a>> {
-                unsafe {
-                    Some((
-                        $( <$name as GetComponents>::get_mut(world, entity, table_id, table_row, last_run, this_run)?, )*
+                        $( <$name>::fetch(mutable, world, entity, table_id, table_row, last_run, this_run)?, )*
                     ))
                 }
             }

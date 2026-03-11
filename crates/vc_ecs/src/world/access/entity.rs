@@ -2,15 +2,12 @@ use core::fmt::Debug;
 
 use crate::entity::{Entity, EntityError, EntityLocation};
 use crate::tick::Tick;
-use crate::world::{GetComponent, UnsafeWorld, World};
+use crate::world::{FetchComponents, GetComponents, UnsafeWorld, World};
 
 pub struct EntityOwned<'a> {
     pub(crate) world: UnsafeWorld<'a>,
     pub(crate) entity: Entity,
     pub(crate) location: EntityLocation,
-    // We have World's exclusive borrowing.
-    // pub(crate) last_run: Tick,
-    // pub(crate) this_run: Tick,
 }
 
 pub struct EntityMut<'a> {
@@ -82,87 +79,6 @@ impl_debug!(EntityOwned);
 impl_debug!(EntityMut);
 impl_debug!(EntityRef);
 
-impl<'a> EntityMut<'a> {
-    pub fn entity(&self) -> Entity {
-        self.entity
-    }
-
-    pub fn contains<T: GetComponent>(&self) -> bool {
-        unsafe { T::contains(self.world.unsafe_world(), self.location.arche_id) }
-    }
-
-    pub fn get<T: GetComponent>(&self) -> Option<T::Raw<'_>> {
-        unsafe {
-            T::get(
-                self.world.unsafe_world(),
-                self.entity,
-                self.location.table_id,
-                self.location.table_row,
-            )
-        }
-    }
-
-    pub fn get_ref<T: GetComponent>(&self) -> Option<T::Ref<'_>> {
-        unsafe {
-            T::get_ref(
-                self.world.unsafe_world(),
-                self.entity,
-                self.location.table_id,
-                self.location.table_row,
-                self.last_run,
-                self.this_run,
-            )
-        }
-    }
-
-    pub fn get_mut<T: GetComponent>(&mut self) -> Option<T::Mut<'_>> {
-        unsafe {
-            T::get_mut(
-                self.world.unsafe_world(),
-                self.entity,
-                self.location.table_id,
-                self.location.table_row,
-                self.last_run,
-                self.this_run,
-            )
-        }
-    }
-}
-
-impl<'a> EntityRef<'a> {
-    pub fn entity(&self) -> Entity {
-        self.entity
-    }
-
-    pub fn contains<T: GetComponent>(&self) -> bool {
-        unsafe { T::contains(self.world.unsafe_world(), self.location.arche_id) }
-    }
-
-    pub fn get<T: GetComponent>(&self) -> Option<T::Raw<'_>> {
-        unsafe {
-            T::get(
-                self.world.unsafe_world(),
-                self.entity,
-                self.location.table_id,
-                self.location.table_row,
-            )
-        }
-    }
-
-    pub fn get_ref<T: GetComponent>(&self) -> Option<T::Ref<'_>> {
-        unsafe {
-            T::get_ref(
-                self.world.unsafe_world(),
-                self.entity,
-                self.location.table_id,
-                self.location.table_row,
-                self.last_run,
-                self.this_run,
-            )
-        }
-    }
-}
-
 impl<'a> EntityOwned<'a> {
     #[inline(always)]
     fn this_run(&self) -> Tick {
@@ -180,11 +96,11 @@ impl<'a> EntityOwned<'a> {
         self.entity
     }
 
-    pub fn contains<T: GetComponent>(&self) -> bool {
+    pub fn contains<T: GetComponents>(&self) -> bool {
         unsafe { T::contains(self.world, self.location.arche_id) }
     }
 
-    pub fn get<T: GetComponent>(&self) -> Option<T::Raw<'_>> {
+    pub fn get<T: GetComponents>(&self) -> Option<T::Raw<'_>> {
         unsafe {
             T::get(
                 self.world,
@@ -195,7 +111,7 @@ impl<'a> EntityOwned<'a> {
         }
     }
 
-    pub fn get_ref<T: GetComponent>(&self) -> Option<T::Ref<'_>> {
+    pub fn get_ref<T: GetComponents>(&self) -> Option<T::Ref<'_>> {
         unsafe {
             T::get_ref(
                 self.world,
@@ -208,9 +124,23 @@ impl<'a> EntityOwned<'a> {
         }
     }
 
-    pub fn get_mut<T: GetComponent>(&mut self) -> Option<T::Mut<'_>> {
+    pub fn get_mut<T: GetComponents>(&mut self) -> Option<T::Mut<'_>> {
         unsafe {
             T::get_mut(
+                self.world,
+                self.entity,
+                self.location.table_id,
+                self.location.table_row,
+                self.last_run(),
+                self.this_run(),
+            )
+        }
+    }
+
+    pub fn fetch<T: FetchComponents>(&mut self) -> Option<T::Item<'_>> {
+        unsafe {
+            T::fetch(
+                true,
                 self.world,
                 self.entity,
                 self.location.table_id,
@@ -224,5 +154,114 @@ impl<'a> EntityOwned<'a> {
     pub fn despawn(self) -> Result<(), EntityError> {
         let world = unsafe { self.world.full_mut() };
         world.despawn(self.entity)
+    }
+}
+
+impl<'a> EntityMut<'a> {
+    pub fn entity(&self) -> Entity {
+        self.entity
+    }
+
+    pub fn contains<T: GetComponents>(&self) -> bool {
+        unsafe { T::contains(self.world.unsafe_world(), self.location.arche_id) }
+    }
+
+    pub fn get<T: GetComponents>(&self) -> Option<T::Raw<'_>> {
+        unsafe {
+            T::get(
+                self.world.unsafe_world(),
+                self.entity,
+                self.location.table_id,
+                self.location.table_row,
+            )
+        }
+    }
+
+    pub fn get_ref<T: GetComponents>(&self) -> Option<T::Ref<'_>> {
+        unsafe {
+            T::get_ref(
+                self.world.unsafe_world(),
+                self.entity,
+                self.location.table_id,
+                self.location.table_row,
+                self.last_run,
+                self.this_run,
+            )
+        }
+    }
+
+    pub fn get_mut<T: GetComponents>(&mut self) -> Option<T::Mut<'_>> {
+        unsafe {
+            T::get_mut(
+                self.world.unsafe_world(),
+                self.entity,
+                self.location.table_id,
+                self.location.table_row,
+                self.last_run,
+                self.this_run,
+            )
+        }
+    }
+
+    pub fn fetch<T: FetchComponents>(&mut self) -> Option<T::Item<'_>> {
+        unsafe {
+            T::fetch(
+                true,
+                self.world.unsafe_world(),
+                self.entity,
+                self.location.table_id,
+                self.location.table_row,
+                self.last_run,
+                self.this_run,
+            )
+        }
+    }
+}
+
+impl<'a> EntityRef<'a> {
+    pub fn entity(&self) -> Entity {
+        self.entity
+    }
+
+    pub fn contains<T: GetComponents>(&self) -> bool {
+        unsafe { T::contains(self.world.unsafe_world(), self.location.arche_id) }
+    }
+
+    pub fn get<T: GetComponents>(&self) -> Option<T::Raw<'_>> {
+        unsafe {
+            T::get(
+                self.world.unsafe_world(),
+                self.entity,
+                self.location.table_id,
+                self.location.table_row,
+            )
+        }
+    }
+
+    pub fn get_ref<T: GetComponents>(&self) -> Option<T::Ref<'_>> {
+        unsafe {
+            T::get_ref(
+                self.world.unsafe_world(),
+                self.entity,
+                self.location.table_id,
+                self.location.table_row,
+                self.last_run,
+                self.this_run,
+            )
+        }
+    }
+
+    pub fn fetch<T: FetchComponents>(&mut self) -> Option<T::Item<'_>> {
+        unsafe {
+            T::fetch(
+                false,
+                self.world.unsafe_world(),
+                self.entity,
+                self.location.table_id,
+                self.location.table_row,
+                self.last_run,
+                self.this_run,
+            )
+        }
     }
 }

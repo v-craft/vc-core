@@ -1,3 +1,5 @@
+#![expect(clippy::module_inception, reason = "For better structure.")]
+
 use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::sync::atomic::Ordering;
@@ -12,6 +14,9 @@ use crate::resource::Resources;
 use crate::storage::Storages;
 use crate::tick::{CHECK_CYCLE, CheckTicks, Tick};
 use crate::world::WorldId;
+
+// -----------------------------------------------------------------------------
+// World
 
 pub struct World {
     id: WorldId,
@@ -88,13 +93,73 @@ impl World {
         let this_run = *self.this_run.get_mut();
         let this_run = Tick::new(this_run);
         if this_run.relative_to(self.last_check).get() < CHECK_CYCLE {
-            return None;
+            None
+        } else {
+            vc_utils::cold_path();
+            let checker = CheckTicks::new(this_run);
+            self.storages.check_ticks(checker);
+            self.last_check = this_run;
+            Some(checker)
         }
+    }
 
-        let checker = CheckTicks::new(this_run);
-        self.storages.check_ticks(checker);
-        self.last_check = this_run;
+    pub fn thread_hash(&self) -> u64 {
+        self.thread_hash
+    }
 
-        Some(checker)
+    pub fn entities(&self) -> &Entities {
+        &self.entities
+    }
+
+    pub fn entities_mut(&mut self) -> &mut Entities {
+        &mut self.entities
+    }
+
+    pub fn allocator(&self) -> &EntityAllocator {
+        &self.allocator
+    }
+
+    pub fn allocator_mut(&mut self) -> &mut EntityAllocator {
+        &mut self.allocator
+    }
+
+    pub fn components(&self) -> &Components {
+        &self.components
+    }
+
+    pub fn components_mut(&mut self) -> &mut Components {
+        &mut self.components
+    }
+
+    pub fn resources(&self) -> &Resources {
+        &self.resources
+    }
+
+    pub fn resources_mut(&mut self) -> &mut Resources {
+        &mut self.resources
+    }
+
+    pub fn storages(&self) -> &Storages {
+        &self.storages
+    }
+
+    pub fn storages_mut(&mut self) -> &mut Storages {
+        &mut self.storages
+    }
+
+    pub fn bundles(&self) -> &Bundles {
+        &self.bundles
+    }
+
+    pub fn bundles_mut(&mut self) -> &mut Bundles {
+        &mut self.bundles
+    }
+
+    pub fn archetypes(&self) -> &Archetypes {
+        &self.archetypes
+    }
+
+    pub fn archetypes_mut(&mut self) -> &mut Archetypes {
+        &mut self.archetypes
     }
 }

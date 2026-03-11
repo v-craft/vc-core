@@ -10,28 +10,26 @@ pub struct UnsafeWorld<'a> {
     _marker: PhantomData<&'a UnsafeCell<World>>,
 }
 
-// SAFETY: `&World` and `&mut World` are both `Send`
 unsafe impl Send for UnsafeWorld<'_> {}
-// SAFETY: `&World` and `&mut World` are both `Sync`
 unsafe impl Sync for UnsafeWorld<'_> {}
 
-// impl<'a> From<&'a World> for UnsafeWorld<'a> {
-//     fn from(value: &'a World) -> Self {
-//         UnsafeWorld {
-//             world: NonNull::from_ref(value),
-//             _marker: PhantomData,
-//         }
-//     }
-// }
+impl<'a> From<&'a World> for UnsafeWorld<'a> {
+    fn from(value: &'a World) -> Self {
+        UnsafeWorld {
+            world: NonNull::from_ref(value),
+            _marker: PhantomData,
+        }
+    }
+}
 
-// impl<'a> From<&'a mut World> for UnsafeWorld<'a> {
-//     fn from(value: &'a mut World) -> Self {
-//         UnsafeWorld {
-//             world: NonNull::from_mut(value),
-//             _marker: PhantomData,
-//         }
-//     }
-// }
+impl<'a> From<&'a mut World> for UnsafeWorld<'a> {
+    fn from(value: &'a mut World) -> Self {
+        UnsafeWorld {
+            world: NonNull::from_mut(value),
+            _marker: PhantomData,
+        }
+    }
+}
 
 impl World {
     pub const fn unsafe_world(&self) -> UnsafeWorld<'_> {

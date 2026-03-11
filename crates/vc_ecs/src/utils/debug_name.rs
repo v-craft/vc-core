@@ -27,6 +27,10 @@ const ANONYMOUS_NAME: &str = "_unknown_";
 /// let name = DebugName::type_name::<String>();
 /// assert!(!name.parse().is_empty());
 ///
+/// // Create a debug name from a function pointer
+/// let custom = DebugName::with(|| "custom_name");
+/// assert_eq!(custom.parse(), "custom_name");
+///
 /// // Create an anonymous debug name
 /// let anonymous = DebugName::anonymous();
 /// assert_eq!(anonymous.parse(), "_unknown_");
@@ -38,6 +42,19 @@ pub struct DebugName {
 }
 
 impl DebugName {
+    /// Creates a new `DebugName` from given function.
+    #[inline(always)]
+    #[allow(unused_variables, reason = "unused in release mode")]
+    pub const fn with(name: fn() -> &'static str) -> Self {
+        cfg::debug! {
+            if {
+                Self { name }
+            } else {
+                Self {}
+            }
+        }
+    }
+
     /// Creates a new `DebugName` that will display the type name of the specified type.
     ///
     /// This uses [`core::any::type_name`] internally to obtain the type's name at compile time.

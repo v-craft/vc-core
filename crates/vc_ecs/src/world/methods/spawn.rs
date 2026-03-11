@@ -48,14 +48,14 @@ impl World {
             }
         }
 
-        archetype
-            .sparse_components()
-            .iter()
-            .for_each(|&cid| unsafe {
+        for &cid in archetype.sparse_components() {
+            unsafe {
                 let map_id = maps.get_id(cid).debug_checked_unwrap();
                 let map = maps.get_unchecked_mut(map_id);
                 let _ = map.alloc(entity); // `MapRow` may be cached in the future.
-            });
+            }
+        }
+
         let table_row = unsafe { table.allocate(entity) };
         let arche_row = unsafe { archetype.insert_entity(entity) };
 
@@ -144,26 +144,36 @@ mod tests {
     }
 
     #[test]
-    fn spawn_basic() {
+    fn spawn_single() {
         let allocator = WorldIdAllocator::new();
         let mut world = World::new(allocator.alloc());
 
-        let mut entity = world.spawn((Foo, Bar(123), Baz(String::from("hello"))));
+        let entity = world.spawn(Foo);
+        assert!(entity.get::<Foo>().is_some());
+        assert!(entity.get::<Bar>().is_none());
+
+        let entity = world.spawn(Bar(123));
+        assert_eq!(entity.get::<Bar>(), Some(&Bar(123)));
+        assert!(entity.get::<Foo>().is_none());
+
+        let entity = world.spawn(Baz(String::from("hello")));
+        assert_eq!(entity.get::<Baz>(), Some(&Baz(String::from("hello"))));
+        assert!(entity.get::<Foo>().is_none());
+    }
+
+    #[test]
+    fn spawn_combined() {
+        let allocator = WorldIdAllocator::new();
+        let mut world = World::new(allocator.alloc());
+
+        let entity = world.spawn((Foo, Bar(123), Baz(String::from("hello"))));
         assert_eq!(entity.get::<Foo>().unwrap(), &Foo);
         assert_eq!(entity.get::<Bar>().unwrap(), &Bar(123));
+        assert_eq!(entity.get::<Baz>().unwrap(), &Baz(String::from("hello")));
 
-        entity.get_mut::<Bar>().unwrap().0 = 321;
-        assert_eq!(entity.get::<(Foo, Bar)>().unwrap(), (&Foo, &Bar(321)));
-
-        let baz = entity.get::<Baz>().unwrap();
-        assert_eq!(&baz.0, "hello");
-
-        // std::eprintln!("{world:?}");
-
-        // std::eprintln!(
-        //     "{entity}: ({:?} , {:?})",
-        //     get_ref::<Foo>(&world, entity),
-        //     get_ref::<Bar>(&world, entity),
-        // );
+        // Repeat again to ensure that the access does not change the data.
+        assert_eq!(entity.get::<Foo>().unwrap(), &Foo);
+        assert_eq!(entity.get::<Bar>().unwrap(), &Bar(123));
+        assert_eq!(entity.get::<Baz>().unwrap(), &Baz(String::from("hello")));
     }
 }

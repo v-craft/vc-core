@@ -3,12 +3,12 @@
 
 mod access;
 mod ident;
-mod impls;
 mod methods;
+mod world;
 
 // -----------------------------------------------------------------------------
 // Exports
 
 pub use access::*;
 pub use ident::{WorldId, WorldIdAllocator};
-pub use impls::World;
+pub use world::World;

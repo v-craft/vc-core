@@ -5,12 +5,12 @@ use core::ops::{Deref, DerefMut};
 
 use crate::resource::Resource;
 use crate::tick::Tick;
-use crate::utils::DebugName;
+use crate::utils::{Cloner, DebugName};
 
 // -----------------------------------------------------------------------------
 // EcsError
 
-pub type ECSResult<T> = Result<T, EcsError>;
+pub type EcsResult<T> = Result<T, EcsError>;
 
 // -----------------------------------------------------------------------------
 // ECSResult
@@ -43,6 +43,13 @@ pub type ErrorHandler = fn(EcsError, ErrorContext);
 // EcsError
 
 impl EcsError {
+    pub fn downcast<E: Error + 'static>(self) -> Result<E, Self> {
+        self.error
+            .downcast::<E>()
+            .map_err(|error| Self { error })
+            .map(|error| *error)
+    }
+
     pub fn downcast_ref<E: Error + 'static>(&self) -> Option<&E> {
         self.error.downcast_ref::<E>()
     }
@@ -50,16 +57,8 @@ impl EcsError {
     pub fn downcast_mut<E: Error + 'static>(&mut self) -> Option<&mut E> {
         self.error.downcast_mut::<E>()
     }
-
-    pub fn downcast<E: Error + 'static>(self) -> Result<E, Self> {
-        self.error
-            .downcast::<E>()
-            .map_err(|error| Self { error })
-            .map(|error| *error)
-    }
 }
 
-// NOTE: writing the impl this way gives us From<&str> ... nice!
 impl<E: Error + Send + Sync + 'static> From<E> for EcsError {
     #[cold]
     fn from(error: E) -> Self {
@@ -109,7 +108,9 @@ impl ErrorContext {
 #[repr(transparent)]
 pub struct DefaultErrorHandler(pub ErrorHandler);
 
-unsafe impl Resource for DefaultErrorHandler {}
+unsafe impl Resource for DefaultErrorHandler {
+    const CLONER: Option<Cloner> = Some(Cloner::copyable::<Self>());
+}
 
 impl Default for DefaultErrorHandler {
     fn default() -> Self {

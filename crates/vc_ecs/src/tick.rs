@@ -64,6 +64,8 @@ impl Tick {
     /// to current time
     #[inline]
     pub const fn is_newer_than(self, other: Tick, now: Tick) -> bool {
+        // We need this function because `core::cmp::min`
+        // can not be use in const fn.
         #[inline(always)]
         const fn min(x: u32, y: u32) -> u32 {
             if x < y { x } else { y }

@@ -26,6 +26,7 @@ pub trait Internable: Hash + Eq + 'static {
 pub struct Interned<T: ?Sized + Internable>(pub &'static T);
 
 impl<T: ?Sized + Internable> Copy for Interned<T> {}
+
 impl<T: ?Sized + Internable> Clone for Interned<T> {
     fn clone(&self) -> Self {
         *self
