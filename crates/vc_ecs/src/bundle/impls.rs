@@ -69,7 +69,7 @@ pub unsafe trait Bundle: Sized + Sync + Send + 'static {
     /// - Every component type written in [`write_explicit`](Self::write_explicit) or
     ///   [`write_required`](Self::write_required) **must** be registered here.
     /// - Registering extra component types that are never written is disallowed.
-    unsafe fn collect_components(collector: &mut ComponentCollector);
+    fn collect_components(collector: &mut ComponentCollector);
 
     /// Writes explicitly provided component values to storage.
     ///
@@ -107,7 +107,7 @@ pub unsafe trait Bundle: Sized + Sync + Send + 'static {
 /// This allows using individual component types directly as bundles for
 /// convenience when spawning entities with only one component.
 unsafe impl<T: Component> Bundle for T {
-    unsafe fn collect_components(collector: &mut ComponentCollector) {
+    fn collect_components(collector: &mut ComponentCollector) {
         collector.collect::<T>();
     }
 
@@ -129,7 +129,7 @@ unsafe impl<T: Component> Bundle for T {
 macro_rules! impl_bundle_for_tuple {
     (0: []) => {
         unsafe impl Bundle for () {
-            unsafe fn collect_components(_collector: &mut ComponentCollector) {}
+            fn collect_components(_collector: &mut ComponentCollector) {}
             unsafe fn write_explicit( _writer: &mut ComponentWriter, _base: usize,) {}
             unsafe fn write_required(_writer: &mut ComponentWriter) {}
         }
@@ -138,8 +138,8 @@ macro_rules! impl_bundle_for_tuple {
         #[cfg_attr(docsrs, doc(fake_variadic))]
         #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 15 items long.")]
         unsafe impl<$name: Bundle> Bundle for ($name,) {
-            unsafe fn collect_components(collector: &mut ComponentCollector) {
-                unsafe { <$name>::collect_components(collector) }
+            fn collect_components(collector: &mut ComponentCollector) {
+                <$name>::collect_components(collector)
             }
 
             unsafe fn write_explicit(writer: &mut ComponentWriter, base: usize) {
@@ -155,8 +155,8 @@ macro_rules! impl_bundle_for_tuple {
     ($num:literal : [$($index:tt : $name:ident),*]) => {
         #[cfg_attr(docsrs, doc(hidden))]
         unsafe impl<$($name: Bundle),*> Bundle for ($($name,)*) {
-            unsafe fn collect_components(collector: &mut ComponentCollector) {
-                $( unsafe { <$name>::collect_components(collector); } )*
+            fn collect_components(collector: &mut ComponentCollector) {
+                $( <$name>::collect_components(collector); )*
             }
 
             unsafe fn write_explicit(writer: &mut ComponentWriter, base: usize) {

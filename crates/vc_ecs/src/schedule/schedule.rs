@@ -1,7 +1,9 @@
 use alloc::boxed::Box;
+use vc_utils::hash::HashMap;
 
 use crate::error::DefaultErrorHandler;
-use crate::schedule::ScheduleLabel;
+use crate::schedule::{ExecutorKind, ScheduleLabel};
+use crate::schedule::{MultiThreadedExecutor, SingleThreadedExecutor};
 use crate::world::World;
 
 use super::{InternedScheduleLabel, SystemExecutor};
@@ -16,14 +18,21 @@ pub struct Schedule {
     is_changed: bool,
 }
 
+#[derive(Default)]
+pub struct Schedules {
+    pub inner: HashMap<InternedScheduleLabel, Schedule>,
+}
+
 impl Schedule {
-    #[expect(unreachable_code, reason = "todo")]
-    pub fn new(label: impl ScheduleLabel) -> Self {
+    pub fn new(label: impl ScheduleLabel, kind: ExecutorKind) -> Self {
         Self {
             label: label.intern(),
             graph: ScheduleGraph::default(),
             schedule: SystemSchedule::default(),
-            executor: todo!(),
+            executor: match kind {
+                ExecutorKind::SingleThreaded => Box::new(SingleThreadedExecutor::new()),
+                ExecutorKind::MultiThreaded => Box::new(MultiThreadedExecutor::new()),
+            },
             executor_initialized: false,
             is_changed: false,
         }

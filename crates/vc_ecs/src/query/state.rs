@@ -70,6 +70,7 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
 
         let mut builders = Vec::<FilterParamBuilder>::new();
         unsafe {
+            // `F::build_filter` function must be called before `D::build_filter`.
             F::build_filter(&f_state, &mut builders);
             D::build_filter(&d_state, &mut builders);
         }

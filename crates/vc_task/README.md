@@ -46,7 +46,7 @@ Three specialized task pools are provided for different workloads:
 
 - **[`ComputeTaskPool`]**: For compute-intensive tasks expected to complete within a single frame.
 - **[`AsyncComputeTaskPool`]**: For compute-intensive tasks that may span multiple frames.
-- **[`IOTaskPool`]**: For IO-bound tasks involving potentially long waits.
+- **[`IoTaskPool`]**: For IO-bound tasks involving potentially long waits.
 
 Internally, all are `TaskPool` instances but can be configured with different worker counts
 to optimize overall efficiency.

@@ -48,7 +48,7 @@ pub trait GraphNode: Copy + Hash + Eq + Ord + Debug {
 }
 
 /// `Graph<DIRECTED>` is a graph datastructure using an associative array
-/// of its node weights of some [`GraphNodeId`].
+/// of its node weights of some [`GraphNode`].
 ///
 /// It uses a combined adjacency list and sparse adjacency matrix
 /// representation, using **O(|N| + |E|)** space, and allows testing for edge
@@ -58,7 +58,7 @@ pub trait GraphNode: Copy + Hash + Eq + Ord + Debug {
 ///
 /// - Constant generic bool `DIRECTED` determines whether the graph edges are directed or
 ///   undirected.
-/// - The `GraphNodeId` type `N`, which is used as the node weight.
+/// - The `GraphNode` type `N`, which is used as the node weight.
 /// - The `BuildHasher` `S`.
 ///
 /// You can use the type aliases `UnGraph` and `DiGraph` for convenience.

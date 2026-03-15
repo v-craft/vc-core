@@ -78,6 +78,15 @@ impl Entities {
         Self { infos: Vec::new() }
     }
 
+    /// Resolves an entity ID to its current entity with correct generation.
+    pub fn resolve(&self, id: EntityId) -> Entity {
+        if let Some(info) = self.infos.get(id.index()) {
+            Entity::new(id, info.generation)
+        } else {
+            Entity::from_id(id)
+        }
+    }
+
     /// Retrieves the location of a spawned entity.
     ///
     /// # Returns
@@ -101,15 +110,6 @@ impl Entities {
             .into());
         }
         info.location.ok_or(FetchError::NotSpawned(entity).into())
-    }
-
-    /// Resolves an entity ID to its current entity with correct generation.
-    pub fn resolve(&self, id: EntityId) -> Entity {
-        if let Some(info) = self.infos.get(id.index()) {
-            Entity::new(id, info.generation)
-        } else {
-            Entity::from_id(id)
-        }
     }
 
     /// Resizes the internal storage to accommodate a new entity index.
@@ -250,8 +250,9 @@ impl Entities {
             }
             .into());
         }
-
-        core::mem::take(&mut info.location).ok_or(DespawnError::NotSpawned(entity).into())
+        info.location
+            .take()
+            .ok_or(DespawnError::NotSpawned(entity).into())
     }
 
     /// Updates an entity's location after a move between storages.

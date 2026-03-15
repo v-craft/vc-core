@@ -231,7 +231,7 @@ impl<T, const N: usize> SmallVec<T, N> {
 
     /// Returns the total number of elements the vector can hold without reallocating.
     ///
-    /// For [Cache], this is always equal to `N` .
+    /// For `Cache`, this is always equal to `N` .
     ///
     /// # Examples
     ///
@@ -261,7 +261,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     /// - If the length is increased, it is necessary to ensure that the new element is initialized correctly.
     /// - If the length is reduced, it is necessary to ensure that the reduced elements can be dropped normally.
     ///
-    /// See [`Vec::set_len`] and [`Cache::set_len`] .
+    /// See [`Vec::set_len`] for more infomation .
     #[inline]
     pub unsafe fn set_len(&mut self, new_len: usize) {
         // SAFETY: See function docs.

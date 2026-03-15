@@ -31,26 +31,26 @@ impl EntityId {
     const _STATIC_ASSERT_: () = const {
         const VAL: u32 = 20260101;
         const ID: EntityId = EntityId(NonZeroU32::new(VAL).unwrap());
-        assert!(VAL == ID.index_u32());
+        assert!(VAL == ID.to_bits());
     };
 
     /// Gets the index of the entity.
     #[inline(always)]
-    const fn index_u32(self) -> u32 {
+    const fn to_bits(self) -> u32 {
         unsafe { mem::transmute(self) }
     }
 
     /// Gets the index of the entity.
     #[inline(always)]
     pub const fn index(self) -> usize {
-        self.index_u32() as usize
+        self.to_bits() as usize
     }
 }
 
 impl PartialEq for EntityId {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        self.index_u32() == other.index_u32()
+        self.to_bits() == other.to_bits()
     }
 }
 
@@ -59,21 +59,21 @@ impl Eq for EntityId {}
 impl Hash for EntityId {
     #[inline(always)]
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        state.write_u32(self.index_u32());
+        state.write_u32(self.to_bits());
     }
 }
 
 impl Debug for EntityId {
     #[inline(always)]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        Debug::fmt(&self.index_u32(), f)
+        Debug::fmt(&self.to_bits(), f)
     }
 }
 
 impl Display for EntityId {
     #[inline(always)]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        Display::fmt(&self.index_u32(), f)
+        Display::fmt(&self.to_bits(), f)
     }
 }
 
@@ -193,7 +193,7 @@ pub struct Entity {
 impl Entity {
     const _STATIC_ASSERT_: () = const {
         // Ensure `EntityId` is storaged in lower bits.
-        assert!(Entity::from_bits(20260101).id.index_u32() == 20260101);
+        assert!(Entity::from_bits(20260101).id.to_bits() == 20260101);
     };
 
     /// A placeholder entity representing an invalid or uninitialized entity.

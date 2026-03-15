@@ -199,7 +199,7 @@ impl Archetype {
     /// - `without` - Component types that must be absent (order doesn't matter)
     ///
     /// # Complexity
-    /// - Time: O(k * log n) where k = max(len(with), len(without)), n = total components
+    /// - Time: O(m * log n) where m = len(with) + len(without), n = total components
     /// - Space: O(1)
     ///
     /// For better performance with sorted inputs, see [`matches_sorted`](Self::matches_sorted).

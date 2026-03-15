@@ -1,4 +1,4 @@
-#![allow(clippy::len_without_is_empty, reason = "internal type")]
+#![allow(clippy::len_without_is_empty, reason = "Archetypes are never empty.")]
 
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;

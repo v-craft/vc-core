@@ -29,6 +29,7 @@ impl GraphNode for SystemKey {
 
 type UnitSystem = Box<dyn System<Input = (), Output = ()>>;
 
+/// A bundle of `Box<dyn System>` and it's `AccessTable`.
 pub struct SystemObject {
     pub system: UnitSystem,
     pub access: AccessTable,
@@ -59,6 +60,7 @@ pub struct Conflicts {
     conflicts: HashMap<SystemKey, HashSet<SystemKey>>,
 }
 
+/// Dependency graph processor and reusable information.
 #[derive(Default)]
 pub struct ScheduleGraph {
     systems: Systems,
@@ -66,6 +68,7 @@ pub struct ScheduleGraph {
     conflicts: Conflicts,
 }
 
+/// Processed dependency graph and system objects.
 #[derive(Default)]
 pub struct SystemSchedule {
     pub keys: Vec<SystemKey>,

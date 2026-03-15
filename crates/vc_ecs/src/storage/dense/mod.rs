@@ -15,5 +15,4 @@ use table::TableBuilder;
 
 pub use ident::{TableCol, TableId, TableRow};
 pub use table::Table;
-pub use table::TableMoveResult;
 pub use tables::Tables;

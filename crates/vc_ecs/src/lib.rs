@@ -1,3 +1,12 @@
+//! TODO: Supplementary documentation.
+//! 
+//! - [`ComponentStorage`] : How components are stored and accessed.
+//! - [`Archetype`] : How does the query system work.
+//! - ......
+//! 
+//! [`ComponentStorage`]: crate::component::ComponentStorage
+//! [`Archetype`]: crate::archetype::Archetype
+
 #![cfg_attr(docsrs, expect(internal_features, reason = "needed for fake_variadic"))]
 #![cfg_attr(docsrs, feature(doc_cfg, rustdoc_internals))]
 #![expect(unsafe_code, reason = "ECS requires underlying operation")]

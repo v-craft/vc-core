@@ -7,7 +7,8 @@ mod toposort;
 // -----------------------------------------------------------------------------
 // Exports
 
-pub use dag::{Dag, DagAnalysis, DagGroups};
+pub use dag::{Dag, DagAnalysis, DagGroups, DagRedundancyError};
+pub use dag::{DagCrossDependencyError, DagOverlappingGroupError};
 pub use graphs::{DiGraph, Direction, Graph, GraphNode, UnGraph};
 pub use scc::{SccIterator, SccNodes};
 pub use toposort::ToposortError;

@@ -489,13 +489,6 @@ impl Table {
 // -----------------------------------------------------------------------------
 // Move, Init data
 
-/// Result of moving an entity between tables.
-#[derive(Debug)]
-pub struct TableMoveResult {
-    pub new_row: TableRow,
-    pub swapped: Option<Entity>,
-}
-
 impl Table {
     /// Removes an entity by swapping with the last row and dropping its components.
     ///

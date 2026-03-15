@@ -23,6 +23,8 @@ struct ExecutorState {
     ready_systems: VecDeque<u32>,
 }
 
+
+/// Runs the schedule using multi-threads.
 pub struct MultiThreadedExecutor {
     state: Mutex<ExecutorState>,
     completed: ListQueue<u32>,
@@ -83,7 +85,7 @@ impl MultiThreadedExecutor {
 }
 
 impl<'scope, 'env: 'scope, 'sys: 'scope> Context<'scope, 'env, 'sys> {
-    pub fn new(
+    fn new(
         world: &'env mut World,
         executor: &'env MultiThreadedExecutor,
         schedule: &'sys mut SystemSchedule,

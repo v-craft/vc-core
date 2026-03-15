@@ -17,7 +17,7 @@ use utils::{AbortOnPanic, VecRemoveExt};
 // Exports
 
 pub use column::Column;
-pub use dense::{Table, TableMoveResult, Tables};
+pub use dense::{Table, Tables};
 pub use dense::{TableCol, TableId, TableRow};
 pub use global::{ResData, ResSet};
 pub use impls::Storages;
