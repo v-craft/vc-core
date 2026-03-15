@@ -1,9 +1,9 @@
 //! TODO: Supplementary documentation.
-//! 
+//!
 //! - [`ComponentStorage`] : How components are stored and accessed.
 //! - [`Archetype`] : How does the query system work.
 //! - ......
-//! 
+//!
 //! [`ComponentStorage`]: crate::component::ComponentStorage
 //! [`Archetype`]: crate::archetype::Archetype
 

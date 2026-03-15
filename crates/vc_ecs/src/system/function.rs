@@ -74,7 +74,7 @@ macro_rules! impl_tuple {
     };
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
-        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 15 items long.")]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         impl<O, $name> SystemFunction for fn($name) -> O
         where
             O: 'static,
@@ -103,7 +103,7 @@ macro_rules! impl_tuple {
         }
 
         #[cfg_attr(docsrs, doc(fake_variadic))]
-        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 15 items long.")]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         impl<I, O, $name> SystemFunction for fn(SystemIn<I>, $name) -> O
         where
             O: 'static,
@@ -194,7 +194,7 @@ macro_rules! impl_tuple {
     }
 }
 
-vc_utils::range_invoke!(impl_tuple, 15: P);
+vc_utils::range_invoke!(impl_tuple, 12);
 
 // -----------------------------------------------------------------------------
 // FunctionSystem

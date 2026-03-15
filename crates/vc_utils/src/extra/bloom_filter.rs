@@ -13,7 +13,7 @@ use crate::hash::FixedHashState;
 /// # Type Parameters
 ///
 /// - `N`: The number of `u64` segments. The total bit capacity is `N * 64`.
-///   **Must be a power of two** (e.g., 1, 2, 4, 8, …); otherwise, compilation will fail.
+///   **Must be a power of two** (e.g., 1, 2, 4, 8, …); otherwise, `new` will panic.
 /// - `K`: The number of hash positions to check per element (default is 2).
 ///   This is implemented using a single hash computation with derived positions
 ///   rather than `K` independent hash functions.
@@ -57,6 +57,7 @@ impl<const N: usize, const K: usize> BloomFilter<N, K> {
     /// let filter = BloomFilter::<2>::new(); // 128-bit filter
     /// assert!(!filter.contains(&"anything"));
     /// ```
+    #[inline(always)]
     pub const fn new() -> Self {
         const {
             // Due to generic types, static assertions cannot be
@@ -202,6 +203,6 @@ impl<const N: usize, const K: usize> BloomFilter<N, K> {
 
 impl<const N: usize, const K: usize> Default for BloomFilter<N, K> {
     fn default() -> Self {
-        Self { bits: [0; N] }
+        Self::new()
     }
 }

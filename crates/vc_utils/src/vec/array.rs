@@ -1431,3 +1431,192 @@ impl<T: fmt::Debug, F: FnMut(&mut T) -> bool, const N: usize> fmt::Debug
             .finish_non_exhaustive()
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use super::ArrayVec;
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn drop_vec() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+        {
+            let mut vec = ArrayVec::<Tracker, 4>::new();
+            vec.push(Tracker);
+            vec.push(Tracker);
+            vec.push(Tracker);
+
+            assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        }
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_pop_remove() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = ArrayVec::<Tracker, 4>::new();
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+
+        let popped = vec.pop().unwrap();
+        assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        drop(popped);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+
+        let removed = vec.remove(0);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+        drop(removed);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 2);
+
+        drop(vec);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_into_iter() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = ArrayVec::<Tracker, 4>::new();
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+
+        let mut iter = vec.into_iter();
+        let first = iter.next().unwrap();
+        drop(first);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+
+        drop(iter);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_drain() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = ArrayVec::<Tracker, 8>::new();
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+
+        {
+            let mut drain = vec.drain(1..4);
+            let first = drain.next().unwrap();
+            drop(first);
+            assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+        }
+
+        // 1 consumed + 2 still in drained range
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+
+        drop(vec);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 5);
+    }
+
+    #[test]
+    fn drop_extract_if() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker {
+            id: usize,
+        }
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = ArrayVec::<Tracker, 8>::new();
+        for id in 0..6 {
+            vec.push(Tracker { id });
+        }
+
+        let removed: ArrayVec<Tracker, 8> = vec.extract_if(.., |t| t.id % 2 == 0).collect();
+        assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+
+        drop(removed);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+
+        drop(vec);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 6);
+    }
+
+    #[test]
+    fn drop_zst() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = ArrayVec::<Tracker, 8>::new();
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+
+        {
+            let mut drain = vec.drain(1..4);
+            let one = drain.next_back().unwrap();
+            drop(one);
+            assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+        }
+
+        // 1 consumed + 2 dropped by Drain::drop in the ZST path.
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+
+        drop(vec);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 5);
+    }
+}

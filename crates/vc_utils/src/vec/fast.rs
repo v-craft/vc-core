@@ -68,16 +68,15 @@ use crate::cold_path;
 /// 3. Heap allocation is allowed even when `capacity <= N`.
 /// 4. If resources are allocated on the heap and `T` is not ZST, the capacity must be non-zero.
 ///
-/// # TODO
-/// Combine the fields `in_cache` and `cap` to reduce 8 bytes.
 pub struct FastVecData<T, const N: usize> {
     cache: [MaybeUninit<T>; N],
     /// We need to use [`Cell`] or [`UnsafeCell`](core::cell::UnsafeCell) to implement internal variability,
     /// When self implemented, [`refresh`](FastVecData::refresh) may be considered useless and optimized.
     ptr: Cell<*mut T>,
     len: usize,
-    cap: usize,
-    in_cache: bool,
+    // The highest bit stores the location flag: 1 means cache, 0 means heap.
+    // The remaining bits store capacity.
+    cap_and_flag: usize,
 }
 
 unsafe impl<T, const N: usize> Send for FastVecData<T, N> where T: Send {}
@@ -87,7 +86,7 @@ impl<T, const N: usize> RefUnwindSafe for FastVecData<T, N> where T: RefUnwindSa
 impl<T, const N: usize> Drop for FastVecData<T, N> {
     // Internal data using `MaybeUninit`, we need to call `drop` manually.
     fn drop(&mut self) {
-        if self.in_cache {
+        if self.in_cache() {
             // SAFETY: data is valid.
             unsafe {
                 ptr::drop_in_place(ptr::slice_from_raw_parts_mut(
@@ -108,6 +107,25 @@ impl<T, const N: usize> Drop for FastVecData<T, N> {
 }
 
 impl<T, const N: usize> FastVecData<T, N> {
+    const CACHE_FLAG: usize = 1usize << (usize::BITS as usize - 1);
+    const CAP_MASK: usize = Self::CACHE_FLAG - 1;
+
+    #[inline(always)]
+    const fn in_cache(&self) -> bool {
+        (self.cap_and_flag & Self::CACHE_FLAG) != 0
+    }
+
+    #[inline(always)]
+    const fn cap(&self) -> usize {
+        self.cap_and_flag & Self::CAP_MASK
+    }
+
+    #[inline(always)]
+    fn set_cap_and_cache(&mut self, cap: usize, in_cache: bool) {
+        debug_assert!(cap <= Self::CAP_MASK, "capacity exceeds encodable range");
+        self.cap_and_flag = cap | if in_cache { Self::CACHE_FLAG } else { 0 };
+    }
+
     /// dealloc old memory
     ///
     /// # Safety
@@ -119,7 +137,7 @@ impl<T, const N: usize> FastVecData<T, N> {
     #[inline]
     unsafe fn dealloc(&mut self) {
         debug_assert!(
-            !T::IS_ZST && { self.cap > 0 },
+            !T::IS_ZST && { self.cap() > 0 },
             "Cannot dealloc zero sized memory."
         );
 
@@ -127,7 +145,7 @@ impl<T, const N: usize> FastVecData<T, N> {
         unsafe {
             malloc::dealloc(
                 self.as_mut_ptr() as *mut _,
-                Layout::from_size_align_unchecked(size_of::<T>() * self.cap, align_of::<T>()),
+                Layout::from_size_align_unchecked(size_of::<T>() * self.cap(), align_of::<T>()),
             );
         }
     }
@@ -137,7 +155,7 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// Resources are transferred or released normally.
     #[inline]
     unsafe fn try_dealloc(&mut self) {
-        if !T::IS_ZST && !self.in_cache {
+        if !T::IS_ZST && !self.in_cache() {
             unsafe {
                 self.dealloc();
             }
@@ -169,7 +187,7 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// - Multi-threaded ?
     #[inline(always)]
     pub unsafe fn refresh(&self) {
-        if !T::IS_ZST && self.in_cache {
+        if !T::IS_ZST && self.in_cache() {
             self.ptr.set(self.cache_ptr() as *mut T);
         }
     }
@@ -181,13 +199,15 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// - or manually call [`FastVecData::refresh`] before any method call.
     #[inline]
     pub(crate) const unsafe fn new() -> Self {
+        const {
+            assert!(N <= (usize::MAX >> 1));
+        }
         unsafe {
             Self {
                 cache: MaybeUninit::<[MaybeUninit<T>; N]>::uninit().assume_init(),
                 ptr: Cell::new(ptr::dangling_mut::<T>()),
                 len: 0,
-                cap: N,
-                in_cache: true,
+                cap_and_flag: N | Self::CACHE_FLAG,
             }
         }
     }
@@ -202,8 +222,7 @@ impl<T, const N: usize> FastVecData<T, N> {
         unsafe {
             let mut vec = Self::new();
             if capacity > N {
-                vec.cap = capacity;
-                vec.in_cache = false;
+                vec.set_cap_and_cache(capacity, false);
                 if !T::IS_ZST {
                     let layout = Layout::array::<T>(capacity).unwrap();
                     vec.ptr.set(malloc::alloc(layout) as *mut T);
@@ -229,8 +248,7 @@ impl<T, const N: usize> FastVecData<T, N> {
                 cache: MaybeUninit::<[MaybeUninit<T>; N]>::uninit().assume_init(),
                 ptr: Cell::new(ptr),
                 len: length,
-                cap: capacity,
-                in_cache: false,
+                cap_and_flag: capacity,
             }
         }
     }
@@ -243,17 +261,15 @@ impl<T, const N: usize> FastVecData<T, N> {
     #[inline(never)]
     unsafe fn grow(&mut self, new_capacity: usize) {
         debug_assert!(
-            self.cap < new_capacity,
+            self.cap() < new_capacity,
             "grow's new_capacity should be > old_capacity"
         );
 
         if T::IS_ZST {
             if new_capacity > N {
-                self.in_cache = false;
-                self.cap = new_capacity;
+                self.set_cap_and_cache(new_capacity, false);
             } else {
-                self.in_cache = true;
-                self.cap = N;
+                self.set_cap_and_cache(N, true);
             }
             return;
         }
@@ -269,11 +285,10 @@ impl<T, const N: usize> FastVecData<T, N> {
                 // SAFETY: start <= end <= self.len
                 ptr::copy_nonoverlapping(old_ptr, new_ptr, self.len);
 
-                if !self.in_cache {
+                if !self.in_cache() {
                     self.dealloc();
                 }
-                self.cap = new_capacity;
-                self.in_cache = false;
+                self.set_cap_and_cache(new_capacity, false);
                 self.ptr.set(new_ptr);
             } else {
                 cold_path();
@@ -286,8 +301,7 @@ impl<T, const N: usize> FastVecData<T, N> {
                 // in_stack -> self.cap == N, but new_capacity <= N
                 self.dealloc();
 
-                self.cap = N;
-                self.in_cache = true;
+                self.set_cap_and_cache(N, true);
                 self.ptr.set(new_ptr);
             }
         }
@@ -300,7 +314,7 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// - new_capacity > old_capacity
     #[inline(always)]
     unsafe fn grow_compare(&mut self, new_capacity: usize) {
-        let new_capacity = core::cmp::max(new_capacity, self.cap << 1);
+        let new_capacity = core::cmp::max(new_capacity, self.cap() << 1);
         unsafe {
             self.grow(new_capacity);
         }
@@ -318,7 +332,7 @@ impl<T, const N: usize> FastVecData<T, N> {
     #[inline(never)]
     unsafe fn grow_split(&mut self, new_capacity: usize, start: usize, end: usize) {
         debug_assert!(
-            self.cap < new_capacity,
+            self.cap() < new_capacity,
             "grow's new_capacity should be > old_capacity"
         );
         debug_assert!(start <= end);
@@ -326,11 +340,9 @@ impl<T, const N: usize> FastVecData<T, N> {
 
         if T::IS_ZST {
             if new_capacity > N {
-                self.in_cache = false;
-                self.cap = new_capacity;
+                self.set_cap_and_cache(new_capacity, false);
             } else {
-                self.in_cache = true;
-                self.cap = N;
+                self.set_cap_and_cache(N, true);
             }
             return;
         }
@@ -347,11 +359,10 @@ impl<T, const N: usize> FastVecData<T, N> {
                 ptr::copy_nonoverlapping(old_ptr, new_ptr, start);
                 ptr::copy_nonoverlapping(old_ptr.add(start), new_ptr.add(end), tail_len);
 
-                if !self.in_cache {
+                if !self.in_cache() {
                     self.dealloc();
                 }
-                self.in_cache = false;
-                self.cap = new_capacity;
+                self.set_cap_and_cache(new_capacity, false);
                 self.ptr.set(new_ptr);
             } else {
                 cold_path();
@@ -367,8 +378,7 @@ impl<T, const N: usize> FastVecData<T, N> {
                 self.dealloc();
 
                 self.ptr.set(new_ptr);
-                self.in_cache = true;
-                self.cap = N;
+                self.set_cap_and_cache(N, true);
             }
         }
     }
@@ -381,16 +391,12 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// - **self.in_cache is false**
     #[inline(never)]
     unsafe fn reduce(&mut self, new_capacity: usize) {
-        debug_assert!(self.len <= new_capacity && new_capacity < self.cap);
-        debug_assert!(!self.in_cache);
+        debug_assert!(self.len <= new_capacity && new_capacity < self.cap());
+        debug_assert!(!self.in_cache());
 
         if T::IS_ZST {
-            self.cap = if new_capacity <= N {
-                self.in_cache = true;
-                N
-            } else {
-                new_capacity
-            };
+            let cap = if new_capacity <= N { N } else { new_capacity };
+            self.set_cap_and_cache(cap, new_capacity <= N);
             return;
         }
 
@@ -407,8 +413,7 @@ impl<T, const N: usize> FastVecData<T, N> {
 
                 self.dealloc();
 
-                self.cap = N;
-                self.in_cache = true;
+                self.set_cap_and_cache(N, true);
                 self.ptr.set(new_ptr);
             } else {
                 let new_layout = Layout::array::<T>(new_capacity).unwrap();
@@ -417,7 +422,7 @@ impl<T, const N: usize> FastVecData<T, N> {
 
                 self.dealloc();
 
-                self.cap = new_capacity;
+                self.set_cap_and_cache(new_capacity, false);
                 self.ptr.set(new_ptr);
             };
         }
@@ -454,7 +459,7 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// ```
     #[inline(always)]
     pub const fn capacity(&self) -> usize {
-        self.cap
+        self.cap()
     }
 
     /// Returns the number of elements in the vector, also referred to as its length.
@@ -520,7 +525,7 @@ impl<T, const N: usize> FastVecData<T, N> {
     #[inline]
     pub fn reserve(&mut self, additional: usize) {
         let new_capacity = self.len + additional;
-        if new_capacity > self.cap {
+        if new_capacity > self.cap() {
             // SAFETY: new_capacity > self.cap
             unsafe {
                 self.grow_compare(new_capacity);
@@ -539,7 +544,7 @@ impl<T, const N: usize> FastVecData<T, N> {
     #[inline]
     pub fn reserve_exact(&mut self, additional: usize) {
         let new_capacity = self.len + additional;
-        if new_capacity > self.cap {
+        if new_capacity > self.cap() {
             // SAFETY: new_capacity > self.cap
             unsafe {
                 self.grow(new_capacity);
@@ -572,11 +577,11 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// ```
     #[inline]
     pub fn shrink_to(&mut self, min_capacity: usize) {
-        if self.in_cache {
+        if self.in_cache() {
             return;
         }
-        let capacity = min_capacity.min(self.cap).max(self.len);
-        if capacity != self.cap {
+        let capacity = min_capacity.min(self.cap()).max(self.len);
+        if capacity != self.cap() {
             // SAFETY: new_capacity >= self.len, new_capacity < old_capacity, !in_stack
             unsafe {
                 self.reduce(capacity);
@@ -609,10 +614,10 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// ```
     #[inline]
     pub fn shrink_to_fit(&mut self) {
-        if self.in_cache {
+        if self.in_cache() {
             return;
         }
-        if self.cap != self.len {
+        if self.cap() != self.len {
             // SAFETY: new_capacity >= self.len, new_capacity < old_capacity, !in_stack
             unsafe {
                 self.reduce(self.len);
@@ -626,7 +631,7 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// - If the data is in the heap, then transfer the pointer directly to ensure maximum efficiency.
     #[inline]
     pub(crate) fn into_vec(mut self) -> Vec<T> {
-        if self.in_cache {
+        if self.in_cache() {
             let len = self.len;
             let mut vec: Vec<T> = Vec::with_capacity(len);
             unsafe {
@@ -636,9 +641,9 @@ impl<T, const N: usize> FastVecData<T, N> {
             self.len = 0;
             vec
         } else {
-            let vec = unsafe { Vec::from_raw_parts(self.as_mut_ptr(), self.len, self.cap) };
+            let vec = unsafe { Vec::from_raw_parts(self.as_mut_ptr(), self.len, self.cap()) };
             self.len = 0;
-            self.in_cache = true;
+            self.set_cap_and_cache(N, true);
             vec
         }
     }
@@ -790,22 +795,14 @@ impl<T, const N: usize> FastVecData<T, N> {
 
         assert!(index <= self.len, "inserted index should be <= len");
 
-        if len == self.cap {
+        if len == self.cap() {
             cold_path();
 
             // SAFETY:
             // - self.ptr is refreshed, so data is valid.
             // - capacity is sufficent, index <= self.len.
             unsafe {
-                self.grow_split(
-                    if self.cap > 0 {
-                        self.cap << 1
-                    } else {
-                        min_cap::<T>()
-                    },
-                    index,
-                    index + 1,
-                );
+                self.grow_split(min_cap::<T>().max(self.cap() << 1), index, index + 1);
                 if T::IS_ZST {
                     mem::forget(element);
                 } else {
@@ -1019,11 +1016,11 @@ impl<T, const N: usize> FastVecData<T, N> {
     #[inline]
     pub fn push(&mut self, value: T) {
         let len = self.len;
-        if len == self.cap {
+        if len == self.cap() {
             cold_path();
             unsafe {
-                self.grow(if self.cap > 0 {
-                    self.cap << 1
+                self.grow(if self.cap() > 0 {
+                    self.cap() << 1
                 } else {
                     min_cap::<T>()
                 });
@@ -1139,7 +1136,7 @@ impl<T, const N: usize> FastVecData<T, N> {
     #[inline]
     pub fn append<const P: usize>(&mut self, other: &mut FastVecData<T, P>) {
         let new_len = self.len + other.len;
-        if new_len > self.cap {
+        if new_len > self.cap() {
             unsafe {
                 self.grow_compare(new_len);
             }
@@ -1217,7 +1214,7 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// assert_eq!(vec, [2, 4, 8, 16]);
     /// ```
     pub fn resize_with<F: FnMut() -> T>(&mut self, new_len: usize, mut f: F) {
-        if new_len > self.cap {
+        if new_len > self.cap() {
             unsafe {
                 self.grow_compare(new_len);
             }
@@ -1271,7 +1268,7 @@ impl<T, const N: usize> FastVecData<T, N> {
         unsafe {
             slice::from_raw_parts_mut(
                 self.as_mut_ptr().add(self.len) as *mut MaybeUninit<T>,
-                self.cap - self.len,
+                self.cap() - self.len,
             )
         }
     }
@@ -1299,7 +1296,7 @@ impl<T: Clone, const N: usize> FastVecData<T, N> {
     /// assert_eq!(vec, ['a', 'b']);
     /// ```
     pub fn resize(&mut self, new_len: usize, value: T) {
-        if new_len > self.cap {
+        if new_len > self.cap() {
             unsafe { self.grow(new_len) };
         }
 
@@ -1332,7 +1329,7 @@ impl<T: Clone, const N: usize> FastVecData<T, N> {
     /// ```
     pub fn extend_from_slice(&mut self, other: &[T]) {
         let new_len = other.len() + self.len;
-        if new_len > self.cap {
+        if new_len > self.cap() {
             unsafe {
                 self.grow_compare(new_len);
             }
@@ -1363,7 +1360,7 @@ impl<T: Clone, const N: usize> FastVecData<T, N> {
     pub fn extend_from_within<R: core::ops::RangeBounds<usize>>(&mut self, src: R) {
         let (start, end) = split_range_bound(&src, self.len);
         let new_len = end - start + self.len;
-        if new_len > self.cap {
+        if new_len > self.cap() {
             unsafe {
                 self.grow_compare(new_len);
             }
@@ -1797,7 +1794,7 @@ impl<'a, I: ExactSizeIterator, const N: usize> Drop for Splice<'a, I, N> {
             let new_tail_start = vec.len + exact_len;
 
             let need_capacity = new_tail_start + self.drain.tail_len;
-            if vec.cap < need_capacity {
+            if vec.capacity() < need_capacity {
                 vec.grow_compare(need_capacity);
             }
 
@@ -1973,9 +1970,9 @@ impl<T: fmt::Debug, F: FnMut(&mut T) -> bool, const N: usize> fmt::Debug
 /// A stack-prioritized vector that automatically spills to the heap
 /// when capacity is exceeded.
 ///
-/// Unlike [`SmallVec`](https://docs.rs/smallvec/latest/smallvec/),
-/// [`FastVec`] uses **pointer caching** to avoid conditional checks
-/// on every operation, achieving higher performance.
+/// Unlike [`SmallVec`](crate::vec::SmallVec), [`FastVec`] uses
+/// **pointer caching** to avoid conditional checks on every operation,
+/// achieving higher performance.
 ///
 /// When the data is in the stack area, the execution efficiency is
 /// almost the same as `[T; N]`. Even if switching to the heap, it
@@ -2310,7 +2307,7 @@ impl<T, const N: usize> FastVec<T, N> {
     /// ```
     #[inline(always)]
     pub const fn capacity(&self) -> usize {
-        self.inner.cap
+        self.inner.capacity()
     }
 
     /// Check and refresh the pointer to ensure it points to the correct location.
@@ -2820,5 +2817,200 @@ impl<T, const N: usize> Drop for IntoIter<T, N> {
                 self.vec.inner.try_dealloc();
             }
         }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+
+#[cfg(test)]
+mod tests {
+    use super::FastVec;
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn drop_vec() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+        {
+            let mut vec = FastVec::<Tracker, 4>::new();
+            let data = vec.data();
+            data.push(Tracker);
+            data.push(Tracker);
+            data.push(Tracker);
+
+            assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        }
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_pop_remove() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = FastVec::<Tracker, 4>::new();
+        let data = vec.data();
+        data.push(Tracker);
+        data.push(Tracker);
+        data.push(Tracker);
+
+        let popped = data.pop().unwrap();
+        assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        drop(popped);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+
+        let removed = data.remove(0);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+        drop(removed);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 2);
+
+        drop(vec);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_into_iter() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = FastVec::<Tracker, 4>::new();
+        let data = vec.data();
+        data.push(Tracker);
+        data.push(Tracker);
+        data.push(Tracker);
+
+        let mut iter = vec.into_iter();
+        let first = iter.next().unwrap();
+        drop(first);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+
+        drop(iter);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_drain() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = FastVec::<Tracker, 8>::new();
+        let data = vec.data();
+        data.push(Tracker);
+        data.push(Tracker);
+        data.push(Tracker);
+        data.push(Tracker);
+        data.push(Tracker);
+
+        {
+            let mut drain = data.drain(1..4);
+            let first = drain.next().unwrap();
+            drop(first);
+            assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+        }
+
+        // 1 consumed + 2 still in drained range
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+
+        drop(vec);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 5);
+    }
+
+    #[test]
+    fn drop_extract_if() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker {
+            id: usize,
+        }
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = FastVec::<Tracker>::new();
+        let data = vec.data();
+        for id in 0..6 {
+            data.push(Tracker { id });
+        }
+
+        let removed: FastVec<Tracker> = data.extract_if(.., |t| t.id % 2 == 0).collect();
+        assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+
+        drop(removed);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+
+        drop(vec);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 6);
+    }
+
+    #[test]
+    fn drop_zst() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = FastVec::<Tracker>::new();
+        let data = vec.data();
+        data.push(Tracker);
+        data.push(Tracker);
+        data.push(Tracker);
+        data.push(Tracker);
+        data.push(Tracker);
+
+        {
+            let mut drain = data.drain(1..4);
+            let one = drain.next_back().unwrap();
+            drop(one);
+            assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+        }
+
+        // 1 consumed + 2 dropped by Drain::drop in the ZST path.
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+
+        drop(vec);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 5);
     }
 }

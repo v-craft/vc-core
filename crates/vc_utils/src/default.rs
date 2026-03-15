@@ -17,10 +17,6 @@
 ///   a: 10,
 ///   ..Default::default()
 /// };
-/// # let foo = Foo {
-/// #   a: 10,
-/// #   ..Foo::default()
-/// # };
 ///
 /// // Now
 /// let foo = Foo {

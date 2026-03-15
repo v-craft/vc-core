@@ -12,8 +12,6 @@ use core::marker::PhantomData;
 use core::panic::{RefUnwindSafe, UnwindSafe};
 use core::ptr::{self, NonNull};
 
-use crate::UnsafeCellDeref;
-
 // -----------------------------------------------------------------------------
 // Page
 
@@ -143,7 +141,7 @@ impl<const PAGE_SIZE: usize> PagePool<PAGE_SIZE> {
     /// }
     /// ```
     pub fn alloc(&self, layout: Layout) -> NonNull<u8> {
-        let pages = unsafe { self.pages.deref_mut() };
+        let pages = unsafe { &mut *self.pages.get() };
 
         if let Some(page) = pages.last_mut() {
             unsafe {
@@ -288,7 +286,7 @@ impl<const PAGE_SIZE: usize> PagePool<PAGE_SIZE> {
                 span: data.add(size),
             };
 
-            self.pages.deref_mut().push(page);
+            { &mut *self.pages.get() }.push(page);
 
             data
         }

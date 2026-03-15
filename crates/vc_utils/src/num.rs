@@ -1,3 +1,37 @@
+//! Numeric utility types.
+//!
+//! This module currently provides a family of `NonMax*` integer wrappers.
+//! A `NonMax*` value guarantees that it is never equal to the maximum value
+//! of its underlying integer type.
+//!
+//! # Why `NonMax`?
+//!
+//! These types are useful for niche-value optimization, similar to `NonZero*`.
+//! Because `MAX` is reserved as an invalid state, `Option<NonMax*>` can often
+//! have the same size as the primitive integer.
+//!
+//! ```
+//! use core::mem::size_of;
+//! use vc_utils::num::{NonMaxI32, NonMaxU32};
+//!
+//! assert_eq!(size_of::<Option<NonMaxU32>>(), size_of::<u32>());
+//! assert_eq!(size_of::<Option<NonMaxI32>>(), size_of::<i32>());
+//! ```
+//!
+//! # Available Types
+//!
+//! - Unsigned: `NonMaxU8`, `NonMaxU16`, `NonMaxU32`, `NonMaxU64`, `NonMaxU128`, `NonMaxUsize`
+//! - Signed: `NonMaxI8`, `NonMaxI16`, `NonMaxI32`, `NonMaxI64`, `NonMaxI128`, `NonMaxIsize`
+//!
+//! # Basic Usage
+//!
+//! ```
+//! use vc_utils::num::NonMaxU8;
+//!
+//! let n = NonMaxU8::new(42).unwrap();
+//! assert_eq!(n.get(), 42);
+//! assert!(NonMaxU8::new(u8::MAX).is_none());
+//! ```
 #![expect(unsafe_code, reason = "transmute is unsafe")]
 
 use core::cmp::Ordering;
@@ -70,6 +104,7 @@ macro_rules! impl_non_max {
             /// The value must not be the maximum value of the underlying integer type.
             #[inline(always)]
             pub const unsafe fn new_unchecked(n: $Int) -> Self {
+                debug_assert!( n != <$Int>::MAX );
                 unsafe { mem::transmute(n ^ <$Int>::MAX) }
             }
 

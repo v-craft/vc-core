@@ -400,7 +400,8 @@ impl<T> fmt::Debug for BlockList<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::BlockList;
+    use super::{BLOCK_SIZE, BlockList};
+    use core::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
     fn is_sync_send() {
@@ -415,5 +416,118 @@ mod tests {
         is_sync::<BlockList<i32>>();
         is_unwindsafe::<BlockList<i32>>();
         is_refunwindsafe::<BlockList<i32>>();
+    }
+
+    #[test]
+    fn drop_list() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        {
+            let mut q = BlockList::<Tracker>::new();
+            for _ in 0..(BLOCK_SIZE * 2 + 5) {
+                q.push_back(Tracker);
+            }
+            assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        }
+
+        assert_eq!(DROPS.load(Ordering::SeqCst), BLOCK_SIZE * 2 + 5);
+    }
+
+    #[test]
+    fn drop_pop() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut q = BlockList::<Tracker>::new();
+        q.push_back(Tracker);
+        q.push_back(Tracker);
+        q.push_back(Tracker);
+
+        let first = q.pop_front().unwrap();
+        assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        drop(first);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+
+        drop(q);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_clear() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut q = BlockList::<Tracker>::new();
+        for _ in 0..(BLOCK_SIZE + 3) {
+            q.push_back(Tracker);
+        }
+
+        q.clear();
+        assert!(q.is_empty());
+        assert_eq!(q.len(), 0);
+        assert_eq!(DROPS.load(Ordering::SeqCst), BLOCK_SIZE + 3);
+
+        drop(q);
+        assert_eq!(DROPS.load(Ordering::SeqCst), BLOCK_SIZE + 3);
+    }
+
+    #[test]
+    fn drop_with_idle_blocks() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        {
+            let mut q = BlockList::<Tracker>::new();
+            for _ in 0..(BLOCK_SIZE * 2) {
+                q.push_back(Tracker);
+            }
+
+            // Drain exactly one full block so it enters idle pool.
+            for _ in 0..BLOCK_SIZE {
+                let v = q.pop_front().unwrap();
+                drop(v);
+            }
+
+            assert_eq!(q.len(), BLOCK_SIZE);
+            assert_eq!(DROPS.load(Ordering::SeqCst), BLOCK_SIZE);
+        }
+
+        // Remaining live elements in queue are dropped once; idle blocks are empty and should not add drops.
+        assert_eq!(DROPS.load(Ordering::SeqCst), BLOCK_SIZE * 2);
     }
 }

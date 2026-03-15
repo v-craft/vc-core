@@ -13,8 +13,6 @@ vc_cfg = { path = "../vc_cfg" }
 
 serde_core = { version = "1", default-features = false, features = ["alloc"] }
 
-fastvec ={ version = "1.1", default-features = false, features = ["serde"] }
-
 indexmap = { version = "2.13", default-features = false, features = ["serde"] }
 
 foldhash = { version = "0.2.0", default-features = false }

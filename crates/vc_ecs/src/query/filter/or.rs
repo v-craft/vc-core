@@ -187,6 +187,4 @@ macro_rules! impl_tuple {
     };
 }
 
-vc_utils::range_invoke! {
-    impl_tuple,  12: P
-}
+vc_utils::range_invoke!(impl_tuple, 12);

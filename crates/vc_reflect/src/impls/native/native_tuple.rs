@@ -4,7 +4,7 @@
 //! - [`Typed`] -> [`DynamicTyped`]
 //! - [`Tuple`]
 //! - [`Reflect`]
-//! - [`GetTypeTraits`]
+//! - [`GetTypeMeta`]
 //! - [`FromReflect`]
 //!
 //! [`DynamicTypePath`]: crate::info::DynamicTypePath
@@ -41,52 +41,52 @@ macro_rules! impl_type_path_tuple {
             }
         }
     };
-    (1: [$zero:ident]) => {
+    (1: [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
-        impl<$zero: TypePath> TypePath for ($zero,) {
+        impl<$name: TypePath> TypePath for ($name,) {
             fn type_path() -> &'static str {
                 static CELL: GenericTypePathCell = GenericTypePathCell::new();
                 CELL.get_or_insert::<Self>(|| {
-                    $crate::impls::concat(&["(" , $zero::type_path() , ",)"])
+                    $crate::impls::concat(&["(" , <$name>::type_path() , ",)"])
                 })
             }
 
             fn type_name() -> &'static str {
                 static CELL: GenericTypePathCell = GenericTypePathCell::new();
                 CELL.get_or_insert::<Self>(|| {
-                    $crate::impls::concat(&["(" , $zero::type_name() , ",)"])
+                    $crate::impls::concat(&["(" , <$name>::type_name() , ",)"])
                 })
             }
 
             fn type_ident() -> &'static str {
                 static CELL: GenericTypePathCell = GenericTypePathCell::new();
                 CELL.get_or_insert::<Self>(|| {
-                    $crate::impls::concat(&["(" , $zero::type_ident() , ",)"])
+                    $crate::impls::concat(&["(" , <$name>::type_ident() , ",)"])
                 })
             }
         }
     };
-    ($_:literal: [$zero:ident, $($index:ident),*]) => {
+    ($_:literal: [$zero_index:tt : $zero_name:ident , $($index:tt : $name:ident),*]) => {
         #[cfg_attr(docsrs, doc(hidden))]
-        impl<$zero: TypePath, $($index: TypePath),*> TypePath for ($zero, $($index),*) {
+        impl<$zero_name: TypePath, $($name: TypePath),*> TypePath for ($zero_name, $($name),*) {
             fn type_path() -> &'static str {
                 static CELL: GenericTypePathCell = GenericTypePathCell::new();
                 CELL.get_or_insert::<Self>(|| {
-                    $crate::impls::concat(&["(", $zero::type_path() $(, ", ", $index::type_path())* , ")"])
+                    $crate::impls::concat(&["(", <$zero_name>::type_path() $(, ", ", <$name>::type_path())* , ")"])
                 })
             }
 
             fn type_name() -> &'static str {
                 static CELL: GenericTypePathCell = GenericTypePathCell::new();
                 CELL.get_or_insert::<Self>(|| {
-                    $crate::impls::concat(&["(", $zero::type_name() $(, ", ", $index::type_name())* , ")"])
+                    $crate::impls::concat(&["(", <$zero_name>::type_name() $(, ", ", <$name>::type_name())* , ")"])
                 })
             }
 
             fn type_ident() -> &'static str {
                 static CELL: GenericTypePathCell = GenericTypePathCell::new();
                 CELL.get_or_insert::<Self>(|| {
-                    $crate::impls::concat(&["(", $zero::type_ident() $(, ", ", $index::type_ident())* , ")"])
+                    $crate::impls::concat(&["(", <$zero_name>::type_ident() $(, ", ", <$name>::type_ident())* , ")"])
                 })
             }
         }
@@ -208,6 +208,7 @@ macro_rules! impl_reflect_tuple {
     };
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         impl<$name: Reflect + Typed> Typed for ($name,) {
             fn type_info() -> &'static TypeInfo {
                 static CELL: GenericTypeInfoCell = GenericTypeInfoCell::new();
@@ -220,6 +221,7 @@ macro_rules! impl_reflect_tuple {
         }
 
         #[cfg_attr(docsrs, doc(fake_variadic))]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         impl<$name: Reflect + Typed> Tuple for ($name,) {
             #[inline]
             fn field(&self, index: usize) -> Option<&dyn Reflect> {
@@ -256,6 +258,7 @@ macro_rules! impl_reflect_tuple {
         }
 
         #[cfg_attr(docsrs, doc(fake_variadic))]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         impl<$name: Reflect + Typed> Reflect for ($name,) {
             crate::reflection::impl_reflect_cast_fn!(Tuple);
             #[inline]
@@ -293,6 +296,7 @@ macro_rules! impl_reflect_tuple {
         }
 
         #[cfg_attr(docsrs, doc(fake_variadic))]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         impl<$name: Reflect + Typed + GetTypeMeta> GetTypeMeta for ($name,) {
             fn get_type_meta() -> TypeMeta {
                 let mut type_meta =  TypeMeta::with_capacity::<($name,)>(1);
@@ -300,12 +304,13 @@ macro_rules! impl_reflect_tuple {
                 type_meta
             }
 
-            fn register_dependencies(_registry: &mut TypeRegistry) {
-                _registry.register::<$name>();
+            fn register_dependencies(registry: &mut TypeRegistry) {
+                registry.register::<$name>();
             }
         }
 
         #[cfg_attr(docsrs, doc(fake_variadic))]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         impl<$name: FromReflect + Typed> FromReflect for ($name,) {
             fn from_reflect(reflect: &dyn Reflect) -> Option<Self> {
                 let _ref_tuple = reflect.reflect_ref().as_tuple().ok()?;
@@ -441,6 +446,6 @@ macro_rules! impl_reflect_tuple {
     };
 }
 
-range_invoke!(impl_reflect_tuple, 12: P);
+range_invoke!(impl_reflect_tuple, 12);
 
 crate::derive::impl_auto_register!(());

@@ -149,4 +149,4 @@ macro_rules! impl_required_for_tuple {
     };
 }
 
-range_invoke!(impl_required_for_tuple,  12: P);
+range_invoke!(impl_required_for_tuple, 12);

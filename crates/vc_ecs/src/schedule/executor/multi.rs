@@ -23,7 +23,6 @@ struct ExecutorState {
     ready_systems: VecDeque<u32>,
 }
 
-
 /// Runs the schedule using multi-threads.
 pub struct MultiThreadedExecutor {
     state: Mutex<ExecutorState>,

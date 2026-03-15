@@ -11,12 +11,26 @@ use cache::Cache;
 
 #[derive(Clone)]
 enum InnerVec<T, const N: usize> {
-    Stack(Cache<T, N>),
+    Cache(Cache<T, N>),
     Heap(Vec<T>),
 }
 
 #[derive(Clone)]
 #[repr(transparent)]
+/// A vector that stores up to `N` elements inline and spills to heap when needed.
+///
+/// This type combines stack-allocated fast-path storage (`N` items) with a `Vec` fallback
+/// for larger workloads. Most methods mirror [`Vec`] semantics while preserving small-size
+/// efficiency.
+///
+/// # Examples
+///
+/// ```
+/// # use vc_utils::vec::SmallVec;
+/// let mut vec: SmallVec<i32, 4> = SmallVec::new();
+/// vec.extend([1, 2, 3, 4, 5]);
+/// assert_eq!(vec, [1, 2, 3, 4, 5]);
+/// ```
 pub struct SmallVec<T, const N: usize>(InnerVec<T, N>);
 
 // -----------------------------------------------------------------------------
@@ -48,7 +62,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     /// ```
     #[inline]
     pub const fn new() -> Self {
-        Self(InnerVec::Stack(Cache::new()))
+        Self(InnerVec::Cache(Cache::new()))
     }
 
     /// Constructs a new, empty `SmallVec` with at least the specified capacity.
@@ -60,7 +74,7 @@ impl<T, const N: usize> SmallVec<T, N> {
         if capacity > N {
             Self(InnerVec::Heap(Vec::with_capacity(capacity)))
         } else {
-            Self(InnerVec::Stack(Cache::new()))
+            Self(InnerVec::Cache(Cache::new()))
         }
     }
 
@@ -84,7 +98,7 @@ impl<T, const N: usize> SmallVec<T, N> {
         let capacity = self.len() + additional;
         if capacity > N {
             match &mut self.0 {
-                InnerVec::Stack(vec) => {
+                InnerVec::Cache(vec) => {
                     // SAFETY: capacity >= len
                     self.0 = InnerVec::Heap(unsafe { vec.move_to_vec_with_capacity(capacity) });
                 }
@@ -92,11 +106,11 @@ impl<T, const N: usize> SmallVec<T, N> {
             }
         } else {
             match &mut self.0 {
-                InnerVec::Stack(_) => (),
+                InnerVec::Cache(_) => (),
                 InnerVec::Heap(vec) => {
                     if capacity > vec.capacity() {
                         // SAFETY: capacity >= len && capacity <= N
-                        self.0 = InnerVec::Stack(unsafe { Cache::from_vec_unchecked(vec) });
+                        self.0 = InnerVec::Cache(unsafe { Cache::from_vec_unchecked(vec) });
                     }
                 }
             }
@@ -115,10 +129,10 @@ impl<T, const N: usize> SmallVec<T, N> {
                     vec.shrink_to_fit();
                 } else {
                     // SAFETY: capacity >= len
-                    self.0 = InnerVec::Stack(unsafe { Cache::from_vec_unchecked(vec) });
+                    self.0 = InnerVec::Cache(unsafe { Cache::from_vec_unchecked(vec) });
                 }
             }
-            InnerVec::Stack(_) => (),
+            InnerVec::Cache(_) => (),
         }
     }
 
@@ -145,7 +159,7 @@ impl<T, const N: usize> SmallVec<T, N> {
                 ptr::copy_nonoverlapping(slice.as_ptr(), vec.as_mut_ptr(), slice.len());
                 vec.set_len(slice.len());
             }
-            Self(InnerVec::Stack(vec))
+            Self(InnerVec::Cache(vec))
         } else {
             cold_path();
             let mut vec = Vec::with_capacity(slice.len());
@@ -162,7 +176,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub const fn as_ptr(&self) -> *const T {
         match &self.0 {
-            InnerVec::Stack(vec) => vec.as_ptr(),
+            InnerVec::Cache(vec) => vec.as_ptr(),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.as_ptr()
@@ -175,7 +189,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub const fn as_mut_ptr(&mut self) -> *mut T {
         match &mut self.0 {
-            InnerVec::Stack(vec) => vec.as_mut_ptr(),
+            InnerVec::Cache(vec) => vec.as_mut_ptr(),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.as_mut_ptr()
@@ -198,7 +212,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub const fn is_empty(&self) -> bool {
         match &self.0 {
-            InnerVec::Stack(vec) => vec.is_empty(),
+            InnerVec::Cache(vec) => vec.is_empty(),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.is_empty()
@@ -221,7 +235,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub const fn len(&self) -> usize {
         match &self.0 {
-            InnerVec::Stack(vec) => vec.len(),
+            InnerVec::Cache(vec) => vec.len(),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.len()
@@ -246,7 +260,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub const fn capacity(&self) -> usize {
         match &self.0 {
-            InnerVec::Stack(vec) => vec.capacity(),
+            InnerVec::Cache(vec) => vec.capacity(),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.capacity()
@@ -267,7 +281,7 @@ impl<T, const N: usize> SmallVec<T, N> {
         // SAFETY: See function docs.
         unsafe {
             match &mut self.0 {
-                InnerVec::Stack(vec) => vec.set_len(new_len),
+                InnerVec::Cache(vec) => vec.set_len(new_len),
                 InnerVec::Heap(vec) => {
                     cold_path();
                     vec.set_len(new_len)
@@ -285,7 +299,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub fn into_vec(self) -> Vec<T> {
         match self.0 {
-            InnerVec::Stack(mut vec) => vec.move_to_vec(),
+            InnerVec::Cache(mut vec) => vec.move_to_vec(),
             InnerVec::Heap(vec) => vec,
         }
     }
@@ -294,7 +308,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub const fn as_slice(&self) -> &[T] {
         match &self.0 {
-            InnerVec::Stack(vec) => vec.as_slice(),
+            InnerVec::Cache(vec) => vec.as_slice(),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.as_slice()
@@ -306,7 +320,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub const fn as_mut_slice(&mut self) -> &mut [T] {
         match &mut self.0 {
-            InnerVec::Stack(vec) => vec.as_mut_slice(),
+            InnerVec::Cache(vec) => vec.as_mut_slice(),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.as_mut_slice()
@@ -326,7 +340,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub fn swap_remove(&mut self, index: usize) -> T {
         match &mut self.0 {
-            InnerVec::Stack(vec) => vec.swap_remove(index),
+            InnerVec::Cache(vec) => vec.swap_remove(index),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.swap_remove(index)
@@ -356,7 +370,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     /// ```
     pub fn insert(&mut self, index: usize, element: T) {
         match &mut self.0 {
-            InnerVec::Stack(vec) => {
+            InnerVec::Cache(vec) => {
                 assert!(index <= vec.len(), "insertion index should be <= len");
                 if !vec.is_full() {
                     // SAFETY: index <= len && len < N
@@ -413,7 +427,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     /// ```
     pub fn remove(&mut self, index: usize) -> T {
         match &mut self.0 {
-            InnerVec::Stack(vec) => vec.remove(index),
+            InnerVec::Cache(vec) => vec.remove(index),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.remove(index)
@@ -441,7 +455,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub fn push(&mut self, value: T) {
         match &mut self.0 {
-            InnerVec::Stack(vec) => {
+            InnerVec::Cache(vec) => {
                 if !vec.is_full() {
                     // SAFETY: len < N
                     unsafe { vec.push_unchecked(value) };
@@ -486,7 +500,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub fn pop(&mut self) -> Option<T> {
         match &mut self.0 {
-            InnerVec::Stack(vec) => vec.pop(),
+            InnerVec::Cache(vec) => vec.pop(),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.pop()
@@ -502,7 +516,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub fn truncate(&mut self, len: usize) {
         match &mut self.0 {
-            InnerVec::Stack(vec) => vec.truncate(len),
+            InnerVec::Cache(vec) => vec.truncate(len),
             InnerVec::Heap(vec) => vec.truncate(len),
         }
     }
@@ -522,7 +536,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     #[inline]
     pub fn clear(&mut self) {
         match &mut self.0 {
-            InnerVec::Stack(vec) => vec.clear(),
+            InnerVec::Cache(vec) => vec.clear(),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.clear();
@@ -537,7 +551,7 @@ impl<T: PartialEq, const N: usize> SmallVec<T, N> {
     #[inline]
     pub fn dedup(&mut self) {
         match &mut self.0 {
-            InnerVec::Stack(vec) => vec.dedup(),
+            InnerVec::Cache(vec) => vec.dedup(),
             InnerVec::Heap(vec) => {
                 cold_path();
                 vec.dedup();
@@ -585,22 +599,16 @@ where
 // From/Into
 
 impl<T: Clone, const N: usize> From<&[T]> for SmallVec<T, N> {
-    #[inline]
     fn from(value: &[T]) -> Self {
-        let mut vec = SmallVec::with_capacity(value.len());
-        match &mut vec.0 {
-            InnerVec::Stack(inner) => {
-                value.iter().for_each(|item| unsafe {
-                    inner.push_unchecked(item.clone());
-                });
-            }
-            InnerVec::Heap(inner) => {
-                value.iter().for_each(|item| {
-                    inner.push(item.clone());
-                });
-            }
+        if value.len() <= N {
+            let mut vec = Cache::<T, N>::new();
+            value.iter().for_each(|item| unsafe {
+                vec.push_unchecked(item.clone());
+            });
+            SmallVec(InnerVec::Cache(vec))
+        } else {
+            SmallVec(InnerVec::Heap(Vec::from(value)))
         }
-        vec
     }
 }
 
@@ -635,7 +643,7 @@ impl<T, const N: usize, const P: usize> From<[T; P]> for SmallVec<T, N> {
                 ptr::copy_nonoverlapping(value.as_ptr(), cache.as_mut_ptr(), P);
                 cache.set_len(P);
             }
-            Self(InnerVec::Stack(cache))
+            Self(InnerVec::Cache(cache))
         } else {
             Self(InnerVec::Heap(Vec::from(value)))
         }
@@ -646,7 +654,7 @@ impl<T, const N: usize> From<SmallVec<T, N>> for Vec<T> {
     #[inline]
     fn from(value: SmallVec<T, N>) -> Self {
         match value.0 {
-            InnerVec::Stack(mut vec) => vec.move_to_vec(),
+            InnerVec::Cache(mut vec) => vec.move_to_vec(),
             InnerVec::Heap(vec) => vec,
         }
     }
@@ -683,7 +691,7 @@ impl<T, const N: usize> IntoIterator for SmallVec<T, N> {
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         match self.0 {
-            InnerVec::Stack(vec) => IntoIter(InternalIter::Stack(vec.into_iter())),
+            InnerVec::Cache(vec) => IntoIter(InternalIter::Cache(vec.into_iter())),
             InnerVec::Heap(vec) => {
                 cold_path();
                 IntoIter(InternalIter::Heap(vec.into_iter()))
@@ -697,7 +705,7 @@ impl<T, const N: usize> IntoIterator for SmallVec<T, N> {
 
 #[derive(Clone)]
 enum InternalIter<T, const N: usize> {
-    Stack(cache::IntoIter<T, N>),
+    Cache(cache::IntoIter<T, N>),
     Heap(alloc::vec::IntoIter<T>),
 }
 
@@ -707,20 +715,41 @@ enum InternalIter<T, const N: usize> {
 pub struct IntoIter<T, const N: usize>(InternalIter<T, N>);
 
 impl<T, const N: usize> IntoIter<T, N> {
+    /// Returns a slice of the remaining elements that have not been yielded yet.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_utils::vec::SmallVec;
+    /// let mut iter = SmallVec::<_, 4>::from([1, 2, 3]).into_iter();
+    /// iter.next();
+    /// assert_eq!(iter.as_slice(), &[2, 3]);
+    /// ```
     #[inline]
     pub fn as_slice(&self) -> &[T] {
         match &self.0 {
-            InternalIter::Stack(iter) => iter.as_slice(),
+            InternalIter::Cache(iter) => iter.as_slice(),
             InternalIter::Heap(iter) => {
                 cold_path();
                 iter.as_slice()
             }
         }
     }
+
+    /// Returns a mutable slice of the remaining elements that have not been yielded yet.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_utils::vec::SmallVec;
+    /// let mut iter = SmallVec::<_, 4>::from([1, 2, 3]).into_iter();
+    /// iter.as_mut_slice()[0] = 10;
+    /// assert_eq!(iter.next(), Some(10));
+    /// ```
     #[inline]
     pub fn as_mut_slice(&mut self) -> &mut [T] {
         match &mut self.0 {
-            InternalIter::Stack(iter) => iter.as_mut_slice(),
+            InternalIter::Cache(iter) => iter.as_mut_slice(),
             InternalIter::Heap(iter) => {
                 cold_path();
                 iter.as_mut_slice()
@@ -734,7 +763,7 @@ impl<T, const N: usize> Iterator for IntoIter<T, N> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.0 {
-            InternalIter::Stack(iter) => Iterator::next(iter),
+            InternalIter::Cache(iter) => Iterator::next(iter),
             InternalIter::Heap(iter) => {
                 cold_path();
                 Iterator::next(iter)
@@ -745,7 +774,7 @@ impl<T, const N: usize> Iterator for IntoIter<T, N> {
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         match &self.0 {
-            InternalIter::Stack(iter) => Iterator::size_hint(iter),
+            InternalIter::Cache(iter) => Iterator::size_hint(iter),
             InternalIter::Heap(iter) => {
                 cold_path();
                 Iterator::size_hint(iter)
@@ -758,7 +787,7 @@ impl<T, const N: usize> DoubleEndedIterator for IntoIter<T, N> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         match &mut self.0 {
-            InternalIter::Stack(iter) => DoubleEndedIterator::next_back(iter),
+            InternalIter::Cache(iter) => DoubleEndedIterator::next_back(iter),
             InternalIter::Heap(iter) => {
                 cold_path();
                 DoubleEndedIterator::next_back(iter)
@@ -1184,5 +1213,177 @@ mod cache {
             let len = self.vec.len() - self.index;
             unsafe { slice::from_raw_parts_mut(self.vec.as_mut_ptr().add(self.index), len) }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SmallVec;
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn drop_cache() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+        {
+            let mut vec = SmallVec::<Tracker, 4>::new();
+            vec.push(Tracker);
+            vec.push(Tracker);
+            vec.push(Tracker);
+
+            assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        }
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_heap() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+        {
+            let mut vec = SmallVec::<Tracker, 2>::new();
+            vec.push(Tracker);
+            vec.push(Tracker);
+            vec.push(Tracker);
+            assert!(vec.capacity() >= 3);
+
+            assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        }
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_pop_remove() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = SmallVec::<Tracker, 4>::new();
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+
+        let popped = vec.pop().unwrap();
+        assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        drop(popped);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+
+        let removed = vec.remove(0);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+        drop(removed);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 2);
+
+        drop(vec);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_into_iter_cache() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = SmallVec::<Tracker, 4>::new();
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+
+        let mut iter = vec.into_iter();
+        let first = iter.next().unwrap();
+        drop(first);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+
+        drop(iter);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_into_iter_heap() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = SmallVec::<Tracker, 2>::new();
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+
+        let mut iter = vec.into_iter();
+        let back = iter.next_back().unwrap();
+        drop(back);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+
+        drop(iter);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 4);
+    }
+
+    #[test]
+    fn drop_transition() {
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut vec = SmallVec::<Tracker, 3>::new();
+        vec.push(Tracker);
+        vec.push(Tracker);
+        vec.push(Tracker);
+
+        vec.reserve(1);
+        assert!(vec.capacity() >= 4);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+
+        vec.truncate(2);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+
+        vec.shrink_to_fit();
+        assert_eq!(vec.capacity(), 3);
+
+        drop(vec);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
     }
 }

@@ -446,4 +446,131 @@ mod tests {
         is_unwindsafe::<ArrayDeque<i32, 0>>();
         is_refunwindsafe::<ArrayDeque<i32, 0>>();
     }
+
+    #[test]
+    fn drop_contiguous() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+        #[derive(Debug)]
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        {
+            let mut deque: ArrayDeque<Tracker, 8> = ArrayDeque::new();
+            deque.push_back(Tracker).unwrap();
+            deque.push_back(Tracker).unwrap();
+            deque.push_back(Tracker).unwrap();
+
+            assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        }
+
+        assert_eq!(DROPS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn drop_full() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+        #[derive(Debug)]
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        {
+            let mut deque: ArrayDeque<Tracker, 4> = ArrayDeque::new();
+            deque.push_back(Tracker).unwrap();
+            deque.push_back(Tracker).unwrap();
+            deque.push_back(Tracker).unwrap();
+            deque.push_back(Tracker).unwrap();
+            assert!(deque.is_full());
+
+            assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        }
+
+        assert_eq!(DROPS.load(Ordering::SeqCst), 4);
+    }
+
+    #[test]
+    fn drop_wrapped() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+        #[derive(Debug)]
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        {
+            let mut deque: ArrayDeque<Tracker, 5> = ArrayDeque::new();
+            deque.push_back(Tracker).unwrap();
+            deque.push_back(Tracker).unwrap();
+            deque.push_back(Tracker).unwrap();
+            deque.push_back(Tracker).unwrap();
+
+            let v1 = deque.pop_front().unwrap();
+            let v2 = deque.pop_front().unwrap();
+            drop(v1);
+            drop(v2);
+            assert_eq!(DROPS.load(Ordering::SeqCst), 2);
+
+            // Make internal range wrap around while len < N.
+            deque.push_back(Tracker).unwrap();
+
+            assert_eq!(deque.len(), 3);
+        }
+
+        assert_eq!(DROPS.load(Ordering::SeqCst), 5);
+    }
+
+    #[test]
+    fn drop_clear_pop() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+        #[derive(Debug)]
+        struct Tracker;
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        DROPS.store(0, Ordering::SeqCst);
+
+        let mut deque: ArrayDeque<Tracker, 6> = ArrayDeque::new();
+        deque.push_back(Tracker).unwrap();
+        deque.push_back(Tracker).unwrap();
+        deque.push_back(Tracker).unwrap();
+        deque.push_back(Tracker).unwrap();
+
+        let front = deque.pop_front().unwrap();
+        assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        drop(front);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+
+        deque.clear();
+        assert!(deque.is_empty());
+        assert_eq!(DROPS.load(Ordering::SeqCst), 4);
+
+        drop(deque);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 4);
+    }
 }

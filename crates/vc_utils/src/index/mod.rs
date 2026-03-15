@@ -5,5 +5,8 @@ pub use indexmap::{Equivalent, GetDisjointMutError, TryReserveError};
 pub mod map;
 pub mod set;
 
-pub use map::{IndexMap, SparseIndexMap};
-pub use set::{IndexSet, SparseIndexSet};
+pub use map::IndexMap;
+pub use set::IndexSet;
+
+// pub use map::SparseIndexMap;
+// pub use set::SparseIndexSet;
