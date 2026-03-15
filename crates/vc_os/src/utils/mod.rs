@@ -1,19 +1,24 @@
-//! This module provides low-level synchronization primitives and concurrent data structures
-//! built on atomic operations.
+//! Low-level synchronization primitives and concurrent data structures.
 //!
-//! ## Primitives
+//! This module contains building blocks implemented around atomics and lock-free or spin-based
+//! techniques. They are intended for runtime internals and performance-sensitive paths.
 //!
-//! - [`OnceFlag`] : A lightweight flag ensuring true appears only once. Useful for
-//!   one-time initialization patterns.
-//! - [`Futex`] : A resource-free spinlock, serving as the most basic synchronization primitive.
-//! - [`SpinLock`] : A spinlock similar to Mutex, but threads busy-wait instead of sleeping.
+//! # Synchronization Primitives
 //!
-//! ## Concurrent Queues
+//! - [`OnceFlag`]: A lightweight one-time state flag.
+//! - [`Futex`]: A minimal spin-based synchronization primitive.
+//! - [`SpinLock`]: A mutex-like lock where waiters spin instead of parking.
+//! - [`SpinLockGuard`]: RAII guard returned by [`SpinLock`].
 //!
-//! - [`ArrayQueue`] : A bounded queue implementation (from crossbeam-queue) using a fixed-size
-//!   circular array. Suitable for producer-consumer patterns with known capacity limits.
-//! - [`ListQueue`] : A custom unbounded queue implementation using a block-linked list with
-//!   idle block reuse to minimize memory allocation overhead.
+//! # Queue Structures
+//!
+//! - [`ArrayQueue`]: A bounded MPMC queue backed by a fixed-size ring buffer.
+//! - [`ListQueue`]: An unbounded queue backed by linked blocks with idle-block reuse.
+//!
+//! # Execution Helpers
+//!
+//! - [`CachePadded`]: Cache-line padding wrapper to reduce false sharing.
+//! - [`Backoff`]: Backoff strategy utility for contention-heavy retry loops.
 
 // -----------------------------------------------------------------------------
 // Modules

@@ -17,7 +17,7 @@ use crate::sync::atomic::{AtomicBool, Ordering};
 /// # Example
 ///
 /// ```
-/// # use vc_os::utils::OnceFlag;
+/// use vc_os::utils::OnceFlag;
 ///
 /// let flag = OnceFlag::new();
 /// let mut count = 0;
