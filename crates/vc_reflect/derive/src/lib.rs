@@ -512,9 +512,9 @@ pub fn impl_auto_register(input: TokenStream) -> TokenStream {
 /// For example, for `Display`, this will generate `DisplayReflect`.
 ///
 /// It only contains three methods internally:
-/// - `cast_ref`: cast `&dyn Reflect` to `&dyn {trait_name}`
-/// - `cast_mut`: cast `&mut dyn Reflect` to `&mut dyn {trait_name}`
-/// - `cast_boxed`: cast `Box<dyn Reflect>` to `Box<dyn {trait_name}>`
+/// - `from_ref`: cast `&dyn Reflect` to `&dyn {trait_name}`
+/// - `from_mut`: cast `&mut dyn Reflect` to `&mut dyn {trait_name}`
+/// - `from_boxed`: cast `Box<dyn Reflect>` to `Box<dyn {trait_name}>`
 ///
 /// ## Example
 ///
