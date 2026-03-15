@@ -37,14 +37,3 @@ pub fn available_parallelism() -> NonZero<usize> {
         }
     }
 }
-
-// -----------------------------------------------------------------------------
-// Tests and Docs
-
-#[cfg(any(test, docsrs, feature = "docsrs_dev"))]
-crate::cfg::switch! {
-    crate::cfg::std => {
-        pub mod __fallback;
-    }
-    _ => {}
-}

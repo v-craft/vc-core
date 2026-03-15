@@ -25,9 +25,6 @@ web = [
   "dep:wasm-bindgen",
 ]
 
-# Open documents for inactive codes.
-docsrs_dev = []
-
 [dependencies]
 vc_cfg = { path = "../vc_cfg" }
 

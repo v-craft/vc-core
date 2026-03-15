@@ -21,11 +21,6 @@ repository.workspace = true
 [features]
 default = [ "std", "debug", "auto_register" ]
 
-# Open some documents for inactive codes.
-docsrs_dev = [
-    "vc_os/docsrs_dev"
-]
-
 # Even if turned on, it only takes effect in Debug mode.
 debug = [
     "std",

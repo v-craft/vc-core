@@ -27,17 +27,3 @@ crate::cfg::switch! {
         use __fallback as time_impl;
     }
 }
-
-// -----------------------------------------------------------------------------
-// Tests and Docs
-
-#[cfg(any(test, docsrs, feature = "docsrs_dev"))]
-crate::cfg::switch! {
-    crate::cfg::web => {
-        pub mod __fallback;
-    }
-    crate::cfg::std => {
-        pub mod __fallback;
-    }
-    _ => {}
-}

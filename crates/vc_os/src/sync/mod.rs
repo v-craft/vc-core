@@ -72,14 +72,3 @@ crate::cfg::switch! {
         };
     }
 }
-
-// -----------------------------------------------------------------------------
-// Tests and Docs
-
-#[cfg(any(test, docsrs, feature = "docsrs_dev"))]
-crate::cfg::switch! {
-    crate::cfg::std => {
-        pub mod __fallback;
-    },
-    _ => {},
-}

@@ -55,8 +55,3 @@ We provide a thin abstraction layer over essential OS functionality, with multip
 - WebAssembly-specific implementations (only on `wasm32` targets)
 - Re-exports essential crates like `wasm-bindgen`
 - Most functionality still utilizes std implementations
-
-### `docsrs_dev`
-- Enables fallback modules for documentation and testing
-- Typically not required by end users
-

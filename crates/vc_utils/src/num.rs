@@ -104,7 +104,7 @@ macro_rules! impl_non_max {
             /// The value must not be the maximum value of the underlying integer type.
             #[inline(always)]
             pub const unsafe fn new_unchecked(n: $Int) -> Self {
-                debug_assert!( n != <$Int>::MAX );
+                debug_assert!(n != <$Int>::MAX);
                 unsafe { mem::transmute(n ^ <$Int>::MAX) }
             }
 
