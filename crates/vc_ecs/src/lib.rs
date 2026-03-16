@@ -1,11 +1,13 @@
 //! TODO: Supplementary documentation.
 //!
 //! - [`ComponentStorage`] : How components are stored and accessed.
-//! - [`Archetype`] : How does the query system work.
+//! - [`Archetype`] : How component queries are performed efficiently.
+//! - [`Schedule`] : How systems are executed with maximum concurrency.
 //! - ......
 //!
 //! [`ComponentStorage`]: crate::component::ComponentStorage
 //! [`Archetype`]: crate::archetype::Archetype
+//! [`Schedule`]: crate::schedule::Schedule
 
 #![cfg_attr(docsrs, expect(internal_features, reason = "needed for fake_variadic"))]
 #![cfg_attr(docsrs, feature(doc_cfg, rustdoc_internals))]

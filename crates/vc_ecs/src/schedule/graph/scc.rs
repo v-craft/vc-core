@@ -314,9 +314,6 @@ mod tests {
     impl GraphNode for Node {
         type Link = (Node, Direction);
         type Edge = (Node, Node);
-        fn name(&self) -> &'static str {
-            ""
-        }
     }
 
     #[test]

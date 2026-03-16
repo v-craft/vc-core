@@ -5,9 +5,8 @@ use alloc::boxed::Box;
 use core::fmt::Debug;
 
 use crate::error::EcsError;
-use crate::system::{AccessTable, FunctionSystem, SystemFlags, SystemFunction};
+use crate::system::{AccessTable, SystemFlags, SystemName};
 use crate::tick::Tick;
-use crate::utils::DebugName;
 use crate::world::{UnsafeWorld, World};
 
 use super::SystemInput;
@@ -22,7 +21,7 @@ pub trait System: Send + Sync + 'static {
     /// The system's output.
     type Output;
 
-    fn name(&self) -> DebugName;
+    fn name(&self) -> SystemName;
 
     fn flags(&self) -> SystemFlags;
 
@@ -48,8 +47,6 @@ pub trait System: Send + Sync + 'static {
     }
 }
 
-pub unsafe trait ReadOnlySystem: System {}
-
 impl<I, O> Debug for dyn System<Input = I, Output = O>
 where
     I: SystemInput + 'static,
@@ -64,47 +61,23 @@ where
     }
 }
 
-impl<I, O> Debug for dyn ReadOnlySystem<Input = I, Output = O>
-where
-    I: SystemInput + 'static,
-    O: 'static,
-{
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("ReadOnlySystem")
-            .field("name", &self.name())
-            .field("non_send", &self.is_non_send())
-            .field("exclusive", &self.is_exclusive())
-            .finish_non_exhaustive()
-    }
-}
-
 // -----------------------------------------------------------------------------
 // Alias
 
 pub type BoxedSystem<I, O> = Box<dyn System<Input = I, Output = O>>;
-pub type BoxedReadOnlySystem<I, O> = Box<dyn ReadOnlySystem<Input = I, Output = O>>;
 
 // -----------------------------------------------------------------------------
 // IntoSystem
 
-pub trait IntoSystem<I: SystemInput, O, Marker>: Sized {
+pub trait IntoSystem<I: SystemInput, O>: Sized {
     type System: System<Input = I, Output = O>;
 
     fn into_system(this: Self) -> Self::System;
 }
 
-impl<T: System> IntoSystem<T::Input, T::Output, ()> for T {
+impl<T: System> IntoSystem<T::Input, T::Output> for T {
     type System = T;
     fn into_system(this: Self) -> Self::System {
         this
-    }
-}
-
-pub struct FunctionMarker;
-
-impl<T: SystemFunction> IntoSystem<T::Input, T::Output, FunctionMarker> for T {
-    type System = FunctionSystem<T::Input, T::Output, T>;
-    fn into_system(this: Self) -> Self::System {
-        FunctionSystem::new(this)
     }
 }

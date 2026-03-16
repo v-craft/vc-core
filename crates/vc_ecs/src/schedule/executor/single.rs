@@ -53,7 +53,7 @@ impl SystemExecutor for SingleThreadedExecutor {
             let func = AssertUnwindSafe(|| unsafe {
                 if let Err(e) = system.run((), world.unsafe_world()) {
                     let ctx = ErrorContext::System {
-                        name,
+                        name: name.as_str(),
                         last_run: system.get_last_run(),
                     };
                     handler(e, ctx);

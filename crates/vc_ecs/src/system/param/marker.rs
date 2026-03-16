@@ -4,15 +4,15 @@ use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
 // -----------------------------------------------------------------------------
-// MainThread
+// MainThreadMarker
 
-pub struct MainThread;
+pub struct MainThreadMarker;
 
-unsafe impl ReadOnlySystemParam for MainThread {}
+unsafe impl ReadOnlySystemParam for MainThreadMarker {}
 
-unsafe impl SystemParam for MainThread {
+unsafe impl SystemParam for MainThreadMarker {
     type State = ();
-    type Item<'world, 'state> = MainThread;
+    type Item<'world, 'state> = MainThreadMarker;
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
@@ -28,20 +28,20 @@ unsafe impl SystemParam for MainThread {
         _last_run: Tick,
         _this_run: Tick,
     ) -> Self::Item<'w, 's> {
-        MainThread
+        MainThreadMarker
     }
 }
 
 // -----------------------------------------------------------------------------
-// NonSend
+// NonSendMarker
 
-pub struct NonSend;
+pub struct NonSendMarker;
 
-unsafe impl ReadOnlySystemParam for NonSend {}
+unsafe impl ReadOnlySystemParam for NonSendMarker {}
 
-unsafe impl SystemParam for NonSend {
+unsafe impl SystemParam for NonSendMarker {
     type State = ();
-    type Item<'world, 'state> = NonSend;
+    type Item<'world, 'state> = NonSendMarker;
     const NON_SEND: bool = true;
     const EXCLUSIVE: bool = false;
 
@@ -57,20 +57,20 @@ unsafe impl SystemParam for NonSend {
         _last_run: Tick,
         _this_run: Tick,
     ) -> Self::Item<'w, 's> {
-        NonSend
+        NonSendMarker
     }
 }
 
 // -----------------------------------------------------------------------------
-// Exclusive
+// ExclusiveMarker
 
-pub struct Exclusive;
+pub struct ExclusiveMarker;
 
-unsafe impl ReadOnlySystemParam for Exclusive {}
+unsafe impl ReadOnlySystemParam for ExclusiveMarker {}
 
-unsafe impl SystemParam for Exclusive {
+unsafe impl SystemParam for ExclusiveMarker {
     type State = ();
-    type Item<'world, 'state> = Exclusive;
+    type Item<'world, 'state> = ExclusiveMarker;
     const NON_SEND: bool = false;
     const EXCLUSIVE: bool = true;
 
@@ -86,6 +86,6 @@ unsafe impl SystemParam for Exclusive {
         _last_run: Tick,
         _this_run: Tick,
     ) -> Self::Item<'w, 's> {
-        Exclusive
+        ExclusiveMarker
     }
 }

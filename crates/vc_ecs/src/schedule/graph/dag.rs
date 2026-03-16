@@ -637,10 +637,6 @@ mod tests {
     impl GraphNode for Node {
         type Link = (Node, Direction);
         type Edge = (Node, Node);
-
-        fn name(&self) -> &'static str {
-            "Node"
-        }
     }
 
     #[test]
@@ -736,10 +732,6 @@ mod tests {
     impl GraphNode for Union {
         type Link = (Union, Direction);
         type Edge = (Union, Union);
-
-        fn name(&self) -> &'static str {
-            "union"
-        }
     }
 
     impl TryInto<Key> for Union {
@@ -767,19 +759,11 @@ mod tests {
     impl GraphNode for Key {
         type Link = (Key, Direction);
         type Edge = (Key, Key);
-
-        fn name(&self) -> &'static str {
-            "key"
-        }
     }
 
     impl GraphNode for Value {
         type Link = (Value, Direction);
         type Edge = (Value, Value);
-
-        fn name(&self) -> &'static str {
-            "value"
-        }
     }
 
     impl From<Key> for Union {

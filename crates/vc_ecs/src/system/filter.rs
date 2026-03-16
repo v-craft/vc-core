@@ -214,7 +214,7 @@ impl FilterData {
         self.entity_ref |= other.entity_ref;
         if self.entity_ref {
             self.reading = SparseHashSet::new();
-            // self.writing = BTreeSet::new();
+            // self.writing = SparseHashSet::new();
         } else {
             self.reading.extend(&other.reading);
             self.writing.extend(&other.writing);

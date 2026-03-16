@@ -2,8 +2,8 @@ use core::fmt::Debug;
 
 use bitflags::bitflags;
 
+use crate::system::SystemName;
 use crate::tick::Tick;
-use crate::utils::DebugName;
 
 bitflags! {
     /// Bitflags representing system states and requirements.
@@ -18,9 +18,9 @@ bitflags! {
 
 #[derive(Clone, Copy)]
 pub struct SystemMeta {
+    name: SystemName,
     flags: SystemFlags,
     last_run: Tick,
-    name: DebugName,
 }
 
 impl Debug for SystemMeta {
@@ -35,9 +35,10 @@ impl Debug for SystemMeta {
 }
 
 impl SystemMeta {
-    pub(crate) fn new<T>() -> Self {
+    #[inline]
+    pub fn new(name: SystemName) -> Self {
         Self {
-            name: DebugName::type_name::<T>(),
+            name,
             flags: SystemFlags::empty(),
             last_run: Tick::new(0),
         }
@@ -49,13 +50,8 @@ impl SystemMeta {
     }
 
     #[inline]
-    pub fn name(&self) -> DebugName {
+    pub fn name(&self) -> SystemName {
         self.name
-    }
-
-    #[inline]
-    pub fn set_name(&mut self, name: DebugName) {
-        self.name = name;
     }
 
     #[inline]

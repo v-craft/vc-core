@@ -190,25 +190,4 @@ impl AccessTable {
             })
         })
     }
-
-    pub fn merge(&mut self, other: &Self) {
-        if self.world_mut || self.world_ref {
-            return;
-        }
-        if other.world_mut || other.world_ref {
-            self.clone_from(other);
-            return;
-        }
-
-        self.res_reading.union_with(&other.res_reading);
-        self.res_writing.union_with(&other.res_writing);
-
-        other.filter.iter().for_each(|(k, v)| {
-            if let Some(data) = self.filter.get_mut(k) {
-                data.merge(v);
-            } else {
-                self.filter.insert(k.clone(), v.clone());
-            }
-        });
-    }
 }

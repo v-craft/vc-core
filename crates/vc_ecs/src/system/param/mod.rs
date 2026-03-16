@@ -21,7 +21,7 @@ mod world;
 // marker
 
 pub use local::Local;
-pub use marker::{Exclusive, MainThread, NonSend};
+pub use marker::{ExclusiveMarker, MainThreadMarker, NonSendMarker};
 
 // -----------------------------------------------------------------------------
 // SystemParam

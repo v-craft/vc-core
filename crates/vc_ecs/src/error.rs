@@ -5,7 +5,7 @@ use core::ops::{Deref, DerefMut};
 
 use crate::resource::Resource;
 use crate::tick::Tick;
-use crate::utils::{Cloner, DebugName};
+use crate::utils::Cloner;
 
 // -----------------------------------------------------------------------------
 // EcsError
@@ -27,7 +27,7 @@ pub struct EcsError {
 #[non_exhaustive]
 pub enum ErrorContext {
     /// The error occurred in a system.
-    System { name: DebugName, last_run: Tick },
+    System { name: &'static str, last_run: Tick },
 }
 
 // -----------------------------------------------------------------------------
@@ -85,9 +85,9 @@ impl Debug for EcsError {
 
 impl ErrorContext {
     /// The name of the ECS construct that failed.
-    pub fn name(&self) -> DebugName {
+    pub fn name(&self) -> &str {
         match self {
-            Self::System { name, .. } => *name,
+            Self::System { name, .. } => name,
         }
     }
 

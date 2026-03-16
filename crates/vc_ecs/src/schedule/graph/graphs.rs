@@ -39,12 +39,6 @@ pub trait GraphNode: Copy + Hash + Eq + Ord + Debug {
     /// The type that packs and unpacks this [`GraphNode`] with another
     /// [`GraphNode`]. This is used to save space in the graph's edge list.
     type Edge: Copy + Hash + Eq + Debug + From<(Self, Self)> + Into<(Self, Self)>;
-
-    /// Name of the kind of this node id.
-    ///
-    /// For structs, this should return a human-readable name of the struct.
-    /// For enums, this should return a human-readable name of the enum variant.
-    fn name(&self) -> &'static str;
 }
 
 /// `Graph<DIRECTED>` is a graph datastructure using an associative array

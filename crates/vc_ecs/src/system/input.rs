@@ -63,7 +63,7 @@ macro_rules! impl_tuple {
     };
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
-        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 8 items long.")]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         impl<$name: SystemInput> SystemInput for ($name,) {
             type Data<'i> = ( <$name>::Data<'i>, );
             type Item<'i> = ( <$name>::Item<'i>, );

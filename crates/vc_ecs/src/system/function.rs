@@ -1,9 +1,7 @@
-use core::marker::PhantomData;
-
 use super::{AccessTable, System, SystemFlags, SystemIn, SystemMeta};
 use crate::error::EcsError;
+use crate::system::{SystemName, UninitSystemError};
 use crate::tick::Tick;
-use crate::utils::DebugName;
 use crate::world::{World, WorldId};
 
 use super::{SystemInput, SystemParam};
@@ -14,13 +12,17 @@ use super::{SystemInput, SystemParam};
 type SystemInputData<'a, P> = <P as SystemInput>::Data<'a>;
 type SystemParamItem<'w, 's, P> = <P as SystemParam>::Item<'w, 's>;
 
-pub trait SystemFunction: Copy + Send + Sync + 'static {
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a valid system function",
+    label = "invalid system function"
+)]
+pub trait SystemFunction<Marker>: Send + Sync + 'static {
     type Param: SystemParam;
     type Input: SystemInput;
     type Output;
 
     fn run(
-        self,
+        this: &mut Self,
         input: SystemInputData<Self::Input>,
         param: SystemParamItem<Self::Param>,
     ) -> Self::Output;
@@ -28,167 +30,189 @@ pub trait SystemFunction: Copy + Send + Sync + 'static {
 
 macro_rules! impl_tuple {
     (0: []) => {
-        impl<O> SystemFunction for fn() -> O
+        impl<O, Func> SystemFunction<fn() -> O> for Func
         where
             O: 'static,
+            Func: Send + Sync + 'static,
+            for<'a> &'a mut Func: FnMut() -> O
         {
             type Param = ();
             type Input = ();
             type Output = O;
 
             fn run(
-                self,
+                this: &mut Self,
                 _input: (),
                 _param: (),
             ) -> Self::Output {
-                (self)()
+                #[inline(always)]
+                fn call<O>(mut func: impl FnMut() -> O) -> O {
+                    func()
+                }
+
+                call(this)
             }
         }
 
-        impl<I, O> SystemFunction for fn(SystemIn<I>) -> O
+        impl<I, O, Func> SystemFunction<(I, fn() -> O)> for Func
         where
             O: 'static,
             I: SystemInput + 'static,
-            Self: Fn(SystemIn<I::Item<'_>>) -> O,
+            Func: Send + Sync + 'static,
+            for<'a> &'a mut Func:
+                FnMut(SystemIn<I>) -> O +
+                FnMut(SystemIn<I::Item<'_>>) -> O +
         {
             type Param = ();
             type Input = I;
             type Output = O;
 
             fn run(
-                self,
+                this: &mut Self,
                 input: I::Data<'_>,
                 _param: (),
             ) -> Self::Output {
                 #[inline(always)]
                 fn call<I, O>(
-                    func: impl Fn(I) -> O,
+                    mut func: impl FnMut(I) -> O,
                     input: I,
                 ) -> O {
                     func(input)
                 }
 
-                call(self, SystemIn(I::wrap(input)))
+                call(this, SystemIn(I::wrap(input)))
             }
         }
     };
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
         #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
-        impl<O, $name> SystemFunction for fn($name) -> O
+        impl<O, $name, Func> SystemFunction<fn($name) -> O> for Func
         where
             O: 'static,
             $name: SystemParam + 'static,
-            Self: Fn(<$name>::Item<'_, '_>) -> O,
+            Func: Send + Sync + 'static,
+            for<'a> &'a mut Func:
+                FnMut($name) -> O +
+                FnMut(<$name>::Item<'_, '_>) -> O
         {
             type Param = ( $name, );
             type Input = ();
             type Output = O;
 
             fn run(
-                self,
+                this: &mut Self,
                 _input: (),
                 param: ( <$name>::Item<'_,'_> ,),
             ) -> Self::Output {
                 #[inline(always)]
                 fn call<O, $name>(
-                    func: impl Fn($name) -> O,
+                    mut func: impl FnMut($name) -> O,
                     param: ( $name , ),
                 ) -> O {
                     func(param.0)
                 }
 
-                call(self, param)
+                call(this, param)
             }
         }
 
         #[cfg_attr(docsrs, doc(fake_variadic))]
         #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
-        impl<I, O, $name> SystemFunction for fn(SystemIn<I>, $name) -> O
+        impl<I, O, $name, Func> SystemFunction<(I, fn($name) -> O)> for Func
         where
             O: 'static,
             I: SystemInput + 'static,
             $name: SystemParam + 'static,
-            Self: Fn(SystemIn<I::Item<'_>>, <$name>::Item<'_, '_>) -> O,
+            Func: Send + Sync + 'static,
+            for<'a> &'a mut Func:
+                FnMut(SystemIn<I>, $name) -> O +
+                FnMut(SystemIn<I::Item<'_>>, <$name>::Item<'_, '_>) -> O
         {
             type Param = ( $name, );
             type Input = I;
             type Output = O;
 
             fn run(
-                self,
+                this: &mut Self,
                 input: I::Data<'_>,
                 param: ( <$name>::Item<'_,'_> ,),
             ) -> Self::Output {
                 #[inline(always)]
                 fn call<I, O, $name>(
-                    func: impl Fn(I, $name) -> O,
+                    mut func: impl FnMut(I, $name) -> O,
                     input: I,
                     param: ( $name , ),
                 ) -> O {
                     func(input, param.0)
                 }
 
-                call(self, SystemIn(I::wrap(input)), param)
+                call(this, SystemIn(I::wrap(input)), param)
             }
         }
     };
     ($num:literal : [$($index:tt : $name:ident),*]) => {
         #[cfg_attr(docsrs, doc(hidden))]
-        impl<O, $($name),*> SystemFunction for fn($($name),*) -> O
+        impl<O, $($name,)* Func> SystemFunction<fn($($name),*) -> O> for Func
         where
             O: 'static,
             $($name: SystemParam + 'static,)*
-            Self: Fn($(<$name>::Item<'_, '_>),*) -> O,
+            Func: Send + Sync + 'static,
+            for<'a> &'a mut Func:
+                FnMut($($name),*) -> O +
+                FnMut($(<$name>::Item<'_, '_>),*) -> O
         {
             type Param = ( $($name),* );
             type Input = ();
             type Output = O;
 
             fn run(
-                self,
+                this: &mut Self,
                 _input: (),
                 param: ( $(<$name>::Item<'_,'_>, )* ),
             ) -> Self::Output {
                 #[inline(always)]
                 fn call<O, $($name),*>(
-                    func: impl Fn($($name),*) -> O,
+                    mut func: impl FnMut($($name),*) -> O,
                     param: ( $($name),* ),
                 ) -> O {
                     func($(param.$index),*)
                 }
 
-                call(self, param)
+                call(this, param)
             }
         }
 
         #[cfg_attr(docsrs, doc(hidden))]
-        impl<I, O, $($name),*> SystemFunction for fn(SystemIn<I>, $($name),*) -> O
+        impl<I, O, $($name,)* Func> SystemFunction<(I, fn($($name),*) -> O)> for Func
         where
             O: 'static,
             I: SystemInput + 'static,
             $($name: SystemParam + 'static,)*
-            Self: Fn(SystemIn<I::Item<'_>>, $(<$name>::Item<'_, '_>),*) -> O,
+            Func: Send + Sync + 'static,
+            for<'a> &'a mut Func:
+                FnMut(SystemIn<I>, $($name),*) -> O +
+                FnMut(SystemIn<I::Item<'_>>, $(<$name>::Item<'_, '_>),*) -> O
         {
             type Param = ( $($name),* );
             type Input = I;
             type Output = O;
 
             fn run(
-                self,
+                this: &mut Self,
                 input: I::Data<'_>,
                 param: ( $(<$name>::Item<'_,'_>, )* ),
             ) -> Self::Output {
                 #[inline(always)]
                 fn call<I, O, $($name),*>(
-                    func: impl Fn(I, $($name),*) -> O,
+                    mut func: impl FnMut(I, $($name),*) -> O,
                     input: I,
                     param: ( $($name),* ),
                 ) -> O {
                     func(input, $(param.$index),*)
                 }
 
-                call(self, SystemIn(I::wrap(input)), param)
+                call(this, SystemIn(I::wrap(input)), param)
             }
         }
     }
@@ -204,33 +228,15 @@ struct FunctionState<P: SystemParam> {
     world_id: WorldId,
 }
 
-pub struct FunctionSystem<I, O, F: SystemFunction> {
+pub struct FunctionSystem<M, F: SystemFunction<M>> {
     func: F,
     meta: SystemMeta,
     state: Option<FunctionState<F::Param>>,
-    _marker: PhantomData<fn(I) -> O>,
 }
 
-impl<I, O, F> Clone for FunctionSystem<I, O, F>
-where
-    F: SystemFunction,
-{
-    fn clone(&self) -> Self {
-        Self {
-            func: self.func,
-            state: None,
-            meta: SystemMeta::new::<F>(),
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<I, O, F> FunctionSystem<I, O, F>
-where
-    F: SystemFunction,
-{
-    pub fn new(func: F) -> Self {
-        let mut meta = SystemMeta::new::<F>();
+impl<M, F: SystemFunction<M>> FunctionSystem<M, F> {
+    pub fn new(func: F, name: SystemName) -> Self {
+        let mut meta = SystemMeta::new(name);
         if <F::Param as SystemParam>::EXCLUSIVE {
             meta.set_exclusive();
         }
@@ -242,21 +248,15 @@ where
             func,
             meta,
             state: None,
-            _marker: PhantomData,
         }
     }
 }
 
-impl<I, O, F> System for FunctionSystem<I, O, F>
-where
-    I: 'static,
-    O: 'static,
-    F: SystemFunction + 'static,
-{
+impl<M: 'static, F: SystemFunction<M> + 'static> System for FunctionSystem<M, F> {
     type Input = F::Input;
     type Output = F::Output;
 
-    fn name(&self) -> DebugName {
+    fn name(&self) -> SystemName {
         self.meta.name()
     }
 
@@ -278,8 +278,9 @@ where
             param: <F::Param as SystemParam>::init_state(world),
             world_id: world.id(),
         });
-        let validity = <F::Param as SystemParam>::mark_access(&mut table, &state.param);
-        assert!(validity, "invalid system {}", self.meta.name());
+        if !<F::Param as SystemParam>::mark_access(&mut table, &state.param) {
+            invalid_system_access(self.meta.name());
+        }
         table
     }
 
@@ -289,17 +290,41 @@ where
         world: crate::world::UnsafeWorld<'_>,
     ) -> Result<Self::Output, EcsError> {
         let Some(state) = &mut self.state else {
-            todo!()
+            return Err(uninit_system_error(self.meta.name()));
         };
-        assert_eq!(unsafe { world.read_only().id() }, state.world_id);
+        let world_id = unsafe { world.read_only().id() };
+        if state.world_id != world_id {
+            mismatched_world(self.meta.name(), state.world_id, world_id);
+        }
 
         let last_run = self.meta.get_last_run();
         let this_run = unsafe { world.read_only().advance_tick() };
         let param = unsafe {
             <F::Param as SystemParam>::get_param(world, &mut state.param, last_run, this_run)
         };
-        let output = <F as SystemFunction>::run(self.func, input, param);
+
+        let output = <F as SystemFunction<M>>::run(&mut self.func, input, param);
+
         self.meta.set_last_run(this_run);
+
         Ok(output)
     }
+}
+
+#[cold]
+#[inline(never)]
+fn uninit_system_error(name: SystemName) -> EcsError {
+    EcsError::from(UninitSystemError { name })
+}
+
+#[cold]
+#[inline(never)]
+fn invalid_system_access(name: SystemName) -> ! {
+    panic!("System {name} params access conflict.")
+}
+
+#[cold]
+#[inline(never)]
+fn mismatched_world(name: SystemName, init: WorldId, run: WorldId) -> ! {
+    panic!("System {name} is initialized in world {init}, but runs in world {run}.")
 }

@@ -55,15 +55,13 @@ impl ExecutorState {
 
     fn init(&mut self, schedule: &SystemSchedule) {
         let systen_count = schedule.systems.len();
-        let capacity = systen_count + (systen_count >> 3);
-        self.incoming = Vec::with_capacity(capacity);
-        self.ready_systems = VecDeque::with_capacity(capacity);
+        self.ready_systems = VecDeque::with_capacity(systen_count >> 2);
+        self.incoming = Vec::with_capacity(systen_count + (systen_count >> 3));
     }
 
     fn reset(&mut self, schedule: &SystemSchedule) {
         // Use `clone_from` to avoid memory reallocation.
         self.incoming.clone_from(&schedule.incoming);
-        self.ready_systems.clear();
         self.ready_systems.clear();
         self.incoming.iter().enumerate().for_each(|(idx, &num)| {
             if num == 0 {
@@ -147,7 +145,7 @@ impl<'scope, 'env: 'scope, 'sys: 'scope> Context<'scope, 'env, 'sys> {
             let func = AssertUnwindSafe(|| unsafe {
                 if let Err(e) = system.run((), context.world) {
                     let ctx = ErrorContext::System {
-                        name,
+                        name: name.as_str(),
                         last_run: system.get_last_run(),
                     };
                     (context.error_handler)(e, ctx);
