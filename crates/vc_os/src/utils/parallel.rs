@@ -48,7 +48,7 @@ impl<T: Send> Parallel<T> {
             if {
                 self.locals.iter_mut().map(RefCell::get_mut)
             } else {
-                self.inner_mut().into_iter().map(RefCell::get_mut)
+                self.inner_mut().iter_mut().map(RefCell::get_mut)
             }
         }
     }

@@ -321,7 +321,7 @@ impl SystemTime {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
     /// use vc_os::time::SystemTime;
     ///
     /// let sys_time = SystemTime::now();

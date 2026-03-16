@@ -103,13 +103,13 @@ impl<'scope, 'env: 'scope, 'sys: 'scope> Context<'scope, 'env, 'sys> {
         &self,
         system_index: u32,
         result: Result<(), Box<dyn Any + Send>>,
-        system: &UnitSystem,
+        _system: &UnitSystem,
     ) {
         // tell the executor that the system finished
         self.executor.completed.push(system_index);
         if let Err(payload) = result {
             cfg::std! {
-                ::std::eprintln!("Encountered a panic in system `{}`!", system.name());
+                ::std::eprintln!("Encountered a panic in system `{}`!", _system.name());
             }
             // set the payload to propagate the error
             *self.executor.panic_payload.lock().unwrap() = Some(payload);
@@ -157,7 +157,7 @@ impl<'scope, 'env: 'scope, 'sys: 'scope> Context<'scope, 'env, 'sys> {
                     let result = ::std::panic::catch_unwind(func);
                     context.push_completed_system(system_index, result, system);
                 } else {
-                    (f)();
+                    (func)();
                     context.push_completed_system(system_index, Ok(()), system);
                 }
             }

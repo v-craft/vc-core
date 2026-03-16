@@ -779,6 +779,15 @@ pub struct Scope<'scope, 'env: 'scope, T> {
     env: PhantomData<&'env mut &'env ()>,
 }
 
+const _STATIC_ASSERT_: () = {
+    const fn is_send<T: Send>() {}
+    const fn is_sync<T: Sync>() {}
+    is_send::<Scope<()>>();
+    is_sync::<Scope<()>>();
+    is_send::<Scope<::core::cell::Cell<u8>>>();
+    is_sync::<Scope<::core::cell::Cell<u8>>>();
+};
+
 impl<'scope, 'env, T: Send + 'scope> Scope<'scope, 'env, T> {
     /// Spawns a scoped future onto the task pool.
     ///
