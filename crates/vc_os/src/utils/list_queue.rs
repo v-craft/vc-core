@@ -242,8 +242,8 @@ pub struct ListQueue<T> {
     _marker: PhantomData<T>,
 }
 
-unsafe impl<T> Sync for ListQueue<T> {}
-unsafe impl<T> Send for ListQueue<T> {}
+unsafe impl<T: Send> Sync for ListQueue<T> {}
+unsafe impl<T: Send> Send for ListQueue<T> {}
 impl<T> UnwindSafe for ListQueue<T> {}
 impl<T> RefUnwindSafe for ListQueue<T> {}
 
