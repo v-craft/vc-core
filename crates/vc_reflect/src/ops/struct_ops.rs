@@ -53,7 +53,7 @@ use crate::reflection::impl_reflect_cast_fn;
 /// ## Applying to a static struct
 ///
 /// ```
-/// use vc_reflect::{Reflect, derive::Reflect, ops::{Struct, DynamicStruct}};
+/// use vc_reflect::{Reflect, ops::{Struct, DynamicStruct}};
 ///
 /// #[derive(Reflect, PartialEq, Debug)]
 /// struct Foo{
@@ -363,7 +363,7 @@ impl<'a> IntoIterator for &'a DynamicStruct {
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, ops::Struct};
+/// use vc_reflect::{Reflect, ops::Struct};
 ///
 /// #[derive(Reflect)]
 /// struct Foo{
@@ -389,7 +389,7 @@ pub trait Struct: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Struct};
+    /// # use vc_reflect::{Reflect, ops::Struct};
     /// #[derive(Reflect)]
     /// struct Foo{ a: i32, b: bool };
     ///
@@ -410,7 +410,7 @@ pub trait Struct: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Struct};
+    /// # use vc_reflect::{Reflect, ops::Struct};
     /// #[derive(Reflect)]
     /// struct Foo{ a: i32, b: bool };
     ///
@@ -434,7 +434,7 @@ pub trait Struct: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Struct};
+    /// # use vc_reflect::{Reflect, ops::Struct};
     /// #[derive(Reflect)]
     /// struct Foo{ a: i32, b: bool };
     ///
@@ -455,7 +455,7 @@ pub trait Struct: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Struct};
+    /// # use vc_reflect::{Reflect, ops::Struct};
     /// #[derive(Reflect)]
     /// struct Foo{ a: i32, b: bool };
     ///
@@ -474,7 +474,7 @@ pub trait Struct: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Struct};
+    /// # use vc_reflect::{Reflect, ops::Struct};
     /// #[derive(Reflect)]
     /// struct Foo{ a: i32, b: bool };
     ///
@@ -490,7 +490,7 @@ pub trait Struct: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Struct};
+    /// # use vc_reflect::{Reflect, ops::Struct};
     /// #[derive(Reflect)]
     /// struct Foo{ a: i32, b: bool };
     ///
@@ -585,7 +585,7 @@ impl dyn Struct {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{ops::Struct, derive::Reflect};
+    /// # use vc_reflect::{ops::Struct, Reflect};
     /// #[derive(Reflect)]
     /// struct Foo{ a: i32, b: &'static str };
     ///
@@ -611,7 +611,7 @@ impl dyn Struct {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{ops::Struct, derive::Reflect};
+    /// # use vc_reflect::{ops::Struct, Reflect};
     /// #[derive(Reflect)]
     /// struct Foo{ a: i32, b: &'static str };
     ///
@@ -638,7 +638,7 @@ impl dyn Struct {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{ops::Struct, derive::Reflect};
+    /// # use vc_reflect::{ops::Struct, Reflect};
     /// #[derive(Reflect)]
     /// struct Foo{ a: i32, b: &'static str };
     ///
@@ -664,7 +664,7 @@ impl dyn Struct {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{ops::Struct, derive::Reflect};
+    /// # use vc_reflect::{ops::Struct, Reflect};
     /// #[derive(Reflect)]
     /// struct Foo{ a: i32, b: &'static str };
     ///
@@ -700,7 +700,7 @@ impl dyn Struct {
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{Reflect, derive::Reflect, ops::{Struct, StructFieldIter}};
+/// use vc_reflect::{Reflect, ops::{Struct, StructFieldIter}};
 ///
 /// #[derive(Reflect)]
 /// struct Foo{ a: i32, b: bool };

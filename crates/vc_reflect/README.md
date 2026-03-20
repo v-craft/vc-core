@@ -52,7 +52,7 @@ As a dynamic reflection system, this library aims to support:
 ### Derive reflection and inspect type info
 
 ```rust
-use vc_reflect::{derive::Reflect, info::Typed};
+use vc_reflect::{Reflect, info::Typed};
 
 #[derive(Reflect)]
 struct Player {
@@ -71,7 +71,7 @@ assert_eq!(info.index_of("health"), Some(2));
 ### Read nested data with path access
 
 ```rust
-use vc_reflect::derive::Reflect;
+use vc_reflect::Reflect;
 use vc_reflect::access::{PathAccessor, ReflectPathAccess};
 
 #[derive(Reflect)]
@@ -98,7 +98,7 @@ assert_eq!(first_slot, Some("Sword"));
 
 ```rust
 use core::any::TypeId;
-use vc_reflect::{Reflect, derive::Reflect};
+use vc_reflect::Reflect;
 use vc_reflect::ops::Struct;
 use vc_reflect::registry::{ReflectDefault, TypeRegistry};
 

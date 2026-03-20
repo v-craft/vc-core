@@ -448,7 +448,7 @@ pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
     /// mark it with the `#[reflect(clone)]` attribute.
     ///
     /// ```
-    /// # use vc_reflect::derive::Reflect;
+    /// # use vc_reflect::Reflect;
     /// #[derive(Reflect, Clone)]
     /// #[reflect(clone)]
     /// struct A { /* ... */ }
@@ -486,7 +486,7 @@ pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
     /// differ immediately return `Some(false)`.
     ///
     /// ```
-    /// use vc_reflect::derive::Reflect;
+    /// use vc_reflect::Reflect;
     ///
     /// #[derive(Reflect, PartialEq)]
     /// #[reflect(eq)]
@@ -524,7 +524,7 @@ pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
     /// differ immediately return `None`.
     ///
     /// ```
-    /// use vc_reflect::derive::Reflect;
+    /// use vc_reflect::Reflect;
     ///
     /// #[derive(Reflect, PartialOrd, PartialEq)]
     /// #[reflect(cmp)]
@@ -560,7 +560,7 @@ pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
     /// implementation instead.
     ///
     /// ```
-    /// use vc_reflect::derive::Reflect;
+    /// use vc_reflect::Reflect;
     ///
     /// #[derive(Reflect, Hash)]
     /// #[reflect(hash)]
@@ -590,7 +590,7 @@ pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
     /// implementation instead.
     ///
     /// ```
-    /// use vc_reflect::derive::Reflect;
+    /// use vc_reflect::Reflect;
     ///
     /// #[derive(Reflect, Debug)]
     /// #[reflect(debug)]
@@ -834,7 +834,6 @@ pub(crate) use impl_reflect_cast_fn;
 
 #[cfg(test)]
 mod tests {
-    use crate::derive::Reflect;
     use crate::info::TypePath;
     use crate::{FromReflect, Reflect};
 

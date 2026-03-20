@@ -11,7 +11,7 @@ use crate::info::{ConstParamData, Type, TypePath, impl_type_fn};
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, info::Typed};
+/// use vc_reflect::{Reflect, info::Typed};
 ///
 /// #[derive(Reflect)]
 /// struct Foo<T = usize>(T);
@@ -77,7 +77,7 @@ impl TypeParamInfo {
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, info::Typed};
+/// use vc_reflect::{Reflect, info::Typed};
 ///
 /// #[derive(Reflect)]
 /// struct Foo<const N: usize>;
@@ -131,7 +131,7 @@ impl ConstParamInfo {
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, info::Typed};
+/// use vc_reflect::{Reflect, info::Typed};
 ///
 /// #[derive(Reflect)]
 /// struct Foo<T, const N: usize>([T; N]);
@@ -227,7 +227,7 @@ impl GenericInfo {
 /// A enum of `TypeParamInfo` and `ConstParamInfo`, see [`GenericInfo`] .
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, info::Typed};
+/// use vc_reflect::{Reflect, info::Typed};
 ///
 /// #[derive(Reflect)]
 /// struct Foo<T, const N: usize>([T; N]);
@@ -250,7 +250,7 @@ impl GenericInfo {
 /// See [`TypeParamInfo`] .
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, info::Typed};
+/// use vc_reflect::{Reflect, info::Typed};
 ///
 /// #[derive(Reflect)]
 /// struct Foo<T = usize>(T);
@@ -270,7 +270,7 @@ impl GenericInfo {
 /// See [`ConstParamInfo`] .
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, info::Typed};
+/// use vc_reflect::{Reflect, info::Typed};
 ///
 /// #[derive(Reflect)]
 /// struct Foo<const N: usize>;
@@ -321,7 +321,7 @@ impl Generics {
     /// Complexity: O(n) in the number of parameters.
     ///
     /// ```
-    /// use vc_reflect::{derive::Reflect, info::Typed};
+    /// use vc_reflect::{Reflect, info::Typed};
     ///
     /// #[derive(Reflect)]
     /// struct Foo<T = usize>(T);

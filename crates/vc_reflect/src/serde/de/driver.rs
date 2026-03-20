@@ -105,7 +105,7 @@ crate::cfg::debug! {
 /// ```
 /// # use core::any::TypeId;
 /// # use serde_core::de::DeserializeSeed;
-/// # use vc_reflect::{derive::Reflect, Reflect, FromReflect, serde::DeserializeDriver};
+/// # use vc_reflect::{Reflect, FromReflect, serde::DeserializeDriver};
 /// # use vc_reflect::{ops::DynamicStruct, registry::{TypeRegistry, ReflectFromReflect}};
 /// #[derive(Reflect, PartialEq, Debug)]
 /// struct MyStruct {
@@ -427,7 +427,7 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for DeserializeDriver<'_
 ///
 /// ```
 /// # use serde_core::de::DeserializeSeed;
-/// # use vc_reflect::{Reflect, FromReflect, derive::Reflect};
+/// # use vc_reflect::{Reflect, FromReflect};
 /// # use vc_reflect::{ops::DynamicStruct, registry::TypeRegistry, serde::ReflectDeserializeDriver};
 /// #[derive(Reflect, PartialEq, Debug)]
 /// #[reflect(type_path = "my_crate::MyStruct")]

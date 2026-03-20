@@ -13,7 +13,7 @@ use crate::ops::Struct;
 /// # Examples
 ///
 /// ```rust
-/// use vc_reflect::{derive::Reflect, info::{Typed, Type}};
+/// use vc_reflect::{Reflect, info::{Typed, Type}};
 ///
 /// #[derive(Reflect)]
 /// struct A {

@@ -13,7 +13,7 @@ use crate::info::{impl_custom_attributes_fn, impl_with_custom_attributes};
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, info::Typed};
+/// use vc_reflect::{Reflect, info::Typed};
 ///
 /// #[derive(Reflect)]
 /// struct Foo {
@@ -89,7 +89,7 @@ impl NamedField {
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, info::Typed};
+/// use vc_reflect::{Reflect, info::Typed};
 ///
 /// #[derive(Reflect)]
 /// struct Foo(f32);

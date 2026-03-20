@@ -58,7 +58,7 @@ use core::any::{Any, TypeId};
 /// [`#[derive(Reflect)`](crate::derive::Reflect): impl full reflect, including `TypePath` trait.
 ///
 /// ```
-/// use vc_reflect::derive::Reflect;
+/// use vc_reflect::Reflect;
 ///
 /// // just like `#[derive(TypePath)]`
 /// #[derive(Reflect)]

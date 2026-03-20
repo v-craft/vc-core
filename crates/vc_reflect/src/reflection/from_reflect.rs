@@ -42,7 +42,7 @@ use crate::ops::ReflectRef;
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{FromReflect, ops::DynamicStruct, derive::Reflect};
+/// use vc_reflect::{FromReflect, ops::DynamicStruct, Reflect};
 ///
 /// #[derive(Reflect)]
 /// struct A {
@@ -180,7 +180,6 @@ impl FromReflect for crate::ops::DynamicEnum {
 mod tests {
     use super::FromReflect;
     use crate::Reflect;
-    use crate::derive::Reflect;
     use crate::ops::DynamicStruct;
     use alloc::boxed::Box;
 

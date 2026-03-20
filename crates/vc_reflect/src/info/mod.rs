@@ -89,6 +89,8 @@ pub(crate) use type_path::impl_type_fn;
 // -----------------------------------------------------------------------------
 // Exports
 
+pub use vc_reflect_derive::TypePath;
+
 pub use array_info::ArrayInfo;
 pub use attributes::CustomAttributes;
 pub use const_param_data::ConstParamData;

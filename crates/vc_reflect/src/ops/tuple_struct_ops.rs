@@ -48,7 +48,7 @@ use crate::reflection::impl_reflect_cast_fn;
 /// ## Applying to a static tuple-struct
 ///
 /// ```
-/// use vc_reflect::{Reflect, derive::Reflect, ops::{TupleStruct, DynamicTupleStruct}};
+/// use vc_reflect::{Reflect, ops::{TupleStruct, DynamicTupleStruct}};
 ///
 /// #[derive(Reflect, PartialEq, Debug)]
 /// struct Foo(i32, i64, bool);
@@ -305,7 +305,7 @@ impl<'a> IntoIterator for &'a DynamicTupleStruct {
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, ops::TupleStruct};
+/// use vc_reflect::{Reflect, ops::TupleStruct};
 ///
 /// #[derive(Reflect)]
 /// struct Foo(i32, &'static str, bool);
@@ -329,7 +329,7 @@ pub trait TupleStruct: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::TupleStruct};
+    /// # use vc_reflect::{Reflect, ops::TupleStruct};
     /// #[derive(Reflect)]
     /// struct Foo(i32, &'static str, bool);
     ///
@@ -350,7 +350,7 @@ pub trait TupleStruct: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::TupleStruct};
+    /// # use vc_reflect::{Reflect, ops::TupleStruct};
     /// #[derive(Reflect)]
     /// struct Foo(i32, &'static str);
     ///
@@ -369,7 +369,7 @@ pub trait TupleStruct: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::TupleStruct};
+    /// # use vc_reflect::{Reflect, ops::TupleStruct};
     /// #[derive(Reflect)]
     /// struct Foo(i32, i32, i32);
     ///
@@ -434,7 +434,7 @@ impl dyn TupleStruct {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{ops::TupleStruct, derive::Reflect};
+    /// # use vc_reflect::{ops::TupleStruct, Reflect};
     /// #[derive(Reflect)]
     /// struct Foo(i32, &'static str);
     ///
@@ -460,7 +460,7 @@ impl dyn TupleStruct {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{ops::TupleStruct, derive::Reflect};
+    /// # use vc_reflect::{ops::TupleStruct, Reflect};
     /// #[derive(Reflect)]
     /// struct A(i32, &'static str);
     ///
@@ -495,7 +495,7 @@ impl dyn TupleStruct {
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{Reflect, derive::Reflect, ops::{TupleStruct, TupleStructFieldIter}};
+/// use vc_reflect::{Reflect, Reflect, ops::{TupleStruct, TupleStructFieldIter}};
 ///
 /// #[derive(Reflect)]
 /// struct Foo(i32, &'static str, bool);

@@ -198,7 +198,7 @@ impl TypeRegistry {
     ///
     /// ```
     /// # use core::any::TypeId;
-    /// # use vc_reflect::{derive::Reflect, registry::{TypeRegistry, ReflectDefault}};
+    /// # use vc_reflect::{Reflect, registry::{TypeRegistry, ReflectDefault}};
     /// #[derive(Reflect, Default)]
     /// #[reflect(default)]
     /// struct Foo {
@@ -251,7 +251,7 @@ impl TypeRegistry {
     ///
     /// ```no_run
     /// # use std::any::TypeId;
-    /// # use vc_reflect::{derive::Reflect, registry::{TypeRegistry, ReflectDefault}};
+    /// # use vc_reflect::{Reflect, registry::{TypeRegistry, ReflectDefault}};
     /// #[derive(Reflect, Default)]
     /// #[reflect(default, auto_register)]
     /// struct Foo {
@@ -417,12 +417,12 @@ impl TypeRegistry {
     /// ```
     /// # use vc_reflect::registry::TypeRegistry;
     /// # mod foo {
-    /// #     use vc_reflect::derive::Reflect;
+    /// #     use vc_reflect::Reflect;
     /// #     #[derive(Reflect)]
     /// #     pub struct MyType;
     /// # }
     /// # mod bar {
-    /// #     use vc_reflect::derive::Reflect;
+    /// #     use vc_reflect::Reflect;
     /// #     #[derive(Reflect)]
     /// #     pub struct MyType;
     /// # }
@@ -534,19 +534,19 @@ mod tests {
     use core::any::TypeId;
 
     use super::{TypeRegistry, TypeRegistryArc};
-    use crate::derive::Reflect;
+    use crate::Reflect;
     use crate::info::TypePath;
     use crate::registry::{ReflectDefault, ReflectFromPtr};
 
     mod foo {
-        use crate::derive::Reflect;
+        use crate::Reflect;
 
         #[derive(Reflect)]
         pub struct MyType;
     }
 
     mod bar {
-        use crate::derive::Reflect;
+        use crate::Reflect;
 
         #[derive(Reflect)]
         pub struct MyType;

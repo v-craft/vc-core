@@ -21,7 +21,7 @@ use crate::registry::FromType;
 /// ```
 /// use core::any::TypeId;
 /// use vc_reflect::registry::{ReflectSerialize, TypeRegistry};
-/// use vc_reflect::{Reflect, derive::Reflect};
+/// use vc_reflect::Reflect;
 /// use serde::Serialize;
 ///
 /// #[derive(Reflect, Serialize, PartialEq, Debug)]

@@ -10,7 +10,7 @@ use crate::Reflect;
 
 /// A collection of custom attributes for a type, field, or variant.
 ///
-/// These attributes can be created with the [`#[derive(Reflect)]`](crate::derive::Reflect).
+/// These attributes can be created with the [`#[derive(Reflect)]`](crate::Reflect).
 ///
 /// Attributes are stored by their [`TypeId`].
 /// Because of this, there can only be one attribute per type.
@@ -18,7 +18,7 @@ use crate::Reflect;
 /// # Example
 ///
 /// ```
-/// # use vc_reflect::{derive::Reflect, info::{Typed, TypeInfo}};
+/// # use vc_reflect::{Reflect, info::{Typed, TypeInfo}};
 /// #[derive(Reflect)]
 /// #[reflect(@false)]
 /// struct Slider {

@@ -517,7 +517,7 @@ pub trait Enum: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Enum};
+    /// # use vc_reflect::{Reflect, ops::Enum};
     ///
     /// #[derive(Reflect)]
     /// enum Foo {
@@ -539,7 +539,7 @@ pub trait Enum: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Enum};
+    /// # use vc_reflect::{Reflect, ops::Enum};
     ///
     /// #[derive(Reflect)]
     /// enum Foo {
@@ -582,7 +582,7 @@ pub trait Enum: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Enum};
+    /// # use vc_reflect::{Reflect, ops::Enum};
     ///
     /// #[derive(Reflect)]
     /// enum Foo {
@@ -603,7 +603,7 @@ pub trait Enum: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Enum};
+    /// # use vc_reflect::{Reflect, ops::Enum};
     ///
     /// #[derive(Reflect)]
     /// enum Foo {
@@ -629,7 +629,7 @@ pub trait Enum: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Enum};
+    /// # use vc_reflect::{Reflect, ops::Enum};
     ///
     /// #[derive(Reflect)]
     /// #[reflect(type_path = "hello::Foo")]
@@ -653,7 +653,7 @@ pub trait Enum: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Enum};
+    /// # use vc_reflect::{Reflect, ops::Enum};
     ///
     /// #[derive(Reflect)]
     /// enum Foo {
@@ -674,7 +674,7 @@ pub trait Enum: Reflect {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, ops::Enum, info::VariantKind};
+    /// # use vc_reflect::{Reflect, ops::Enum, info::VariantKind};
     ///
     /// #[derive(Reflect)]
     /// enum Foo {

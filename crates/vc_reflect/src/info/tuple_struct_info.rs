@@ -11,7 +11,7 @@ use crate::ops::TupleStruct;
 /// # Examples
 ///
 /// ```rust
-/// use vc_reflect::{derive::Reflect, info::Typed};
+/// use vc_reflect::{Reflect, info::Typed};
 ///
 /// #[derive(Reflect)]
 /// struct A(i32, String);

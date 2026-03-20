@@ -25,7 +25,7 @@ use crate::ops::{ReflectMut, ReflectRef};
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, access::Accessor};
+/// use vc_reflect::{Reflect, access::Accessor};
 ///
 /// #[derive(Reflect)]
 /// struct Foo {
@@ -344,7 +344,7 @@ impl core::error::Error for AccessError<'_> {}
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, access::{Accessor, OffsetAccessor}};
+/// use vc_reflect::{Reflect, access::{Accessor, OffsetAccessor}};
 ///
 /// #[derive(Reflect)]
 /// struct Foo {

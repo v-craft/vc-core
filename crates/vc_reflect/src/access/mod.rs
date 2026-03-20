@@ -38,7 +38,7 @@
 //! `ReflectPathAccess`:
 //!
 //! ```
-//! use vc_reflect::{derive::Reflect, access::ReflectPathAccess};
+//! use vc_reflect::{Reflect, access::ReflectPathAccess};
 //!
 //! #[derive(Reflect)]
 //! struct Foo { id: u32, data: (Vec<u8>, bool) }
@@ -53,7 +53,7 @@
 //! `PathAccessor`:
 //!
 //! ```
-//! use vc_reflect::{derive::Reflect, access::PathAccessor};
+//! use vc_reflect::{Reflect, access::PathAccessor};
 //!
 //! #[derive(Reflect)]
 //! struct Foo { id: u32, data: (Vec<u8>, bool) }

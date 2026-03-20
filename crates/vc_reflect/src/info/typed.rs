@@ -11,7 +11,7 @@ use crate::info::{TypeInfo, TypePath};
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, info::{Typed, TypeInfo}};
+/// use vc_reflect::{Reflect, info::{Typed, TypeInfo}};
 ///
 /// #[derive(Reflect)]
 /// struct A{ /* ... */ }
@@ -28,7 +28,7 @@ use crate::info::{TypeInfo, TypePath};
 ///
 /// ```
 /// use vc_reflect::{
-///     derive::Reflect,
+///     Reflect,
 ///     info::{Typed, TypeInfo, StructInfo, NamedField},
 ///     impls::NonGenericTypeInfoCell
 /// };
@@ -57,7 +57,7 @@ use crate::info::{TypeInfo, TypePath};
 ///
 /// ```
 /// use vc_reflect::{
-///     derive::Reflect, Reflect,
+///     Reflect,
 ///     info::{Typed, TypeInfo, TupleStructInfo, UnnamedField},
 ///     impls::GenericTypeInfoCell
 /// };
@@ -86,7 +86,7 @@ pub trait Typed: TypePath {
     /// # Examples
     ///
     /// ```
-    /// use vc_reflect::{derive::Reflect, info::Typed};
+    /// use vc_reflect::{Reflect, info::Typed};
     /// #[derive(Reflect)]
     /// struct A{ /* ... */ }
     /// let info = <A as Typed>::type_info();
@@ -111,7 +111,7 @@ pub trait DynamicTyped {
     /// # Examples
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, Reflect, info::DynamicTyped};
+    /// # use vc_reflect::{Reflect, info::DynamicTyped};
     /// #[derive(Reflect)]
     /// struct A(u64);
     ///

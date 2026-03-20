@@ -2,7 +2,6 @@ use alloc::boxed::Box;
 use core::any::TypeId;
 
 use crate::Reflect;
-use crate::derive::TypePath;
 use crate::impls::NonGenericTypeInfoCell;
 use crate::info::{OpaqueInfo, TypeInfo, TypePath, Typed};
 use crate::ops::{ApplyError, ReflectCloneError};
@@ -33,7 +32,7 @@ use crate::registry::{ReflectDefault, TypeRegistry};
 ///
 /// ```no_run
 /// # use core::marker::PhantomData;
-/// # use vc_reflect::{derive::Reflect, serde::SkipSerde};
+/// # use vc_reflect::{Reflect, serde::SkipSerde};
 /// #[derive(Reflect)]
 /// struct A<T> {
 ///     #[reflect(@SkipSerde::None)]
@@ -50,7 +49,7 @@ use crate::registry::{ReflectDefault, TypeRegistry};
 ///
 /// ```no_run
 /// # use core::marker::PhantomData;
-/// # use vc_reflect::{derive::Reflect, serde::SkipSerde};
+/// # use vc_reflect::{Reflect, serde::SkipSerde};
 /// #[derive(Reflect)]
 /// #[reflect(default)]
 /// struct A<T> {
@@ -74,7 +73,7 @@ use crate::registry::{ReflectDefault, TypeRegistry};
 /// enum variant directly. The function validates [`Reflect::reflect_clone`] availability in debug builds.
 ///
 /// ```no_run
-/// # use vc_reflect::{derive::Reflect, serde::SkipSerde};
+/// # use vc_reflect::{Reflect, serde::SkipSerde};
 /// #[derive(Reflect)]
 /// struct A {
 ///     text: String,
@@ -201,7 +200,7 @@ mod tests {
     use core::any::TypeId;
 
     use super::SkipSerde;
-    use crate::derive::Reflect;
+    use crate::Reflect;
     use crate::registry::TypeRegistry;
 
     #[derive(Reflect, Default, PartialEq, Debug)]

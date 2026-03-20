@@ -52,3 +52,4 @@ pub mod __macro_exports;
 
 pub use reflection::{FromReflect, Reflect, reflect_hasher};
 pub use vc_reflect_derive as derive;
+pub use vc_reflect_derive::Reflect;

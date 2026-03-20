@@ -262,7 +262,7 @@ impl core::fmt::Debug for TypeMeta {
 /// Use [`#[derive(Reflect)]`](crate::derive::Reflect):
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, registry::GetTypeMeta};
+/// use vc_reflect::{Reflect, registry::GetTypeMeta};
 ///
 /// #[derive(Reflect)]
 /// struct A;

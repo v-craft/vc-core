@@ -275,7 +275,7 @@ impl TypeInfo {
     /// `#[doc = "..."]` attibutes, including `///` syntax.
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, info::Typed};
+    /// # use vc_reflect::{Reflect, info::Typed};
     /// #
     /// /// This is type A.
     /// #[derive(Reflect)]
@@ -294,7 +294,7 @@ impl TypeInfo {
     /// please use syntax `#[reflect(doc = "...")]`.
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, info::Typed};
+    /// # use vc_reflect::{Reflect, info::Typed};
     /// #
     /// /// This is type A.
     /// #[derive(Reflect)]
@@ -314,7 +314,7 @@ impl TypeInfo {
     /// please use the `#[reflect(doc = false)]` tag.
     ///
     /// ```
-    /// # use vc_reflect::{derive::Reflect, info::Typed};
+    /// # use vc_reflect::{Reflect, info::Typed};
     /// #
     /// /// This is type A.
     /// #[derive(Reflect)]

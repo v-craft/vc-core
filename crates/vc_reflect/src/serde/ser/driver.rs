@@ -88,7 +88,7 @@ use crate::registry::{ReflectSerialize, TypeRegistry};
 /// # Examples
 ///
 /// ```
-/// # use vc_reflect::{registry::TypeRegistry, serde::SerializeDriver, derive::Reflect};
+/// # use vc_reflect::{registry::TypeRegistry, serde::SerializeDriver, Reflect};
 /// #[derive(Reflect, PartialEq, Debug)]
 /// struct MyStruct {
 ///   value: i32
@@ -292,7 +292,7 @@ impl<'a, P: SerializeProcessor> Serialize for SerializeDriver<'a, P> {
 /// # Examples
 ///
 /// ```
-/// # use vc_reflect::{registry::TypeRegistry, serde::ReflectSerializeDriver, derive::Reflect};
+/// # use vc_reflect::{registry::TypeRegistry, serde::ReflectSerializeDriver, Reflect};
 /// #[derive(Reflect, PartialEq, Debug)]
 /// #[reflect(type_path = "my_crate::MyStruct")]
 /// struct MyStruct {

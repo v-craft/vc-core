@@ -68,7 +68,7 @@ impl<'a> From<AccessError<'a>> for PathAccessError<'a> {
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, access::PathAccessor};
+/// use vc_reflect::{Reflect, access::PathAccessor};
 ///
 /// #[derive(Reflect)]
 /// struct Foo {
@@ -309,7 +309,7 @@ impl fmt::Display for PathAccessor {
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{derive::Reflect, access::ReflectPathAccess};
+/// use vc_reflect::{Reflect, access::ReflectPathAccess};
 ///
 /// #[derive(Reflect)]
 /// struct Foo {
@@ -489,7 +489,7 @@ impl_reflect_path_access!(dyn Enum);
 #[cfg(test)]
 mod tests {
     use super::{PathAccessError, PathAccessor, ReflectPathAccess};
-    use crate::derive::Reflect;
+    use crate::Reflect;
     use alloc::string::ToString;
     use alloc::vec;
     use alloc::vec::Vec;
