@@ -11,6 +11,7 @@ use crate::component::ComponentId;
 // -----------------------------------------------------------------------------
 // FilterParam
 
+/// Builder for constructing query filter parameters.
 #[derive(Debug, Default, Clone)]
 pub struct FilterParamBuilder {
     // We use BTreeSet to ensure it's ordering.
@@ -61,6 +62,8 @@ impl FilterParamBuilder {
             params.hash(&mut hasher);
             let hash = hasher.finish();
 
+            debug_assert!(params[..with_len].is_sorted() && params[with_len..].is_sorted());
+
             Some(FilterParam {
                 hash,
                 with_len,
@@ -72,6 +75,7 @@ impl FilterParamBuilder {
     }
 }
 
+/// A compact, hashable representation of component filter requirements.
 #[derive(Clone, PartialEq, Eq)]
 pub struct FilterParam {
     hash: u64,
@@ -119,6 +123,7 @@ impl Debug for FilterParam {
     }
 }
 
+/// Tracks access patterns during query construction to detect conflicts.
 #[derive(Default, Clone)]
 pub struct FilterData {
     entity_mut: bool, // holding `EntityMut`
@@ -169,33 +174,62 @@ impl FilterData {
         !self.entity_mut && !self.entity_ref && !self.reading.contains(&id)
     }
 
-    pub fn set_entity_ref(&mut self) {
-        self.entity_ref = true;
-        self.reading = SparseHashSet::new();
-    }
-
-    pub fn set_entity_mut(&mut self) {
-        self.entity_mut = true;
-        // ↓ useless, see `can_entity_mut` .
-        // self.reading = SparseHashSet::new();
-        // self.writing = SparseHashSet::new();
-    }
-
-    pub fn set_reading(&mut self, id: ComponentId) {
-        if !self.entity_ref {
-            self.reading.insert(id);
+    #[must_use]
+    pub fn set_entity_ref(&mut self) -> bool {
+        if self.can_entity_ref() {
+            self.entity_ref = true;
+            self.reading = SparseHashSet::new();
+            true
+        } else {
+            vc_utils::cold_path();
+            false
         }
     }
 
-    pub fn set_writing(&mut self, id: ComponentId) {
-        self.reading.insert(id);
-        self.writing.insert(id);
+    #[must_use]
+    pub fn set_entity_mut(&mut self) -> bool {
+        if self.can_entity_mut() {
+            self.entity_mut = true;
+            self.reading = SparseHashSet::new();
+            self.writing = SparseHashSet::new();
+            true
+        } else {
+            vc_utils::cold_path();
+            false
+        }
     }
 
+    #[must_use]
+    pub fn set_reading(&mut self, id: ComponentId) -> bool {
+        if self.can_reading(id) {
+            if !self.entity_ref {
+                self.reading.insert(id);
+            }
+            true
+        } else {
+            vc_utils::cold_path();
+            false
+        }
+    }
+
+    #[must_use]
+    pub fn set_writing(&mut self, id: ComponentId) -> bool {
+        if self.can_writing(id) {
+            self.reading.insert(id);
+            self.writing.insert(id);
+            true
+        } else {
+            vc_utils::cold_path();
+            false
+        }
+    }
+
+    #[must_use]
     pub fn is_read_only(&self) -> bool {
         self.entity_ref || (!self.entity_mut && self.writing.is_empty())
     }
 
+    #[must_use]
     pub fn parallelizable(&self, other: &Self) -> bool {
         if self.entity_mut || other.entity_mut {
             return false;
@@ -209,12 +243,12 @@ impl FilterData {
         self.writing.is_disjoint(&other.reading) && other.writing.is_disjoint(&self.reading)
     }
 
-    pub fn merge(&mut self, other: &Self) {
-        // self.entity_mut |= other.entity_mut;
-        self.entity_ref |= other.entity_ref;
-        if self.entity_ref {
+    pub fn merge_with(&mut self, other: &Self) {
+        self.entity_mut |= other.entity_mut;
+        self.entity_ref &= other.entity_ref;
+        if self.entity_mut || self.entity_ref {
+            self.writing = SparseHashSet::new();
             self.reading = SparseHashSet::new();
-            // self.writing = SparseHashSet::new();
         } else {
             self.reading.extend(&other.reading);
             self.writing.extend(&other.writing);

@@ -9,8 +9,35 @@ use crate::utils::DebugCheckedUnwrap;
 use crate::world::{EntityOwned, World};
 
 impl World {
-    // We enable inlining to avoid copying data
-    #[inline(always)]
+    /// Spawns a new entity from a bundle and returns an owned handle to it.
+    ///
+    /// This method:
+    /// - Registers the bundle type (if needed).
+    /// - Resolves or creates the matching archetype/table layout.
+    /// - Allocates entity storage and writes all explicit/required components.
+    ///
+    /// The returned [`EntityOwned`] borrows the world and provides convenient
+    /// typed access to the spawned entity.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # use vc_ecs::component::Component;
+    /// #
+    /// # #[derive(Debug, PartialEq, Eq)]
+    /// # struct Foo;
+    /// # #[derive(Debug, PartialEq, Eq)]
+    /// # struct Bar(u64);
+    /// # unsafe impl Component for Foo {}
+    /// # unsafe impl Component for Bar {}
+    /// #
+    /// # let allocator = WorldIdAllocator::new();
+    /// # let mut world = World::new(allocator.alloc());
+    /// let entity = world.spawn((Foo, Bar(123)));
+    /// assert!(entity.contains::<(Foo, Bar)>());
+    /// ```
+    #[inline(always)] // We enable inlining to avoid copying data
     pub fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityOwned<'_> {
         let bundle_id = self.register_bundle::<B>();
 

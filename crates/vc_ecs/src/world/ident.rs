@@ -99,7 +99,7 @@ impl WorldIdAllocator {
         }
     }
 
-    /// Returns the number of IDs that have been allocated.
+    /// Returns how many ids have been handed out so far.
     pub fn count(&self) -> usize {
         self.next.load(Ordering::Relaxed) as usize - 1
     }

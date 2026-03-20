@@ -151,7 +151,7 @@ impl<'s, D: QueryData, F: QueryFilter> Query<'_, 's, D, F> {
         unsafe { QueryIter::new(self.world, self.state, self.last_run, self.this_run) }
     }
 
-    pub fn iter(&mut self) -> QueryIter<'_, 's, D, F>
+    pub fn iter(&self) -> QueryIter<'_, 's, D, F>
     where
         D: ReadOnlyQueryData,
     {

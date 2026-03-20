@@ -18,6 +18,7 @@ use crate::utils::{Cloner, Dropper};
 /// type-erased resource storage. If you override [`Self::CLONER`] or
 /// [`Self::DROPPER`], they must match the implementor's actual layout and drop
 /// behavior.
+#[diagnostic::on_unimplemented(message = "`{Self}` is not a resource", label = "invalid resource")]
 pub unsafe trait Resource: Sized + 'static {
     const MUTABLE: bool = true;
     const CLONER: Option<Cloner> = None;

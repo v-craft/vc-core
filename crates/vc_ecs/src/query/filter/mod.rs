@@ -85,6 +85,21 @@ pub unsafe trait QueryFilter {
     /// This converts the filter into a list of [`FilterParamBuilder`]s that
     /// are used to construct the final query access patterns.
     ///
+    /// # Note
+    ///
+    /// The caller must ensure that [`QueryFilter::build_filter`] is called before
+    /// [`QueryData::build_filter`].
+    ///
+    /// The `out` parameter is a vector where each entry represents one branch of
+    /// an `Or` condition - i.e., multiple alternative paths where satisfying any
+    /// one is sufficient.
+    ///
+    /// For [`QueryFilter::build_filter`] implementations, new branches typically
+    /// need to be added. By default, the input `out` is an empty vector, meaning
+    /// no archetype would satisfy the filter conditions.
+    ///
+    /// [`QueryData::build_filter`]: crate::query::QueryData::build_filter
+    /// 
     /// # Safety
     /// - Must correctly represent all component accesses
     /// - Must not introduce conflicting access patterns

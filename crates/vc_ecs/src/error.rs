@@ -4,17 +4,23 @@ use core::fmt::{Debug, Display};
 use core::ops::{Deref, DerefMut};
 
 use crate::resource::Resource;
+use crate::system::SystemName;
 use crate::tick::Tick;
 use crate::utils::Cloner;
 
 // -----------------------------------------------------------------------------
 // EcsError
 
+/// Convenient result type for ECS operations.
 pub type EcsResult<T> = Result<T, EcsError>;
 
 // -----------------------------------------------------------------------------
 // ECSResult
 
+/// Type-erased ECS error container.
+///
+/// Stores any error that is `Send + Sync + 'static`, making it suitable for
+/// passing across ECS boundaries and into configurable error handlers.
 pub struct EcsError {
     error: Box<dyn Error + Send + Sync + 'static>,
 }
@@ -27,13 +33,17 @@ pub struct EcsError {
 #[non_exhaustive]
 pub enum ErrorContext {
     /// The error occurred in a system.
-    System { name: &'static str, last_run: Tick },
+    ///
+    /// `last_run` is the last known run tick for that system.
+    System { name: SystemName, last_run: Tick },
 }
 
 // -----------------------------------------------------------------------------
 // ErrorHandler
 
-/// Defines how Bevy reacts to errors.
+/// Function signature for ECS error handlers.
+///
+/// Receives the captured error and its execution context.
 pub type ErrorHandler = fn(EcsError, ErrorContext);
 
 // -----------------------------------------------------------------------------
@@ -43,6 +53,10 @@ pub type ErrorHandler = fn(EcsError, ErrorContext);
 // EcsError
 
 impl EcsError {
+    /// Attempts to downcast this error to a concrete error type.
+    ///
+    /// Returns the concrete error on success, or the original [`EcsError`]
+    /// unchanged on failure.
     pub fn downcast<E: Error + 'static>(self) -> Result<E, Self> {
         self.error
             .downcast::<E>()
@@ -50,10 +64,12 @@ impl EcsError {
             .map(|error| *error)
     }
 
+    /// Returns a shared reference to the concrete error type if it matches.
     pub fn downcast_ref<E: Error + 'static>(&self) -> Option<&E> {
         self.error.downcast_ref::<E>()
     }
 
+    /// Returns a mutable reference to the concrete error type if it matches.
     pub fn downcast_mut<E: Error + 'static>(&mut self) -> Option<&mut E> {
         self.error.downcast_mut::<E>()
     }
@@ -104,11 +120,15 @@ impl ErrorContext {
 // ----------------------------------------------------------
 // Handler
 
+/// Resource wrapper holding the active global ECS error handler.
+///
+/// The default handler is `panic`.
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
 pub struct DefaultErrorHandler(pub ErrorHandler);
 
 unsafe impl Resource for DefaultErrorHandler {
+    const MUTABLE: bool = true;
     const CLONER: Option<Cloner> = Some(Cloner::copyable::<Self>());
 }
 

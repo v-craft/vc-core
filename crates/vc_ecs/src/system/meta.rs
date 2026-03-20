@@ -16,6 +16,7 @@ bitflags! {
     }
 }
 
+/// Metadata container for system execution information.
 #[derive(Clone, Copy)]
 pub struct SystemMeta {
     name: SystemName,

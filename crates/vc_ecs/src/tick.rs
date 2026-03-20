@@ -1,15 +1,17 @@
-//! Tick is a timing mechanism in the game world, primarily used for change detection.
+//! Tick is the world timestamp mechanism used primarily for change detection.
 //!
-//! It is a 32-bit integer representing a point in time, can easily overflow
-//! over time and is therefore unsuitable for timeline synchronization. Its main
-//! purpose is to work within the change detection system.
+//! It is a 32-bit integer representing a discrete point in time. Because it can
+//! overflow and wrap around, it is not suitable for timeline synchronization
+//! across different instances.
 //!
-//! The World maintains a dynamically changing `Tick` object `now`, representing
-//! the current moment. When `now` overflows, it wraps around, so we must also
-//! constrain the maximum age difference.
+//! The world maintains a continuously advancing `Tick` named `now` as the current
+//! moment. Since `now` wraps on overflow, we must also cap the maximum observable
+//! age between two ticks.
 //!
-//! We periodically check the Tick markers of all components every `CHECK_CYCLE`
-//! ticks to ensure their "age" does not exceed `MAX_TICK_AGE`.
+//! Every [`CHECK_CYCLE`] ticks, all component/resource tick markers are validated
+//! to ensure their age does not exceed [`MAX_TICK_AGE`]. This can introduce a
+//! periodic pause (roughly every 8 hours), but the work is chunked and spread
+//! across threads, so the runtime impact is typically small.
 
 // -----------------------------------------------------------------------------
 // Configuration
@@ -23,49 +25,103 @@ pub const MAX_TICK_AGE: u32 = u32::MAX - (CHECK_CYCLE << 1) - 1;
 // -----------------------------------------------------------------------------
 // Tick
 
-/// A 32-bit integer representing a discrete point in time
+/// A 32-bit integer representing a discrete time point (or duration).
 ///
-/// Primarily used for change detection mechanisms. Not suitable for timeline
-/// synchronization across different clients, as Tick progression rates cannot
-/// be guaranteed to match between different instances.
+/// Primarily used by change detection to track when components/resources were
+/// inserted or modified.
+///
+/// Not suitable for timeline synchronization between independent clients,
+/// because tick progression rates are not guaranteed to match.
+///
+/// As a 32-bit value, it wraps periodically, so age checks and clamping are
+/// built into the surrounding systems.
+///
+/// *Note* that a system that hasn't been run yet has a `Tick` of 0.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct Tick(u32);
 
 impl Tick {
-    /// Maximum valid Tick value, equivalent to [`MAX_TICK_AGE`]
+    /// Maximum valid tick age, equivalent to [`MAX_TICK_AGE`].
+    ///
+    /// Any tick older than this limit is clamped during world maintenance.
     pub const MAX_AGE: Self = Self::new(MAX_TICK_AGE);
 
-    /// Creates a new `Tick` instance
+    /// Creates a new `Tick`.
+    ///
+    /// # Examples
+    /// ```
+    /// # use vc_ecs::tick::Tick;
+    /// let tick = Tick::new(42);
+    /// ```
     #[inline(always)]
     pub const fn new(tick: u32) -> Self {
         Self(tick)
     }
 
-    /// Retrieves the underlying u32 value
+    /// Returns the underlying `u32` value.
+    ///
+    /// # Examples
+    /// ```
+    /// # use vc_ecs::tick::Tick;
+    /// let tick = Tick::new(42);
+    /// assert_eq!(tick.get(), 42);
+    /// ```
     #[inline(always)]
     pub const fn get(self) -> u32 {
         self.0
     }
 
-    /// Sets the Tick value
+    /// Sets the tick value.
+    ///
+    /// # Examples
+    /// ```
+    /// # use vc_ecs::tick::Tick;
+    /// let mut tick = Tick::new(42);
+    /// tick.set(100);
+    /// assert_eq!(tick.get(), 100);
+    /// ```
     #[inline(always)]
     pub const fn set(&mut self, tick: u32) {
         self.0 = tick;
     }
 
-    /// Calculates the relative age difference from another Tick
+    /// Computes age relative to another tick.
+    ///
+    /// Uses wrapping subtraction so overflow/wrap-around is handled correctly.
+    ///
+    /// # Examples
+    /// ```
+    /// # use vc_ecs::tick::Tick;
+    /// let later = Tick::new(200);
+    /// let earlier = Tick::new(100);
+    /// let age = later.relative_to(earlier);
+    /// assert_eq!(age.get(), 100);
+    /// ```
     #[inline(always)]
     pub const fn relative_to(self, other: Self) -> Self {
         Self(self.0.wrapping_sub(other.0))
     }
 
-    /// Determines whether this Tick is newer than another relative
-    /// to current time
+    /// Returns whether this tick is newer than `other`, relative to `now`.
+    ///
+    /// This is used by change detection: if an update happened after
+    /// `last_run` from the perspective of `this_run` (`now`), it is considered
+    /// changed.
+    ///
+    /// # Examples
+    /// ```
+    /// # use vc_ecs::tick::Tick;
+    /// let tick1 = Tick::new(100);
+    /// let tick2 = Tick::new(200);
+    /// let this_run = Tick::new(500);
+    ///
+    /// assert!(tick2.is_newer_than(tick1, this_run));
+    /// assert!(!tick1.is_newer_than(tick2, this_run));
+    /// ```
     #[inline]
     pub const fn is_newer_than(self, other: Tick, now: Tick) -> bool {
-        // We need this function because `core::cmp::min`
-        // can not be use in const fn.
+        // `core::cmp::min` cannot currently be used in this `const fn`.
         #[inline(always)]
         const fn min(x: u32, y: u32) -> u32 {
             if x < y { x } else { y }
@@ -77,20 +133,9 @@ impl Tick {
         since_system > since_insert
     }
 
-    /// Validates and clamps age relative to current time
-    #[inline]
-    pub const fn check_age(&mut self, now: Tick) -> bool {
-        let age = now.relative_to(*self);
-        // must be `>` instead of `>=`.
-        if age.0 > MAX_TICK_AGE {
-            *self = now.relative_to(Tick::MAX_AGE);
-            true
-        } else {
-            false
-        }
-    }
-
-    /// `fall_back == now.relative_to(Tick::MAX_AGE)`
+    /// Clamps a single tick value if it is older than `MAX_TICK_AGE`.
+    ///
+    /// `fall_back` should be computed as `now.relative_to(Tick::MAX_AGE)`.
     #[inline(always)]
     pub(crate) fn quick_check(&mut self, now: Tick, fall_back: Tick) {
         let age = now.relative_to(*self);
@@ -99,6 +144,7 @@ impl Tick {
         }
     }
 
+    /// Clamps a tick slice, optimized for bulk processing.
     pub(crate) fn slice_check(this: &mut [Tick], now: Tick) {
         // `u32` is more easily optimized by compiler.
         let arr: &mut [u32] = unsafe { core::mem::transmute(this) };
@@ -133,7 +179,12 @@ impl core::fmt::Debug for Tick {
 // -----------------------------------------------------------------------------
 // CheckTicks
 
-/// Event triggered for periodic Tick age validation
+/// Event emitted when periodic tick-age validation should run.
+///
+/// Each time [`World::update_tick`] advances time past [`CHECK_CYCLE`], this
+/// event is triggered to clamp stale change records on resources/components.
+///
+/// [`World::update_tick`]: crate::world::World::update_tick
 #[derive(Debug, Clone, Copy)]
 pub struct CheckTicks(Tick);
 
@@ -152,6 +203,12 @@ impl CheckTicks {
 // -----------------------------------------------------------------------------
 // DetectChanges
 
+/// Change-detection trait for components and resources.
+///
+/// Types implementing this trait can report when they were inserted and when
+/// they were most recently modified.
+///
+/// See [`vc_ecs::borrow`](crate::borrow) for more infomation.
 pub trait DetectChanges {
     /// Returns `true` if this value was added after the system last ran.
     fn is_added(&self) -> bool;
@@ -178,6 +235,18 @@ use vc_ptr::{ThinSlice, ThinSliceMut};
 // -------------------------------------------------------------------
 // TicksRef
 
+/// Immutable references to insertion/change ticks with run context.
+///
+/// Contains immutable references to the added/changed ticks plus the system
+/// run context (`last_run`, `this_run`).
+///
+/// See [`Ref`]/[`Res`]/[`UntypedRef`].
+///
+/// Fields are public for advanced/custom system-parameter use cases.
+///
+/// [`Ref`]: crate::borrow::Ref
+/// [`Res`]: crate::borrow::Res
+/// [`UntypedRef`]: crate::borrow::UntypedRef
 #[derive(Debug, Clone)]
 pub struct TicksRef<'w> {
     // Perhaps we can directly store the value instead of referencing,
@@ -193,6 +262,18 @@ pub struct TicksRef<'w> {
 // -------------------------------------------------------------------
 // TicksMut
 
+/// Mutable references to insertion/change ticks with run context.
+///
+/// Contains mutable references to the added/changed ticks plus the system
+/// run context (`last_run`, `this_run`).
+///
+/// See [`Mut`]/[`ResMut`]/[`UntypedMut`].
+///
+/// Fields are public for advanced/custom system-parameter use cases.
+///
+/// [`Mut`]: crate::borrow::Mut
+/// [`ResMut`]: crate::borrow::ResMut
+/// [`UntypedMut`]: crate::borrow::UntypedMut
 #[derive(Debug)]
 pub struct TicksMut<'w> {
     pub added: &'w mut Tick,
@@ -216,6 +297,17 @@ impl<'w> From<TicksMut<'w>> for TicksRef<'w> {
 // -------------------------------------------------------------------
 // TicksSliceRef
 
+/// Immutable slices of insertion/change ticks with run context.
+///
+/// Contains immutable slices for added/changed ticks plus the system run
+/// context (`last_run`, `this_run`).
+///
+/// See [`SliceRef`]/[`UntypedSliceRef`].
+///
+/// Fields are public for advanced/custom system-parameter use cases.
+///
+/// [`SliceRef`]: crate::borrow::SliceRef
+/// [`UntypedSliceRef`]: crate::borrow::UntypedSliceRef
 #[derive(Debug, Clone)]
 pub struct TicksSliceRef<'w> {
     pub length: usize,
@@ -228,6 +320,17 @@ pub struct TicksSliceRef<'w> {
 // -------------------------------------------------------------------
 // TicksSliceMut
 
+/// Mutable slices of insertion/change ticks with run context.
+///
+/// Contains mutable slices for added/changed ticks plus the system run
+/// context (`last_run`, `this_run`).
+///
+/// See [`SliceMut`]/[`UntypedSliceMut`].
+///
+/// Fields are public for advanced/custom system-parameter use cases.
+///
+/// [`SliceMut`]: crate::borrow::SliceMut
+/// [`UntypedSliceMut`]: crate::borrow::UntypedSliceMut
 #[derive(Debug)]
 pub struct TicksSliceMut<'w> {
     pub length: usize,

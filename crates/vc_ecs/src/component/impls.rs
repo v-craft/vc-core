@@ -27,6 +27,10 @@ use crate::utils::{Cloner, Dropper};
 /// - Violation of thread safety guarantees
 /// - Incorrect component versioning and tick tracking
 /// - Undefined behavior in component cloning and mutation
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a component",
+    label = "invalid component"
+)]
 pub unsafe trait Component: Sized + Send + Sync + 'static {
     const STORAGE: ComponentStorage = ComponentStorage::Dense;
     const MUTABLE: bool = true;

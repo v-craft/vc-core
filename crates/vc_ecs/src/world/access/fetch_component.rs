@@ -9,9 +9,56 @@ use crate::storage::{TableId, TableRow};
 use crate::tick::Tick;
 use crate::world::UnsafeWorld;
 
+/// Generic component fetch contract used by entity and query accessors.
+///
+/// Implementations define how a fetch pattern is materialized for a single
+/// entity/table row under the current world/tick context.
+///
+/// # Note
+///
+/// - If you fetch `&mut T`, the target is marked as changed immediately.
+/// - If you fetch `Mut<T>`, the changed flag is deferred until you obtain an
+///   inner mutable borrow. If you never borrow mutably, it is not marked changed.
+///
+/// # Examples
+///
+/// ```ignore
+/// # use vc_ecs::borrow::{Mut, Ref};
+/// # use vc_ecs::world::EntityMut;
+/// # struct Foo;
+/// # struct Bar;
+/// # struct Baz;
+/// let entity: EntityMut<'_> = todo!();
+///
+/// // Fetch one component.
+/// let ret: Option<&Foo> = entity.fetch::<&Foo>();
+///
+/// // Fetch multiple components.
+/// let ret: Option<(&Bar, &mut Baz)> = entity.fetch::<(&Bar, &mut Baz)>();
+/// let ret: Option<(Ref<Bar>, Mut<Baz>)> = entity.fetch::<(Ref<Bar>, Mut<Baz>)>();
+/// // Missing any required component returns `None`.
+///
+/// // If there are optional components, use `Option` wrapper:
+/// let ret: Option<(&Foo, Option<&mut Bar>)> = entity.fetch::<(&Foo, Option<&mut Bar>)>();
+/// // If `Bar` does not exist, only the optional part is `None`.
+///
+/// // Note that obtaining two mutable references to the same component is feasible,
+/// // but this violates Rust aliasing requirements. Do not do this:
+/// let ret: Option<(&mut Foo, &mut Foo)> = entity.fetch::<(&mut Foo, &mut Foo)>();
+/// ```
 pub unsafe trait FetchComponents {
+    /// The fetched output type.
     type Item<'a>;
 
+    /// Fetches components for one entity according to the implementor pattern.
+    ///
+    /// `mutable` indicates whether mutable access is allowed by the caller
+    /// (for example, `EntityRef` passes `false`, `EntityMut` passes `true`).
+    ///
+    /// # Safety
+    /// The caller must ensure that `world`, `entity`, `table_id`, and
+    /// `table_row` describe a valid and coherent location, and that borrow/
+    /// aliasing rules for the requested mutability are upheld.
     unsafe fn fetch<'a>(
         mutable: bool,
         world: UnsafeWorld<'a>,
@@ -193,6 +240,7 @@ macro_rules! impl_tuple {
     (0: []) => {};
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         unsafe impl<$name: FetchComponents> FetchComponents for ($name,) {
             type Item<'a> = (<$name>::Item<'a>,);
 

@@ -108,12 +108,7 @@ unsafe impl<T: Component> QueryData for Ref<'_, T> {
     }
 
     unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool {
-        if out.can_reading(*state) {
-            out.set_reading(*state);
-            true
-        } else {
-            false
-        }
+        out.set_reading(*state)
     }
 
     unsafe fn set_for_arche<'w>(
@@ -260,12 +255,7 @@ unsafe impl<T: Component> QueryData for Mut<'_, T> {
     }
 
     unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool {
-        if out.can_writing(*state) {
-            out.set_writing(*state);
-            true
-        } else {
-            false
-        }
+        out.set_writing(*state)
     }
 
     unsafe fn set_for_arche<'w>(

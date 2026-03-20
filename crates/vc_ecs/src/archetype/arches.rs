@@ -242,6 +242,17 @@ impl ArcheFilter<'_> {
     /// This narrows down the candidate set to only archetypes that include
     /// this component. If the component doesn't exist in any archetype,
     /// the filter becomes empty (no matches possible).
+    ///
+    /// # Behavior
+    /// - If this is the first `with` constraint, initializes the candidate set
+    ///   with all archetypes containing this component (minus any already excluded)
+    /// - If there are existing `with` constraints, intersects the current
+    ///   candidate set with archetypes containing this component
+    /// - Automatically excludes any archetypes already in the `without` set
+    ///
+    /// # Performance
+    /// O(1) for the initial constraint, O(n) for subsequent constraints where
+    /// n is the size of the current candidate set.
     pub fn with(&mut self, id: ComponentId) {
         if let Some(set) = self.arches.component_map.get(id.index()) {
             if let Some(with) = &mut self.with {
@@ -259,6 +270,17 @@ impl ArcheFilter<'_> {
     /// Adds a requirement that archetypes must NOT contain the specified component.
     ///
     /// This excludes all archetypes that include this component from the results.
+    ///
+    /// # Behavior
+    /// - Adds all archetypes containing this component to the exclusion set
+    /// - If there's an existing candidate set (`with`), removes any excluded
+    ///   archetypes from it immediately
+    /// - Multiple `without` constraints are cumulative (union of exclusions)
+    ///
+    /// # Performance
+    /// O(n) where n is the number of archetypes containing this component,
+    /// plus O(m) for filtering existing candidates where m is the size of
+    /// the current candidate set.
     pub fn without(&mut self, id: ComponentId) {
         if let Some(set) = self.arches.component_map.get(id.index()) {
             self.without.extend(set.iter());
@@ -268,6 +290,11 @@ impl ArcheFilter<'_> {
         }
     }
 
+    /// Collects matching archetypes into a set of [`StorageId`]s keyed by archetype.
+    ///
+    /// This method populates the provided set with storage IDs for all archetypes
+    /// that satisfy the current filter constraints. Each storage ID contains the
+    /// archetype ID of a matching archetype.
     pub fn collect_arche(self, set: &mut BTreeSet<StorageId>) {
         if let Some(with) = self.with {
             with.into_iter().for_each(|item| {
@@ -283,6 +310,11 @@ impl ArcheFilter<'_> {
         }
     }
 
+    /// Collects matching archetypes into a set of [`StorageId`]s keyed by table.
+    ///
+    /// Unlike [`collect_arche`](Self::collect_arche), this method groups results by
+    /// their table IDs. This is useful for operations that work at the table level
+    /// rather than the archetype level.
     pub fn collect_table(self, set: &mut BTreeSet<StorageId>) {
         let arches = self.arches;
         if let Some(with) = self.with {

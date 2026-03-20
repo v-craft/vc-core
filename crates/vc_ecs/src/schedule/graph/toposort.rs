@@ -69,7 +69,7 @@ impl<N: GraphNode> DiGraph<N> {
     /// ["Finding all the elementary circuits of a directed graph"][1] by D. B. Johnson.
     ///
     /// [1]: https://doi.org/10.1137/0204007
-    pub fn simple_cycles_in_component(&self, scc: &[N]) -> Vec<Vec<N>> {
+    fn simple_cycles_in_component(&self, scc: &[N]) -> Vec<Vec<N>> {
         let mut cycles: Vec<Vec<N>> = Vec::new();
 
         let mut sccs: Vec<Vec<N>> = Vec::new();

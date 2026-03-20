@@ -149,9 +149,7 @@ impl<const DIRECTED: bool, N: GraphNode> Graph<DIRECTED, N> {
             return;
         };
 
-        let links = links.into_iter().map(N::Link::into);
-
-        links.into_iter().for_each(|(to, dir)| {
+        links.into_iter().map(N::Link::into).for_each(|(to, dir)| {
             let (edge, rdir) = if dir == Outgoing {
                 (Self::edge_key(n, to), Incoming)
             } else {
@@ -251,46 +249,6 @@ impl<const DIRECTED: bool, N: GraphNode> Graph<DIRECTED, N> {
         iter.copied()
             .map(N::Link::into)
             .filter_map(move |(n, d)| (!DIRECTED || d == dir || n == a).then_some(n))
-    }
-
-    pub fn try_convert<T>(self) -> Result<Graph<DIRECTED, T>, N::Error>
-    where
-        N: TryInto<T>,
-        T: GraphNode,
-    {
-        // Converts the node key and every adjacency list entry from `N` to `T`.
-        fn try_convert_node<N: GraphNode + TryInto<T>, T: GraphNode>(
-            (key, links): (N, Vec<N::Link>),
-        ) -> Result<(T, Vec<T::Link>), N::Error> {
-            let key = key.try_into()?;
-            let links = links
-                .into_iter()
-                .map(|link| {
-                    let (id, dir) = link.into();
-                    Ok(T::Link::from((id.try_into()?, dir)))
-                })
-                .collect::<Result<_, N::Error>>()?;
-            Ok((key, links))
-        }
-        // Unpacks the edge pair, converts the nodes from `N` to `T`, and repacks them.
-        fn try_convert_edge<N: GraphNode + TryInto<T>, T: GraphNode>(
-            edge: N::Edge,
-        ) -> Result<T::Edge, N::Error> {
-            let (a, b) = edge.into();
-            Ok(T::Edge::from((a.try_into()?, b.try_into()?)))
-        }
-
-        let nodes = self
-            .nodes
-            .into_iter()
-            .map(try_convert_node::<N, T>)
-            .collect::<Result<_, N::Error>>()?;
-        let edges = self
-            .edges
-            .into_iter()
-            .map(try_convert_edge::<N, T>)
-            .collect::<Result<_, N::Error>>()?;
-        Ok(Graph { nodes, edges })
     }
 
     pub(super) fn to_index(&self, ix: N) -> usize {

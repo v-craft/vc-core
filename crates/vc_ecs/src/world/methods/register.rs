@@ -6,16 +6,41 @@ use crate::resource::{Resource, ResourceId};
 use crate::world::World;
 
 impl World {
+    /// Registers a resource type and returns its [`ResourceId`].
+    ///
+    /// If the type has already been registered, the existing id is returned.
+    ///
+    /// When you already have `&mut World`, this is a convenient alternative to
+    /// [`Resources::get_id`].
+    ///
+    /// This only registers metadata and allocates an id. It does not allocate
+    /// storage; storage is prepared lazily when the resource is inserted.
+    ///
+    /// [`Resources::get_id`]: crate::resource::Resources::get_id
     #[inline]
     pub fn register_resource<T: Resource>(&mut self) -> ResourceId {
         self.resources.register::<T>()
     }
 
+    /// Registers a component type and returns its [`ComponentId`].
+    ///
+    /// If the type has already been registered, the existing id is returned.
+    ///
+    /// When you already have `&mut World`, this is a convenient alternative to
+    /// [`Components::get_id`].
+    ///
+    /// This only registers metadata and allocates an id. It does not allocate
+    /// storage; storage is prepared lazily during entity insertion.
+    ///
+    /// [`Components::get_id`]: crate::component::Components::get_id
     #[inline]
     pub fn register_component<T: Component>(&mut self) -> ComponentId {
         self.components.register::<T>()
     }
 
+    /// Ensures storage slots exist for a resource id.
+    ///
+    /// If the storage has already been prepared, this is a no-op.
     #[inline]
     pub fn prepare_resource(&mut self, id: ResourceId) {
         if let Some(info) = self.resources.get(id) {
@@ -23,6 +48,13 @@ impl World {
         }
     }
 
+    /// Ensures storage slots exist for a component id.
+    ///
+    /// If the storage has already been prepared, this is a no-op.
+    ///
+    /// At present, this is mainly useful for sparse components, because sparse
+    /// storage maps are allocated per component type. Dense components are
+    /// allocated per table (component set), so this call has no direct effect.
     #[inline]
     pub fn prepare_component(&mut self, id: ComponentId) {
         if let Some(info) = self.components.get(id) {
@@ -30,6 +62,9 @@ impl World {
         }
     }
 
+    /// Registers a bundle type and returns its [`BundleId`].
+    ///
+    /// This is called automatically by entity spawning APIs.
     #[inline]
     pub fn register_bundle<T: Bundle>(&mut self) -> BundleId {
         if let Some(id) = self.bundles.get_id_by_type(TypeId::of::<T>()) {

@@ -5,10 +5,24 @@ use crate::system::SystemParam;
 use crate::world::{UnsafeWorld, World};
 
 impl World {
+    /// Creates a fresh [`QueryState`] from query parameters.
+    ///
+    /// This function does **not** cache the query state as a world resource.
+    /// Use this when you want one-off query setup without persistent caching.
     pub fn query_state<D: QueryData, F: QueryFilter>(&mut self) -> QueryState<D, F> {
         <QueryState<D, F>>::new(self)
     }
 
+    /// Returns a cached [`QueryState`] resource, creating it if missing.
+    ///
+    /// [`World::query`] and [`World::query_with`] call this automatically to
+    /// avoid repeated initialization and archetype-filter setup costs.
+    ///
+    /// If you do not want caching, use [`World::query_state`] for ad-hoc
+    /// query construction.
+    ///
+    /// Note: when `Query` is used as a system parameter, its query state is
+    /// stored on the system instance, not in [`World`].
     pub fn cache_query_state<D: QueryData + 'static, F: QueryFilter + 'static>(
         &mut self,
     ) -> &mut QueryState<D, F> {
@@ -22,6 +36,9 @@ impl World {
         }
     }
 
+    /// Clears a cached query state created by [`World::cache_query_state`].
+    ///
+    /// If no such cached state exists, this is a no-op.
     pub fn clear_query_state<D: QueryData + 'static, F: QueryFilter + 'static>(&mut self) {
         let type_id = TypeId::of::<QueryState<D, F>>();
         if let Some(id) = self.resources.get_id(type_id)
@@ -33,6 +50,27 @@ impl World {
         }
     }
 
+    /// Creates a cached query with no filter.
+    ///
+    /// This is shorthand for `query_with::<D, ()>()`. Internally, it updates a
+    /// cached [`QueryState`] before constructing the runtime query parameter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::component::Component;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # #[derive(Debug)]
+    /// # struct Foo;
+    /// # unsafe impl Component for Foo {}
+    /// #
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// world.spawn(Foo);
+    /// world.spawn(Foo);
+    ///
+    /// let query = world.query::<&Foo>();
+    /// assert_eq!(query.into_iter().count(), 2);
+    /// ```
     pub fn query<D: QueryData + 'static>(&mut self) -> Query<'_, '_, D> {
         let world: UnsafeWorld<'_> = self.unsafe_world();
         let state = unsafe { world.full_mut().cache_query_state::<D, ()>() };
@@ -44,6 +82,34 @@ impl World {
         unsafe { <Query<D> as SystemParam>::get_param(world, state, last_run, this_run) }
     }
 
+    /// Creates a cached query with an explicit filter.
+    ///
+    /// Use this when you need conditional matching (`With`, `Without`, `And`,
+    /// `Or`, etc.) in addition to the query data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::component::Component;
+    /// # use vc_ecs::query::With;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # #[derive(Debug)]
+    /// # struct Foo;
+    /// # #[derive(Debug)]
+    /// # struct Bar(u64);
+    /// # unsafe impl Component for Foo {}
+    /// # unsafe impl Component for Bar {}
+    /// #
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// world.spawn((Foo, Bar(1)));
+    /// world.spawn(Bar(2));
+    ///
+    /// let query = world.query_with::<&Bar, With<Foo>>();
+    /// assert_eq!(query.into_iter().count(), 1);
+    /// for bar in query {
+    ///     assert_eq!(bar.0, 1);
+    /// }
+    /// ```
     pub fn query_with<D: QueryData + 'static, F: QueryFilter + 'static>(
         &mut self,
     ) -> Query<'_, '_, D, F> {

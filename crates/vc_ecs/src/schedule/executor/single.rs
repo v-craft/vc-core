@@ -52,10 +52,8 @@ impl SystemExecutor for SingleThreadedExecutor {
             let name = system.name();
             let func = AssertUnwindSafe(|| unsafe {
                 if let Err(e) = system.run((), world.unsafe_world()) {
-                    let ctx = ErrorContext::System {
-                        name: name.as_str(),
-                        last_run: system.get_last_run(),
-                    };
+                    let last_run = system.get_last_run();
+                    let ctx = ErrorContext::System { name, last_run };
                     handler(e, ctx);
                 }
             });

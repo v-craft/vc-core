@@ -1,3 +1,8 @@
+//! World runtime and entry-point APIs.
+//!
+//! This module defines the central [`World`] type, world identifiers, low-level
+//! access wrappers, and high-level mutation/query methods.
+
 // -----------------------------------------------------------------------------
 // Modules
 

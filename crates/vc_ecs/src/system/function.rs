@@ -1,6 +1,6 @@
 use super::{AccessTable, System, SystemFlags, SystemIn, SystemMeta};
 use crate::error::EcsError;
-use crate::system::{SystemName, UninitSystemError};
+use crate::system::{IntoSystem, SystemName, UninitSystemError};
 use crate::tick::Tick;
 use crate::world::{World, WorldId};
 
@@ -327,4 +327,15 @@ fn invalid_system_access(name: SystemName) -> ! {
 #[inline(never)]
 fn mismatched_world(name: SystemName, init: WorldId, run: WorldId) -> ! {
     panic!("System {name} is initialized in world {init}, but runs in world {run}.")
+}
+
+// -----------------------------------------------------------------------------
+// FunctionSystem
+
+impl<M: 'static, F: SystemFunction<M>> IntoSystem<F::Input, F::Output, M> for F {
+    type System = FunctionSystem<M, F>;
+
+    fn into_system(this: Self, name: SystemName) -> Self::System {
+        FunctionSystem::new(this, name)
+    }
 }

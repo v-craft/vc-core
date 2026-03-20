@@ -1,3 +1,11 @@
+//! Scheduling and system execution pipeline.
+//!
+//! This module contains:
+//! - schedule labels and schedule collections,
+//! - dependency graph utilities,
+//! - system ordering/concurrency planning,
+//! - executor backends (single-threaded and multi-threaded).
+
 // -----------------------------------------------------------------------------
 // Modules
 
@@ -6,18 +14,19 @@ mod graph;
 mod label;
 mod schedule;
 mod schedules;
+mod system;
 
 // -----------------------------------------------------------------------------
 // Exports
 
 pub use executor::{ExecutorKind, MainThreadExecutor, SystemExecutor};
 pub use executor::{MultiThreadedExecutor, SingleThreadedExecutor};
-pub use graph::{Dag, DagAnalysis, DagGroups, DiGraph, ToposortError, UnGraph};
-pub use graph::{DagCrossDependencyError, DagOverlappingGroupError, DagRedundancyError};
+pub use graph::{Dag, DiGraph, ToposortError, UnGraph};
 pub use graph::{Direction, Graph, GraphNode, SccIterator, SccNodes};
 pub use label::{InternedScheduleLabel, ScheduleLabel};
-pub use schedule::{Schedule, SystemKey, SystemObject, SystemSchedule};
+pub use schedule::{Schedule, SystemSchedule};
 pub use schedules::Schedules;
+pub use system::{SystemKey, SystemObject, UnitSystem};
 
 // -----------------------------------------------------------------------------
 // Tests
@@ -27,7 +36,7 @@ mod tests {
     use super::*;
     use crate::component::{Component, ComponentStorage};
     use crate::query::{And, Or, With, Without};
-    use crate::system::{FunctionSystem, SystemName};
+    use crate::system::{IntoSystem, SystemName};
     use crate::world::{World, WorldIdAllocator};
     use alloc::boxed::Box;
     use alloc::string::String;
@@ -75,9 +84,9 @@ mod tests {
         let mut world = alloc_world();
         let mut schedules = Schedules::new();
         let name = SystemName::new("spawn_entities");
-        let system = FunctionSystem::new(spawn_entities, name);
+        let system = IntoSystem::into_system(spawn_entities, name);
 
-        schedules.insert_system(Testing, name, system);
+        schedules.insert_system(Testing, Box::new(system));
         schedules.entry(Testing).run(&mut world);
 
         let query =

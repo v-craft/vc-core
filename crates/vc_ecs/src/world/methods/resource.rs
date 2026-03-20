@@ -28,8 +28,24 @@ impl World {
     /// Inserts or replaces a `Send` resource and returns a mutable reference to it.
     ///
     /// The resource is registered by type on first use. Once inserted, it can be
-    /// accessed from systems through [`crate::borrow::Res`],
-    /// [`crate::borrow::ResRef`], or [`crate::borrow::ResMut`].
+    /// accessed from systems through [`Res`], [`ResRef`], or [`ResMut`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Counter(u64);
+    /// unsafe impl Resource for Counter {}
+    ///
+    /// assert_eq!(*world.insert_resource(Counter(1)), Counter(1));
+    /// assert_eq!(*world.insert_resource(Counter(2)), Counter(2));
+    /// assert_eq!(world.get_resource::<Counter>(), Some(&Counter(2)));
+    /// ```
+    ///
+    /// [`Res`]: crate::borrow::Res
     pub fn insert_resource<T: Resource + Send>(&mut self, value: T) -> &mut T {
         let id = self.resources.register::<T>();
         vc_ptr::into_owning!(value);
@@ -37,6 +53,21 @@ impl World {
     }
 
     /// Removes and returns a `Send` resource if it exists.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Foo;
+    /// unsafe impl Resource for Foo {}
+    ///
+    /// world.insert_resource(Foo);
+    /// assert_eq!(world.remove_resource::<Foo>(), Some(Foo));
+    /// assert_eq!(world.remove_resource::<Foo>(), None);
+    /// ```
     pub fn remove_resource<T: Resource + Send>(&mut self) -> Option<T> {
         if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get_mut(id)
@@ -50,6 +81,21 @@ impl World {
     /// Drop a `Send` resource if it exists.
     ///
     /// This will be faster than removing, as there is no need to return data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug)]
+    /// struct Temp;
+    /// unsafe impl Resource for Temp {}
+    ///
+    /// world.insert_resource(Temp);
+    /// world.drop_resource::<Temp>();
+    /// assert!(world.get_resource::<Temp>().is_none());
+    /// ```
     pub fn drop_resource<T: Resource + Send>(&mut self) {
         if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get_mut(id)
@@ -60,7 +106,21 @@ impl World {
 
     /// Returns a shared reference to a `Send + Sync` resource without change detection.
     ///
-    /// This mirrors the behavior of the [`crate::borrow::Res`] system parameter.
+    /// This mirrors the behavior of the [`Res`](crate::borrow::Res) system parameter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Bar(u64);
+    /// unsafe impl Resource for Bar {}
+    ///
+    /// world.insert_resource(Bar(20));
+    /// assert_eq!(world.get_resource::<Bar>(), Some(&Bar(20)));
+    /// ```
     pub fn get_resource<T: Resource + Sync>(&self) -> Option<&T> {
         if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get(id)
@@ -75,7 +135,24 @@ impl World {
 
     /// Returns a shared resource borrow with change detection.
     ///
-    /// This mirrors the behavior of the [`crate::borrow::ResRef`] system parameter.
+    /// This mirrors the behavior of the [`ResRef`] system parameter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::tick::DetectChanges;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Bar(u64);
+    /// unsafe impl Resource for Bar {}
+    ///
+    /// world.insert_resource(Bar(20));
+    /// let res = world.get_resource_ref::<Bar>().unwrap();
+    /// assert!(res.is_added());
+    /// assert!(res.is_changed());
+    /// ```
     pub fn get_resource_ref<T: Resource + Sync>(&self) -> Option<ResRef<'_, T>> {
         if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get(id)
@@ -91,7 +168,24 @@ impl World {
 
     /// Returns an exclusive resource borrow with change detection.
     ///
-    /// This mirrors the behavior of the [`crate::borrow::ResMut`] system parameter.
+    /// This mirrors the behavior of the [`ResMut`] system parameter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::tick::DetectChanges;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Bar(u64);
+    /// unsafe impl Resource for Bar {}
+    ///
+    /// world.insert_resource(Bar(20));
+    /// let mut res = world.get_resource_mut::<Bar>().unwrap();
+    /// *res = Bar(50);
+    /// assert!(res.is_changed());
+    /// ```
     pub fn get_resource_mut<T: Resource + Send>(&mut self) -> Option<ResMut<'_, T>> {
         if let Some(id) = self.resources.get_id(TypeId::of::<T>())
             && let Some(data) = self.storages.res.get_mut(id)
@@ -110,6 +204,20 @@ impl World {
     /// Unlike [`World::insert_resource`], this accepts `!Sync` values. Access to the
     /// resource is restricted to the thread that created the world.
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct LocalCache(u64);
+    /// unsafe impl Resource for LocalCache {}
+    ///
+    /// world.insert_non_send(LocalCache(1));
+    /// assert_eq!(world.get_non_send::<LocalCache>(), Some(&LocalCache(1)));
+    /// ```
+    ///
     /// # Panics
     /// Panics if called from a thread other than the world's main thread.
     pub fn insert_non_send<T: Resource>(&mut self, value: T) -> &mut T {
@@ -126,6 +234,21 @@ impl World {
     }
 
     /// Removes and returns a main-thread resource if it exists.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Foo;
+    /// unsafe impl Resource for Foo {}
+    ///
+    /// world.insert_non_send(Foo);
+    /// assert_eq!(world.remove_non_send::<Foo>(), Some(Foo));
+    /// assert_eq!(world.remove_non_send::<Foo>(), None);
+    /// ```
     ///
     /// # Panics
     /// Panics if called from a thread other than the world's main thread.
@@ -148,6 +271,21 @@ impl World {
     ///
     /// This will be faster than removing, as there is no need to return data.
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug)]
+    /// struct LocalTemp;
+    /// unsafe impl Resource for LocalTemp {}
+    ///
+    /// world.insert_non_send(LocalTemp);
+    /// world.drop_non_send::<LocalTemp>();
+    /// assert!(world.get_non_send::<LocalTemp>().is_none());
+    /// ```
+    ///
     /// # Panics
     /// Panics if called from a thread other than the world's main thread.
     pub fn drop_non_send<T: Resource>(&mut self) {
@@ -164,6 +302,20 @@ impl World {
     }
 
     /// Returns a shared reference to a main-thread resource without change detection.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Bar(u64);
+    /// unsafe impl Resource for Bar {}
+    ///
+    /// world.insert_non_send(Bar(99));
+    /// assert_eq!(world.get_non_send::<Bar>(), Some(&Bar(99)));
+    /// ```
     ///
     /// # Panics
     /// Panics if called from a thread other than the world's main thread.
@@ -186,7 +338,24 @@ impl World {
 
     /// Returns a shared main-thread resource borrow with change detection.
     ///
-    /// This mirrors the behavior of the [`crate::borrow::NonSendRef`] system parameter.
+    /// This mirrors the behavior of the [`NonSendRef`] system parameter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::tick::DetectChanges;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Bar(u64);
+    /// unsafe impl Resource for Bar {}
+    ///
+    /// world.insert_non_send(Bar(7));
+    /// let res = world.get_non_send_ref::<Bar>().unwrap();
+    /// assert!(res.is_added());
+    /// assert!(res.is_changed());
+    /// ```
     ///
     /// # Panics
     /// Panics if called from a thread other than the world's main thread.
@@ -210,7 +379,24 @@ impl World {
 
     /// Returns an exclusive main-thread resource borrow with change detection.
     ///
-    /// This mirrors the behavior of the [`crate::borrow::NonSendMut`] system parameter.
+    /// This mirrors the behavior of the [`NonSendMut`] system parameter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::resource::Resource;
+    /// # use vc_ecs::tick::DetectChanges;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// #[derive(Debug, PartialEq, Eq)]
+    /// struct Bar(u64);
+    /// unsafe impl Resource for Bar {}
+    ///
+    /// world.insert_non_send(Bar(7));
+    /// let mut res = world.get_non_send_mut::<Bar>().unwrap();
+    /// *res = Bar(8);
+    /// assert!(res.is_changed());
+    /// ```
     ///
     /// # Panics
     /// Panics if called from a thread other than the world's main thread.

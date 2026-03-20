@@ -8,6 +8,12 @@ use vc_utils::hash::FixedHashState;
 // -----------------------------------------------------------------------------
 // SystemName
 
+/// A unique identifier for a system.
+///
+/// `SystemName` provides an efficient, hashable representation of system names
+/// for use in debugging, scheduling, and system identification. It precomputes
+/// a hash using a fixed seed, making it suitable for use in hash maps and sets
+/// without runtime hashing overhead.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SystemName {
     name: &'static str,
@@ -21,6 +27,7 @@ impl Hash for SystemName {
 }
 
 impl SystemName {
+    /// Creates a new `SystemName` from a static string.
     pub fn new(name: &'static str) -> Self {
         Self {
             name,
@@ -28,6 +35,7 @@ impl SystemName {
         }
     }
 
+    /// Returns the underlying static string slice.
     pub fn as_str(&self) -> &'static str {
         self.name
     }

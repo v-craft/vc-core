@@ -1,10 +1,11 @@
-use alloc::boxed::Box;
-
 use vc_utils::hash::HashMap;
 
-use super::{InternedScheduleLabel, Schedule, ScheduleLabel};
+use super::{InternedScheduleLabel, Schedule, ScheduleLabel, UnitSystem};
 use crate::resource::Resource;
-use crate::system::{IntoSystem, SystemName};
+use crate::system::SystemName;
+
+// -----------------------------------------------------------------------------
+// Schedules
 
 pub struct Schedules {
     mapper: HashMap<InternedScheduleLabel, Schedule>,
@@ -29,7 +30,6 @@ impl Schedules {
         self.mapper.insert(schedule.label(), schedule)
     }
 
-    /// Removes the schedule corresponding to the `label` from the map, returning it if it existed.
     pub fn remove(&mut self, label: impl ScheduleLabel) -> Option<Schedule> {
         self.mapper.remove(&label.intern())
     }
@@ -71,18 +71,21 @@ impl Schedules {
             .map(|(label, schedule)| (&**label, schedule))
     }
 
-    pub fn insert_system(
-        &mut self,
-        label: impl ScheduleLabel,
-        name: SystemName,
-        system: impl IntoSystem<(), ()>,
-    ) -> &mut Self {
-        self.entry(label)
-            .insert(name, Box::new(IntoSystem::into_system(system)));
-
-        self
+    /// Insert a system to specific schedule.
+    ///
+    /// - If the System does not already exist, return `true`.
+    /// - If the System already exist, overwrite it and return `false`.
+    ///
+    /// # Panic
+    /// Panic if the number of systems in target schedule exceed `u16::MAX`.
+    pub fn insert_system(&mut self, label: impl ScheduleLabel, system: UnitSystem) -> bool {
+        self.entry(label).insert(system.name(), system)
     }
 
+    /// Insert a system from specific schedule.
+    ///
+    /// - If the System does not already exist, return `false`.
+    /// - If the System already exist, remove it and return `true`.
     pub fn remove_system(&mut self, label: impl ScheduleLabel, name: SystemName) -> bool {
         self.entry(label).remove(name)
     }

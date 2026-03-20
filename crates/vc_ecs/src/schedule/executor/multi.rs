@@ -19,14 +19,14 @@ use crate::world::{UnsafeWorld, World};
 // State
 
 struct ExecutorState {
-    incoming: Vec<u32>,
-    ready_systems: VecDeque<u32>,
+    incoming: Vec<u16>,
+    ready_systems: VecDeque<u16>,
 }
 
 /// Runs the schedule using multi-threads.
 pub struct MultiThreadedExecutor {
     state: Mutex<ExecutorState>,
-    completed: ListQueue<u32>,
+    completed: ListQueue<u16>,
     panic_payload: Mutex<Option<Box<dyn Any + Send>>>,
 }
 
@@ -35,7 +35,7 @@ struct Context<'scope, 'env, 'sys> {
     world: UnsafeWorld<'env>,
     executor: &'env MultiThreadedExecutor,
     systems: &'sys [SyncUnsafeCell<SystemObject>],
-    outgoing: &'sys [Vec<u32>],
+    outgoing: &'sys [Vec<u16>],
     scope: &'scope Scope<'scope, 'env, ()>,
     error_handler: fn(EcsError, ErrorContext),
 }
@@ -65,7 +65,7 @@ impl ExecutorState {
         self.ready_systems.clear();
         self.incoming.iter().enumerate().for_each(|(idx, &num)| {
             if num == 0 {
-                self.ready_systems.push_back(idx as u32);
+                self.ready_systems.push_back(idx as u16);
             }
         });
     }
@@ -101,7 +101,7 @@ impl<'scope, 'env: 'scope, 'sys: 'scope> Context<'scope, 'env, 'sys> {
 
     fn push_completed_system(
         &self,
-        system_index: u32,
+        system_index: u16,
         result: Result<(), Box<dyn Any + Send>>,
         _system: &UnitSystem,
     ) {
@@ -117,7 +117,7 @@ impl<'scope, 'env: 'scope, 'sys: 'scope> Context<'scope, 'env, 'sys> {
         self.tick();
     }
 
-    fn handle_completed_system(&self, state: &mut ExecutorState, system_index: u32) {
+    fn handle_completed_system(&self, state: &mut ExecutorState, system_index: u16) {
         let index = system_index as usize;
         self.outgoing[index].iter().for_each(|&to| {
             let to_index = to as usize;
@@ -135,7 +135,7 @@ impl<'scope, 'env: 'scope, 'sys: 'scope> Context<'scope, 'env, 'sys> {
         });
     }
 
-    fn spawn_system_task(&self, system_index: u32) {
+    fn spawn_system_task(&self, system_index: u16) {
         let system = &mut unsafe { &mut *self.systems[system_index as usize].get() }.system;
         let non_send = system.is_non_send();
         let name = system.name();
@@ -144,10 +144,8 @@ impl<'scope, 'env: 'scope, 'sys: 'scope> Context<'scope, 'env, 'sys> {
         let task = async move {
             let func = AssertUnwindSafe(|| unsafe {
                 if let Err(e) = system.run((), context.world) {
-                    let ctx = ErrorContext::System {
-                        name: name.as_str(),
-                        last_run: system.get_last_run(),
-                    };
+                    let last_run = system.get_last_run();
+                    let ctx = ErrorContext::System { name, last_run };
                     (context.error_handler)(e, ctx);
                 }
             });

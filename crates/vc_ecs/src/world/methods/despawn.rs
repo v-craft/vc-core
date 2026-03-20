@@ -3,6 +3,36 @@ use crate::utils::DebugCheckedUnwrap;
 use crate::world::World;
 
 impl World {
+    /// Despawns an entity and removes all of its components.
+    ///
+    /// This operation:
+    /// - Marks the entity as despawned in the entity registry.
+    /// - Removes the entity row from its archetype and table.
+    /// - Drops sparse-component values associated with that entity.
+    /// - Fixes moved-entity locations caused by swap-remove operations.
+    /// - Releases the entity id back to the allocator.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EntityError`] if the entity is invalid or is not currently
+    /// spawned in this world.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::component::Component;
+    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # #[derive(Debug)]
+    /// # struct Foo;
+    /// # unsafe impl Component for Foo {}
+    /// #
+    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// let entity = world.spawn(Foo).entity();
+    /// assert!(world.despawn(entity).is_ok());
+    ///
+    /// // Despawning the same entity again returns an error.
+    /// assert!(world.despawn(entity).is_err());
+    /// ```
     pub fn despawn(&mut self, entity: Entity) -> Result<(), EntityError> {
         let location = unsafe { self.entities.set_despawned(entity)? };
 

@@ -11,6 +11,10 @@ pub use alloc::boxed::Box;
 // -----------------------------------------------------------------------------
 // Internable
 
+/// A value that can be interned into a stable `'static` reference.
+///
+/// Implementations define how values are leaked, how pointer-level equality is
+/// checked, and how pointer identity is hashed.
 pub trait Internable: Hash + Eq + 'static {
     /// Creates a static reference to `self`, possibly leaking memory.
     fn leak(&self) -> &'static Self;
@@ -23,6 +27,14 @@ pub trait Internable: Hash + Eq + 'static {
 // -----------------------------------------------------------------------------
 // Interned
 
+/// A lightweight handle to an interned value.
+///
+/// This type is primarily used by Label implementations:
+/// - It stores a canonical `'static` reference, so cloning is just copying a pointer.
+/// - Equality and hashing use identity semantics through
+///   [`Internable::ref_eq`] and [`Internable::ref_hash`].
+///
+/// Equivalent label values resolve to the same interned instance.
 pub struct Interned<T: ?Sized + Internable>(pub &'static T);
 
 impl<T: ?Sized + Internable> Copy for Interned<T> {}
@@ -68,8 +80,13 @@ impl<T: ?Sized + Internable> From<&Interned<T>> for Interned<T> {
 }
 
 // -----------------------------------------------------------------------------
-// Interned
+// Interner
 
+/// Thread-safe interner for values implementing [`Internable`].
+///
+/// In the Label system, this is used to canonicalize dynamic labels into
+/// unique `'static` references, enabling fast comparisons, stable hashing,
+/// and cheap copies via [`Interned<T>`].
 pub struct Interner<T: ?Sized + 'static>(RwLock<HashSet<&'static T>>);
 
 impl<T: ?Sized> Interner<T> {
@@ -86,11 +103,11 @@ impl<T: ?Sized> Default for Interner<T> {
 }
 
 impl<T: ?Sized + Internable> Interner<T> {
-    /// Return the [`Interned<T>`] corresponding to `value`.
+    /// Returns the [`Interned<T>`] corresponding to `value`.
     ///
-    /// If it is called the first time for `value`, it will possibly leak the value and return an
-    /// [`Interned<T>`] using the obtained static reference. Subsequent calls for the same `value`
-    /// will return [`Interned<T>`] using the same static reference.
+    /// On first encounter, the value may be leaked to obtain a stable `'static`
+    /// reference. Subsequent calls with an equivalent value return an
+    /// [`Interned<T>`] backed by the same reference.
     pub fn intern(&self, value: &T) -> Interned<T> {
         {
             let set = self.0.read().unwrap_or_else(PoisonError::into_inner);
@@ -112,11 +129,15 @@ impl<T: ?Sized + Internable> Interner<T> {
 // -----------------------------------------------------------------------------
 // Dyn Hash/Eq
 
+/// Type-erased equality for label trait objects.
 pub trait DynEq: Any {
+    /// Compares two dynamic values for equality.
     fn dyn_eq(&self, other: &dyn DynEq) -> bool;
 }
 
+/// Type-erased hashing for label trait objects.
 pub trait DynHash: Any {
+    /// Hashes this dynamic value into the provided hasher.
     fn dyn_hash(&self, state: &mut dyn Hasher);
 }
 
@@ -140,6 +161,23 @@ impl<T: Any + Hash> DynHash for T {
 // -----------------------------------------------------------------------------
 // Label
 
+/// Defines a label trait and its global interner.
+///
+/// This macro generates:
+/// - A trait with dynamic clone and intern support.
+/// - An implementation for [`Interned<dyn Trait>`]-style values.
+/// - Dynamic `Eq`/`Hash` behavior for the trait object.
+/// - A static [`Interner`] used by `intern()`.
+///
+/// The 2-argument form creates a trait with only the default methods.
+/// The extended form accepts additional trait methods and an implementation
+/// block for `Interned<dyn Trait>`.
+///
+/// For example, [`ScheduleLabel`] is a trait with multiple concrete
+/// implementations. Using [`Interned`] gives each label value a canonical
+/// `'static` reference and ensures each distinct logical value is stored once.
+///
+/// [`ScheduleLabel`]: crate::schedule::ScheduleLabel
 #[macro_export]
 macro_rules! define_label {
     (
@@ -168,12 +206,10 @@ macro_rules! define_label {
 
             $($trait_extra_methods)*
 
-            /// Clones this `
-            #[doc = stringify!($label_trait_name)]
-            ///`.
+            #[doc = concat!("Clones this `", stringify!($label_trait_name), "`.")]
             fn dyn_clone(&self) -> $crate::label::Box<dyn $label_trait_name>;
 
-            /// Returns an [`Interned`] value corresponding to `self`.
+            /// Returns the canonical interned handle corresponding to `self`.
             fn intern(&self) -> $crate::label::Interned<dyn $label_trait_name>
             where
                 Self: Sized
@@ -196,13 +232,13 @@ macro_rules! define_label {
             }
         }
 
-        impl PartialEq for dyn $label_trait_name {
+        impl ::core::cmp::PartialEq for dyn $label_trait_name {
             fn eq(&self, other: &Self) -> bool {
                 self.dyn_eq(other)
             }
         }
 
-        impl Eq for dyn $label_trait_name {}
+        impl ::core::cmp::Eq for dyn $label_trait_name {}
 
         impl ::core::hash::Hash for dyn $label_trait_name {
             fn hash<H: ::core::hash::Hasher>(&self, state: &mut H) {
@@ -216,22 +252,21 @@ macro_rules! define_label {
             }
 
             fn ref_eq(&self, other: &Self) -> bool {
-                use ::core::ptr;
+                let x_ptr = ::core::ptr::from_ref::<Self>(self);
+                let y_ptr = ::core::ptr::from_ref::<Self>(other);
 
                 // Test that both the type id and pointer address are equivalent.
-                self.type_id() == other.type_id()
-                    && ptr::addr_eq(ptr::from_ref::<Self>(self), ptr::from_ref::<Self>(other))
+                self.type_id() == other.type_id() && ::core::ptr::addr_eq(x_ptr, y_ptr)
             }
 
             fn ref_hash<H: ::core::hash::Hasher>(&self, state: &mut H) {
-                use ::core::hash::Hash;
-
                 // Hash the type id...
-                self.type_id().hash(state);
+                ::core::hash::Hash::hash(&self.type_id(), state);
 
                 // ...and the pointer address.
                 // Cast to a unit `()` first to discard any pointer metadata.
-                ::core::ptr::from_ref::<Self>(self).cast::<()>().hash(state);
+                let ptr = ::core::ptr::from_ref::<Self>(self) as *const ();
+                ::core::hash::Hash::hash(&ptr, state);
             }
         }
 
@@ -276,7 +311,7 @@ mod tests {
 
     #[test]
     fn fieldless_enum() {
-        #[derive(PartialEq, Eq, Hash, Debug, Clone)]
+        #[derive(PartialEq, Eq, Hash, Debug)]
         pub enum A {
             X,
             Y,
@@ -300,8 +335,10 @@ mod tests {
         }
 
         let interner = Interner::default();
-        let x = interner.intern(&A::X);
+        let x1 = interner.intern(&A::X);
+        let x2 = interner.intern(&A::X);
         let y = interner.intern(&A::Y);
-        assert_ne!(x, y);
+        assert_ne!(x1, y);
+        assert_eq!(x1, x2);
     }
 }

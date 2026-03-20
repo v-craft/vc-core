@@ -1,5 +1,21 @@
+/// Trait for types that can be used as system inputs.
+///
+/// `SystemInput` defines how input values are passed into systems and how they
+/// can be composed. It separates the "borrowed" form (`Data`) used during system
+/// execution from the "owned" form (`Item`) used for storage and wrapping.
+///
+/// # Implementations
+///
+/// The crate provides implementations for:
+/// - Unit type `()` (no input)
+/// - [`In<T>`] for owned values
+/// - [`InRef<'_, T>`] for shared references
+/// - [`InMut<'_, T>`] for mutable references
+/// - Tuples of types that implement `SystemInput` (up to 12 elements)
 pub trait SystemInput: Sized {
+    /// The borrowed data type passed to system execution.  
     type Data<'i>;
+    /// The wrapper type that implements `SystemInput` for storage.
     type Item<'i>: SystemInput;
 
     fn wrap(this: Self::Data<'_>) -> Self::Item<'_>;

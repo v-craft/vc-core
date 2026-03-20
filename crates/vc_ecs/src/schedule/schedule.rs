@@ -9,45 +9,12 @@ use fixedbitset::FixedBitSet;
 use slotmap::{SecondaryMap, SlotMap};
 use vc_utils::hash::{HashMap, HashSet, NoOpHashMap};
 
-use super::{Dag, InternedScheduleLabel, SystemExecutor};
-use super::{Direction, GraphNode};
-use super::{ExecutorKind, MultiThreadedExecutor, ScheduleLabel, SingleThreadedExecutor};
+use super::{Dag, SystemKey, SystemObject, UnitSystem};
+use super::{ExecutorKind, MultiThreadedExecutor, SingleThreadedExecutor};
+use super::{InternedScheduleLabel, ScheduleLabel, SystemExecutor};
 use crate::error::DefaultErrorHandler;
-use crate::system::{AccessTable, System, SystemName};
+use crate::system::SystemName;
 use crate::world::World;
-
-// -----------------------------------------------------------------------------
-// SystemKey
-
-slotmap::new_key_type! {
-    pub struct SystemKey;
-}
-
-impl GraphNode for SystemKey {
-    type Link = (SystemKey, Direction);
-    type Edge = (SystemKey, SystemKey);
-}
-
-// -----------------------------------------------------------------------------
-// SystemObject
-
-type UnitSystem = Box<dyn System<Input = (), Output = ()>>;
-
-/// A bundle of `Box<dyn System>` and it's `AccessTable`.
-pub struct SystemObject {
-    pub system: UnitSystem,
-    pub access: AccessTable,
-}
-
-impl SystemObject {
-    #[inline]
-    pub fn new_uninit(system: UnitSystem) -> Self {
-        Self {
-            system,
-            access: AccessTable::new(),
-        }
-    }
-}
 
 // -----------------------------------------------------------------------------
 // Schedule
@@ -106,8 +73,8 @@ struct ConflictTable {
 pub struct SystemSchedule {
     pub keys: Vec<SystemKey>,
     pub systems: Vec<SystemObject>,
-    pub incoming: Vec<u32>,
-    pub outgoing: Vec<Vec<u32>>,
+    pub incoming: Vec<u16>,
+    pub outgoing: Vec<Vec<u16>>,
 }
 
 // -----------------------------------------------------------------------------
@@ -298,57 +265,33 @@ impl Schedule {
         let buffer = &mut self.buffer;
         let schedule = &mut self.schedule;
         let conflict = &mut self.conflict;
-        let ordering = &mut self.ordering.ordering;
-
+        let ordering = &mut self.ordering;
         assert!(schedule.keys.is_empty() && schedule.systems.is_empty());
         assert!(schedule.outgoing.is_empty() && schedule.incoming.is_empty());
 
-        let mut exec_dag = ordering.clone();
-        let old_topo = ordering.toposort().unwrap();
+        let mut dag = transitive_reduction(conflict, ordering);
 
-        let mut is_exclusive = FixedBitSet::with_capacity(old_topo.len());
-        for (idx, &key) in old_topo.iter().enumerate() {
-            if conflict.is_exclusive(key) {
-                is_exclusive.insert(idx);
-            }
-        }
-
-        // `deref_mut` will modify `is_dirty` field, so we cache it.
-        let digraph = exec_dag.graph_mut();
-        for (idx_a, &key_a) in old_topo.iter().enumerate() {
-            let a_is_exclusive = unsafe { is_exclusive.contains_unchecked(idx_a) };
-            for (idx_b, &key_b) in old_topo[0..idx_a].iter().enumerate() {
-                if a_is_exclusive
-                    || unsafe { is_exclusive.contains_unchecked(idx_b) }
-                    || conflict.is_conflict(key_a, key_b)
-                {
-                    digraph.insert_edge(key_a, key_b);
-                }
-            }
-        }
-
-        schedule.keys.extend(exec_dag.toposort().unwrap());
+        schedule.keys.extend(dag.toposort().unwrap());
         let topo: &[SystemKey] = &schedule.keys;
-        assert!(topo.len() < u32::MAX as usize, "too many systems");
 
         schedule
             .systems
             .extend(topo.iter().map(|&key| buffer.take_system(key)));
-
-        let mut index_map: HashMap<SystemKey, usize> = HashMap::with_capacity(topo.len());
-        topo.iter().enumerate().for_each(|(idx, &key)| {
-            index_map.insert(key, idx);
-        });
+        debug_assert_eq!(schedule.keys.len(), schedule.systems.len());
 
         schedule.incoming.resize(topo.len(), 0);
         schedule.outgoing.resize(topo.len(), Vec::new());
 
-        let reduced = exec_dag.transitive_reduction(topo, &index_map);
+        let mut indices: HashMap<SystemKey, usize> = HashMap::with_capacity(topo.len());
         topo.iter().enumerate().for_each(|(idx, &key)| {
-            reduced.neighbors(key).for_each(|to| {
-                let neighbor_index = index_map[&to];
+            indices.insert(key, idx);
+        });
+
+        topo.iter().enumerate().for_each(|(idx, &key)| {
+            dag.neighbors(key).for_each(|to| {
+                let neighbor_index = indices[&to];
                 schedule.incoming[neighbor_index] += 1;
-                schedule.outgoing[idx].push(neighbor_index as u32);
+                schedule.outgoing[idx].push(neighbor_index as u16);
             });
         });
     }
@@ -424,7 +367,7 @@ impl Schedule {
         true
     }
 
-    pub fn insert(&mut self, name: SystemName, system: UnitSystem) {
+    pub fn insert(&mut self, name: SystemName, system: UnitSystem) -> bool {
         if !self.is_changed {
             self.recycle_schedule();
             self.is_changed = true;
@@ -434,11 +377,17 @@ impl Schedule {
             log::info!("Insert system {} repeatedly.", system.name());
             self.buffer.remove(key);
             self.buffer.insert(key, system);
+            let len = self.allocator.names.len();
+            assert!(len <= u16::MAX as usize, "too many systems in a schedule");
+            false
         } else {
             let key = self.allocator.insert(name);
             self.buffer.insert(key, system);
             self.ordering.insert_node(key);
-        };
+            let len = self.allocator.names.len();
+            assert!(len <= u16::MAX as usize, "too many systems in a schedule");
+            true
+        }
     }
 
     pub fn insert_order(&mut self, before: SystemName, after: SystemName) -> bool {
@@ -490,4 +439,69 @@ impl Schedule {
     pub fn order_graph(&self) -> &Dag<SystemKey> {
         &self.ordering.ordering
     }
+}
+
+fn transitive_reduction(conflict: &ConflictTable, ordering: &mut OrderingGraph) -> Dag<SystemKey> {
+    const fn bind_index(row: usize, col: usize) -> usize {
+        // 0
+        // 1 2
+        // 3 4 5
+        ((row * (row + 1)) >> 1) + col
+    }
+
+    let (topo, graph) = ordering.ordering.toposort_and_graph().unwrap();
+    debug_assert!(topo.len() <= u16::MAX as usize);
+    if topo.is_empty() {
+        return Dag::new();
+    }
+
+    let mut exec_dag = graph.clone();
+    let mut index_map = HashMap::<SystemKey, usize>::with_capacity(topo.len());
+    index_map.extend(topo.iter().enumerate().map(|(idx, &key)| (key, idx)));
+
+    let system_count = topo.len();
+    let mut exclusive_systems = FixedBitSet::with_capacity(system_count);
+    let matrix_size = system_count * (system_count + 1) / 2;
+    let mut transitive_closure = FixedBitSet::with_capacity(matrix_size);
+    topo.iter().enumerate().for_each(|(ib, &kb)| {
+        let b_is_exclusive = conflict.is_exclusive(kb);
+        if b_is_exclusive {
+            unsafe {
+                exclusive_systems.insert_unchecked(ib);
+            }
+        }
+
+        exec_dag.neighbors(kb).for_each(|km| {
+            let im = *index_map.get(&km).unwrap();
+            unsafe {
+                transitive_closure.insert_unchecked(bind_index(im, ib));
+            }
+        });
+
+        topo[0..ib].iter().enumerate().rev().for_each(|(ia, &ka)| {
+            let matrix_index = bind_index(ia, ib);
+            if unsafe { transitive_closure.contains_unchecked(matrix_index) } {
+                return;
+            }
+
+            if b_is_exclusive
+                || unsafe { exclusive_systems.contains_unchecked(ia) }
+                || conflict.is_conflict(ka, kb)
+            {
+                unsafe {
+                    transitive_closure.insert_unchecked(matrix_index);
+                }
+                let is_unreachable = exec_dag.neighbors(kb).all(|km| {
+                    let im = *index_map.get(&km).unwrap();
+                    unsafe { !transitive_closure.contains_unchecked(bind_index(im, ib)) }
+                });
+
+                if is_unreachable {
+                    exec_dag.insert_edge(ka, kb);
+                }
+            }
+        });
+    });
+
+    exec_dag.into()
 }

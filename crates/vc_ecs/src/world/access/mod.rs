@@ -1,3 +1,11 @@
+//! Low-level world access adapters.
+//!
+//! These types expose entity-centric and pointer-centric access paths used by
+//! query/system internals:
+//! - [`UnsafeWorld`]: unchecked world handle with explicit safety contracts,
+//! - [`EntityOwned`]/[`EntityRef`]/[`EntityMut`]: entity views,
+//! - [`GetComponents`]/[`FetchComponents`]: generic component access traits.
+
 // -----------------------------------------------------------------------------
 // Modules
 

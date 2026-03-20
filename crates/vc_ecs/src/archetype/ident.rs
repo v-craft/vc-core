@@ -6,12 +6,13 @@ use vc_utils::num::NonMaxU32;
 // -----------------------------------------------------------------------------
 // ArcheId
 
-/// Unique identifier for a Archetype.
+/// Unique identifier for an archetype.
 #[derive(Copy, Clone, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct ArcheId(NonMaxU32);
 
 impl ArcheId {
+    /// Id of the empty archetype (no components).
     pub const EMPTY: ArcheId = ArcheId(NonMaxU32::ZERO);
 
     #[inline(always)]
@@ -71,7 +72,7 @@ impl PartialEq for ArcheId {
 impl Eq for ArcheId {}
 
 // -----------------------------------------------------------------------------
-// ArcheId
+// ArcheRow
 
 /// Row position within a table.
 ///

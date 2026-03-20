@@ -89,6 +89,20 @@ pub unsafe trait QueryData {
     /// describe which components are accessed. These parameters are used by the
     /// query planner to construct efficient access patterns.
     ///
+    /// # Note
+    ///
+    /// The caller must ensure that [`QueryFilter::build_filter`] is called before
+    /// [`QueryData::build_filter`].
+    ///
+    /// The `out` parameter is a vector where each entry represents one branch of
+    /// an `Or` condition - i.e., multiple alternative paths where satisfying any
+    /// one is sufficient.
+    ///
+    /// For [`QueryData::build_filter`], no new branches need to be created; instead,
+    /// constraints are added to each existing branch.
+    ///
+    /// [`QueryFilter::build_filter`]: crate::query::QueryFilter::build_filter
+    ///
     /// # Safety
     /// - Must correctly represent all component accesses
     /// - Must not introduce conflicting access patterns

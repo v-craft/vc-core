@@ -3,6 +3,11 @@
 
 use vc_ptr::OwningPtr;
 
+/// Type-erased drop function wrapper for values stored behind [`OwningPtr`].
+///
+/// `Dropper` stores a monomorphized function pointer that can drop a value of a
+/// specific type `T` from an erased pointer. It is typically used in storage
+/// internals where concrete types are not known at call sites.
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
 pub struct Dropper {
@@ -10,8 +15,10 @@ pub struct Dropper {
 }
 
 impl Dropper {
+    /// Drops a value of type `T` from an erased owning pointer.
+    ///
     /// # Safety
-    /// - `ptr` point to valid data.
+    /// - `ptr` must point to a valid initialized value of type `T`.
     unsafe fn drop_fn<T>(ptr: OwningPtr<'_>) {
         ptr.debug_assert_aligned::<T>();
         unsafe {
@@ -19,6 +26,10 @@ impl Dropper {
         }
     }
 
+    /// Creates a [`Dropper`] for `T` if `T` needs drop.
+    ///
+    /// Returns `None` for trivially droppable types, allowing callers to skip
+    /// storing or invoking unnecessary drop callbacks.
     pub const fn of<T>() -> Option<Dropper> {
         if ::core::mem::needs_drop::<T>() {
             Some(Dropper {
@@ -29,8 +40,11 @@ impl Dropper {
         }
     }
 
+    /// Invokes the stored drop function on `ptr`.
+    ///
     /// # Safety
-    /// Ensure by caller.
+    /// The caller must ensure `ptr` points to a valid initialized value of the
+    /// exact type this [`Dropper`] was created for.
     #[inline(always)]
     pub unsafe fn call(self, ptr: OwningPtr<'_>) {
         unsafe {

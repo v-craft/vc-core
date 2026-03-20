@@ -97,12 +97,7 @@ unsafe impl QueryData for EntityRef<'_> {
     unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
 
     unsafe fn build_target(_state: &Self::State, out: &mut FilterData) -> bool {
-        if out.can_entity_ref() {
-            out.set_entity_ref();
-            true
-        } else {
-            false
-        }
+        out.set_entity_ref()
     }
 
     unsafe fn set_for_arche<'w>(
@@ -163,12 +158,7 @@ unsafe impl QueryData for EntityMut<'_> {
     unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
 
     unsafe fn build_target(_state: &Self::State, out: &mut FilterData) -> bool {
-        if out.can_entity_mut() {
-            out.set_entity_mut();
-            true
-        } else {
-            false
-        }
+        out.set_entity_mut()
     }
 
     unsafe fn set_for_arche<'w>(

@@ -6,6 +6,7 @@ use vc_utils::hash::NoOpHashMap;
 use super::{FilterData, FilterParam};
 use crate::resource::ResourceId;
 
+/// Tracks access patterns for system execution and conflict detection.
 #[derive(Default)]
 pub struct AccessTable {
     world_mut: bool,          // holding `&mut world`
@@ -87,6 +88,7 @@ impl AccessTable {
             self.world_mut = true;
             true
         } else {
+            vc_utils::cold_path();
             false
         }
     }
@@ -99,6 +101,7 @@ impl AccessTable {
             }
             true
         } else {
+            vc_utils::cold_path();
             false
         }
     }
@@ -118,6 +121,7 @@ impl AccessTable {
             }
             true
         } else {
+            vc_utils::cold_path();
             false
         }
     }
@@ -129,6 +133,7 @@ impl AccessTable {
             self.res_writing.grow_and_insert(index);
             true
         } else {
+            vc_utils::cold_path();
             false
         }
     }
@@ -156,7 +161,7 @@ impl AccessTable {
             if !self.world_ref {
                 params.iter().for_each(|param| {
                     if let Some(item) = self.filter.get_mut(param) {
-                        item.merge(data);
+                        item.merge_with(data);
                     } else {
                         self.filter.insert(param.clone(), data.clone());
                     }
@@ -189,5 +194,26 @@ impl AccessTable {
                 }
             })
         })
+    }
+
+    pub fn merge(mut self, other: Self) -> Self {
+        self.world_mut |= other.world_mut;
+        self.world_ref &= other.world_ref;
+        if self.world_mut || self.world_ref {
+            self.res_reading = FixedBitSet::new();
+            self.res_writing = FixedBitSet::new();
+            self.filter = NoOpHashMap::new();
+        } else {
+            self.res_reading.union_with(&other.res_reading);
+            self.res_writing.union_with(&other.res_writing);
+            other.filter.into_iter().for_each(|(param, data)| {
+                if let Some(item) = self.filter.get_mut(&param) {
+                    item.merge_with(&data);
+                } else {
+                    self.filter.insert(param, data);
+                }
+            });
+        }
+        self
     }
 }

@@ -16,11 +16,20 @@ use crate::tick::{TicksSliceMut, TicksSliceRef};
 /// A thin shared reference to a `Send + Sync` resource.
 ///
 /// This is the lightweight resource view used when a system only needs immutable
-/// access and does not need change detection. It is also returned by
-/// [`crate::world::World::get_resource`].
+/// access and does not need change detection.
 ///
-/// Prefer [`ResRef`] when you need to inspect whether the resource changed since
-/// the last system run.
+/// Prefer [`ResRef`] if you need change-detection metadata.
+///
+/// # Examples
+///
+/// ```ignore
+/// #[derive(Resource)]
+/// struct Logger { /* ... */ }
+///
+/// fn system_a(logger: Res<Logger>) {
+///     // ......
+/// }
+/// ```
 pub struct Res<'w, T: Resource + Sync> {
     pub(crate) value: &'w T,
 }
@@ -31,7 +40,23 @@ pub struct Res<'w, T: Resource + Sync> {
 /// A shared reference to a `Send + Sync` resource with change detection.
 ///
 /// This is the read-only resource parameter for systems that need change ticks,
-/// or the wrapper returned by [`crate::world::World::get_resource_ref`].
+/// or the wrapper returned by [`World::get_resource_ref`].
+///
+/// [`World::get_resource_ref`]: crate::world::World::get_resource_ref
+///
+/// # Examples
+///
+/// As system parameter:
+///
+/// ```ignore
+/// #[derive(Resource)]
+/// struct Logger { /* ... */ }
+///
+/// fn system_a(logger: ResRef<Logger>) {
+///     println!("is changed? {}", logger.is_changed());
+///     // ......
+/// }
+/// ```
 pub struct ResRef<'w, T: Resource + Sync> {
     pub(crate) value: &'w T,
     pub(crate) ticks: TicksRef<'w>,
@@ -43,9 +68,26 @@ pub struct ResRef<'w, T: Resource + Sync> {
 /// An exclusive reference to a `Send` resource with change detection.
 ///
 /// This is the mutable resource parameter for systems and the wrapper returned by
-/// [`crate::world::World::get_resource_mut`]. Mutable access participates in the
-/// ECS borrow rules, so no other system can read or write the same resource at
-/// the same time.
+/// [`World::get_resource_mut`]. Mutable access participates in the ECS borrow rules,
+/// so no other system can read or write the same resource at the same time.
+///
+/// [`World::get_resource_mut`]: crate::world::World::get_resource_mut
+///
+/// # Examples
+///
+/// As system parameter:
+///
+/// ```ignore
+/// #[derive(Resource)]
+/// struct Logger { /* ... */ }
+///
+/// fn system_a(logger: ResMut<Logger>) {
+///     // After obtaining mutable reference,
+///     // the resource will be marked as changed.
+///     let _: &mut Logger = logger;
+///     assert!(logger.is_changed());
+/// }
+/// ```
 pub struct ResMut<'w, T: Resource + Send> {
     pub(crate) value: &'w mut T,
     pub(crate) ticks: TicksMut<'w>,
@@ -58,6 +100,23 @@ pub struct ResMut<'w, T: Resource + Send> {
 ///
 /// `NonSend` parameters can only be fetched on the world's main thread. Use this
 /// variant when immutable access is enough and change detection is not needed.
+///
+/// Note: This can also be used for `Sync` resources, but it is slower than [`Res`].
+///
+/// # Examples
+///
+/// As system parameter:
+///
+/// ```ignore
+/// // A !Sync Resource
+/// #[derive(Resource)]
+/// struct Inputs { /* ... */ }
+///
+/// fn system_a(inputs: NonSend<Inputs>) {
+///     // Then this system can only be run in main thread.
+///     // ......
+/// }
+/// ```
 pub struct NonSend<'w, T: Resource> {
     pub(crate) value: &'w T,
 }
@@ -69,6 +128,24 @@ pub struct NonSend<'w, T: Resource> {
 ///
 /// This behaves like [`ResRef`] but marks the containing system as main-thread
 /// only.
+///
+/// Note: This can also be used for `Sync` resources, but it is slower than [`ResRef`].
+///
+/// # Examples
+///
+/// As system parameter:
+///
+/// ```ignore
+/// // A !Sync Resource
+/// #[derive(Resource)]
+/// struct Inputs { /* ... */ }
+///
+/// fn system_a(inputs: NonSendRef<Inputs>) {
+///     // Then this system can only be run in main thread.
+///     println!("is changed? {}", inputs.is_changed());
+///     // ......
+/// }
+/// ```
 pub struct NonSendRef<'w, T: Resource> {
     pub(crate) value: &'w T,
     pub(crate) ticks: TicksRef<'w>,
@@ -81,6 +158,25 @@ pub struct NonSendRef<'w, T: Resource> {
 ///
 /// This mutable view is restricted to the main thread and prevents any concurrent
 /// access to the same resource while the system runs.
+///
+/// Note: This can also be used for `Send` resources, but it is slower than [`ResMut`].
+///
+/// # Examples
+///
+/// As system parameter:
+///
+/// ```ignore
+/// // A !Send Resource
+/// #[derive(Resource)]
+/// struct Inputs { /* ... */ }
+///
+/// fn system_a(inputs: NonSendMut<Inputs>) {
+///     // After obtaining mutable reference,
+///     // the resource will be marked as changed.
+///     let _: &mut Inputs = inputs;
+///     assert!(inputs.is_changed());
+/// }
+/// ```
 pub struct NonSendMut<'w, T: Resource> {
     pub(crate) value: &'w mut T,
     pub(crate) ticks: TicksMut<'w>,
@@ -92,6 +188,33 @@ pub struct NonSendMut<'w, T: Resource> {
 /// A generic shared reference to a component or resource.
 ///
 /// Provides read-only access with change detection.
+///
+/// Returned by [`EntityRef::get`]/[`EntityRef::fetch`] or the iterator
+/// of [`Query`].
+///
+/// [`Query`]: crate::query::Query
+/// [`EntityRef::get`]: crate::world::EntityRef::get
+/// [`EntityRef::fetch`]: crate::world::EntityRef::fetch
+///
+/// # Examples
+///
+/// As system parameter:
+///
+/// ```ignore
+/// #[derive(Component)]
+/// struct Foo { /* ... */ }
+///
+/// #[derive(Component)]
+/// struct Bar { /* ... */ }
+///
+/// fn system_a(query: Query<(&Foo, Ref<Bar>)>) {
+///     query.into_iter().for_each(|(foo, bar)|{
+///         // foo is `&Foo`, a thin reference, without change detection.
+///         // bar is `Ref<Bar>`, a reference wrapper, with change detection.
+///         let _: bool = bar.is_changed();
+///     })
+/// }
+/// ```
 pub struct Ref<'w, T: ?Sized> {
     pub(crate) value: &'w T,
     pub(crate) ticks: TicksRef<'w>,
@@ -103,17 +226,52 @@ pub struct Ref<'w, T: ?Sized> {
 /// A generic exclusive reference to a component or resource.
 ///
 /// Provides mutable access with change detection.
+///
+/// Returned by [`EntityMut::get_mut`]/[`EntityMut::fetch`] or the iterator
+/// of [`Query`].
+///
+/// [`Query`]: crate::query::Query
+/// [`EntityMut::get_mut`]: crate::world::EntityMut::get_mut
+/// [`EntityMut::fetch`]: crate::world::EntityMut::fetch
+///
+/// # Examples
+///
+/// As system parameter:
+///
+/// ```ignore
+/// #[derive(Component)]
+/// struct Foo { /* ... */ }
+///
+/// #[derive(Component)]
+/// struct Bar { /* ... */ }
+///
+/// fn system_a(query: Query<(&mut Foo, Mut<Bar>)>) {
+///     query.into_iter().for_each(|(foo, bar)|{
+///         // foo is `&mut Foo`, a thin reference. It is marked as changed
+///         // as soon as the mutable borrow is obtained.
+///
+///         // bar is `Mut<Bar>`, a reference wrapper, with change detection.
+///         // The change flag is not set until you dereference mutably.
+///         let _: bool = bar.is_changed(); // true or false
+///         // Set the changed flag by taking `&mut Bar`.
+///         let _: &mut Bar = bar;
+///         assert!(bar.is_changed());
+///     })
+/// }
+/// ```
 pub struct Mut<'w, T: ?Sized> {
     pub(crate) value: &'w mut T,
     pub(crate) ticks: TicksMut<'w>,
 }
 
 // -----------------------------------------------------------------------------
-// SliceRef
+// SliceMut
 
 /// A shared reference to a slice of components.
 ///
 /// Provides read-only access to multiple components of the same type.
+///
+/// TODO: SliceQuery
 pub struct SliceRef<'w, T> {
     pub(crate) value: ThinSlice<'w, T>,
     pub(crate) ticks: TicksSliceRef<'w>,
@@ -125,6 +283,8 @@ pub struct SliceRef<'w, T> {
 /// An exclusive reference to a slice of components.
 ///
 /// Provides mutable access to multiple components of the same type.
+///
+/// TODO: SliceQuery
 pub struct SliceMut<'w, T> {
     pub(crate) value: ThinSliceMut<'w, T>,
     pub(crate) ticks: TicksSliceMut<'w>,
@@ -136,6 +296,13 @@ pub struct SliceMut<'w, T> {
 /// An untyped shared reference to a component or resource.
 ///
 /// Provides read-only access without knowing the concrete type.
+///
+/// This wrapper contains raw pointer metadata plus change ticks. Fields are
+/// intentionally public to support custom system-parameter implementations.
+///
+/// The pointers returned in [`Storages`] are usually of this type.
+///
+/// [`Storages`]: crate::storage::Storages
 pub struct UntypedRef<'w> {
     pub value: Ptr<'w>,
     pub ticks: TicksRef<'w>,
@@ -147,6 +314,13 @@ pub struct UntypedRef<'w> {
 /// An untyped exclusive reference to a component or resource.
 ///
 /// Provides mutable access without knowing the concrete type.
+///
+/// This wrapper contains raw pointer metadata plus change ticks. Fields are
+/// intentionally public to support custom system-parameter implementations.
+///
+/// The pointers returned in [`Storages`] are usually of this type.
+///
+/// [`Storages`]: crate::storage::Storages
 pub struct UntypedMut<'w> {
     pub value: PtrMut<'w>,
     pub ticks: TicksMut<'w>,
@@ -158,6 +332,8 @@ pub struct UntypedMut<'w> {
 /// An untyped shared reference to a slice of components.
 ///
 /// Provides read-only access to multiple components without knowing their type.
+///
+/// TODO: SliceQuery
 pub struct UntypedSliceRef<'w> {
     pub value: Ptr<'w>,
     pub ticks: TicksSliceRef<'w>,
@@ -169,6 +345,8 @@ pub struct UntypedSliceRef<'w> {
 /// An untyped exclusive reference to a slice of components.
 ///
 /// Provides mutable access to multiple components without knowing their type.
+///
+/// TODO: SliceQuery
 pub struct UntypedSliceMut<'w> {
     pub value: PtrMut<'w>,
     pub ticks: TicksSliceMut<'w>,
@@ -1007,7 +1185,7 @@ impl<T> FusedIterator for SliceMutIterator<'_, T> {}
 // UntypedRef : Method Implementation
 
 impl<'w> UntypedRef<'w> {
-    /// Consumes self and returns the inner [`PtrMut`].
+    /// Consumes `self` and returns the inner [`Ptr`].
     #[inline(always)]
     pub fn into_inner(self) -> Ptr<'w> {
         self.value
@@ -1035,7 +1213,7 @@ impl<'w> UntypedRef<'w> {
         }
     }
 
-    /// Specifies the reference type and converts self to a [`Res`].
+    /// Specifies the reference type and converts `self` to a [`ResRef`].
     ///
     /// # Safety
     /// `T` must be the erased pointee type for this [`UntypedRef`].
@@ -1048,7 +1226,7 @@ impl<'w> UntypedRef<'w> {
         }
     }
 
-    /// Specifies the reference type and converts self to a [`NonSend`].
+    /// Specifies the reference type and converts `self` to a [`NonSendRef`].
     ///
     /// # Safety
     /// `T` must be the erased pointee type for this [`UntypedRef`].
@@ -1074,9 +1252,9 @@ impl Debug for UntypedRef<'_> {
 // UntypedMut : Method Implementation
 
 impl<'w> UntypedMut<'w> {
-    /// Consumes self and returns the inner [`PtrMut`].
+    /// Consumes `self` and returns the inner [`PtrMut`].
     ///
-    /// This function does not set the change flag.
+    /// This function does not set the changed flag.
     #[inline(always)]
     pub fn into_inner(self) -> PtrMut<'w> {
         self.value
@@ -1084,7 +1262,7 @@ impl<'w> UntypedMut<'w> {
 
     /// Returns a shorter-lived version of self.
     ///
-    /// This function does not set the change flag.
+    /// This function does not set the changed flag.
     #[inline(always)]
     pub fn reborrow(&mut self) -> UntypedMut<'_> {
         UntypedMut {
@@ -1098,9 +1276,9 @@ impl<'w> UntypedMut<'w> {
         }
     }
 
-    /// Specifies the reference type and converts self to a [`Mut`].
+    /// Specifies the reference type and converts `self` to a [`Mut`].
     ///
-    /// This function does not set the change flag.
+    /// This function does not set the changed flag.
     ///
     /// # Safety
     /// `T` must be the erased pointee type for this [`UntypedMut`].
@@ -1112,7 +1290,7 @@ impl<'w> UntypedMut<'w> {
             ticks: self.ticks,
         }
     }
-    /// Specifies the reference type and converts self to a [`ResMut`].
+    /// Specifies the reference type and converts `self` to a [`ResMut`].
     ///
     /// # Safety
     /// `T` must be the erased pointee type for this [`UntypedMut`].
@@ -1125,10 +1303,10 @@ impl<'w> UntypedMut<'w> {
         }
     }
 
-    /// Specifies the reference type and converts self to a [`NonSendMut`].
+    /// Specifies the reference type and converts `self` to a [`NonSendMut`].
     ///
     /// # Safety
-    /// `T` must be the erased pointee type for this [`UntypedRef`].
+    /// `T` must be the erased pointee type for this [`UntypedMut`].
     #[inline(always)]
     pub unsafe fn into_non_send<T: Resource>(self) -> NonSendMut<'w, T> {
         self.value.debug_assert_aligned::<T>();
@@ -1151,7 +1329,7 @@ impl Debug for UntypedMut<'_> {
 // UntypedSliceRef : Method Implementation
 
 impl<'w> UntypedSliceRef<'w> {
-    /// Consumes self and returns the inner [`PtrMut`].
+    /// Consumes `self` and returns the inner [`Ptr`].
     #[inline]
     pub fn into_inner(self) -> Ptr<'w> {
         self.value
@@ -1169,7 +1347,7 @@ impl<'w> UntypedSliceRef<'w> {
         self.ticks.length == 0
     }
 
-    /// Specifies the reference type and converts self to a [`SliceRef`].
+    /// Specifies the reference type and converts `self` to a [`SliceRef`].
     ///
     /// # Safety
     /// `T` must be the erased pointee type for this [`UntypedSliceRef`].
@@ -1196,7 +1374,7 @@ impl Debug for UntypedSliceRef<'_> {
 // UntypedSliceMut : Method Implementation
 
 impl<'w> UntypedSliceMut<'w> {
-    /// Consumes self and returns the inner [`PtrMut`].
+    /// Consumes `self` and returns the inner [`PtrMut`].
     #[inline]
     pub fn into_inner(self) -> PtrMut<'w> {
         self.value
@@ -1214,10 +1392,10 @@ impl<'w> UntypedSliceMut<'w> {
         self.ticks.length == 0
     }
 
-    /// Specifies the reference type and converts self to a [`SliceMut`].
+    /// Specifies the reference type and converts `self` to a [`SliceMut`].
     ///
     /// # Safety
-    /// `T` must be the erased pointee type for this [`UntypedSliceRef`].
+    /// `T` must be the erased pointee type for this [`UntypedSliceMut`].
     #[inline]
     pub unsafe fn with_type<T>(self) -> SliceMut<'w, T> {
         self.value.debug_assert_aligned::<T>();
