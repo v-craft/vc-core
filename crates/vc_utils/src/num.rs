@@ -10,7 +10,7 @@
 //! Because `MAX` is reserved as an invalid state, `Option<NonMax*>` can often
 //! have the same size as the primitive integer.
 //!
-//! ```
+//! ```no_run
 //! use core::mem::size_of;
 //! use vc_utils::num::{NonMaxI32, NonMaxU32};
 //!
@@ -25,7 +25,7 @@
 //!
 //! # Basic Usage
 //!
-//! ```
+//! ```no_run
 //! use vc_utils::num::NonMaxU8;
 //!
 //! let n = NonMaxU8::new(42).unwrap();
@@ -90,6 +90,7 @@ macro_rules! impl_non_max {
             /// of the underlying integer type.
             ///
             /// Returns `None` if `n == <Int>::MAX`.
+            #[must_use]
             #[inline(always)]
             pub const fn new(n: $Int) -> Option<Self> {
                 match NonZero::<$Int>::new(n ^ <$Int>::MAX) {
@@ -102,6 +103,7 @@ macro_rules! impl_non_max {
             ///
             /// # Safety
             /// The value must not be the maximum value of the underlying integer type.
+            #[must_use]
             #[inline(always)]
             pub const unsafe fn new_unchecked(n: $Int) -> Self {
                 debug_assert!(n != <$Int>::MAX);
@@ -272,9 +274,16 @@ mod tests {
 
     #[test]
     fn size_optimization() {
+        assert_eq!(size_of::<Option<NonMaxU8>>(), size_of::<u8>());
+        assert_eq!(size_of::<Option<NonMaxI8>>(), size_of::<i8>());
+        assert_eq!(size_of::<Option<NonMaxU16>>(), size_of::<u16>());
+        assert_eq!(size_of::<Option<NonMaxI16>>(), size_of::<i16>());
         assert_eq!(size_of::<Option<NonMaxU32>>(), size_of::<u32>());
         assert_eq!(size_of::<Option<NonMaxI32>>(), size_of::<i32>());
         assert_eq!(size_of::<Option<NonMaxU64>>(), size_of::<u64>());
+        assert_eq!(size_of::<Option<NonMaxI64>>(), size_of::<i64>());
+        assert_eq!(size_of::<Option<NonMaxUsize>>(), size_of::<usize>());
+        assert_eq!(size_of::<Option<NonMaxIsize>>(), size_of::<isize>());
     }
 
     #[test]

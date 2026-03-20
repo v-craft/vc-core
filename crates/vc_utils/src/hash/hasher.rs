@@ -49,6 +49,15 @@ impl BuildHasher for FixedHashState {
     fn build_hasher(&self) -> Self::Hasher {
         FIXED_HASH_STATE.build_hasher()
     }
+
+    #[inline]
+    fn hash_one<T: core::hash::Hash>(&self, x: T) -> u64
+    where
+        Self: Sized,
+        Self::Hasher: Hasher,
+    {
+        FIXED_HASH_STATE.hash_one(x)
+    }
 }
 
 // -----------------------------------------------------------------------------

@@ -2,8 +2,7 @@
 //!
 //! Currently only the most basic APIs are provided.
 //!
-//! Advanced APIs may be added in future releases
-//! based on usage patterns and community feedback.
+//! TODO: Advanced APIs.
 #![expect(unsafe_code, reason = "original implementation")]
 
 use core::fmt;
@@ -20,6 +19,8 @@ use core::ptr;
 /// avoiding heap allocations.
 ///
 /// Note that the back operation is faster than front.
+///
+/// # Examples
 ///
 /// ```
 /// use vc_utils::extra::ArrayDeque;
@@ -56,10 +57,9 @@ pub struct ArrayDeque<T, const N: usize> {
 
 impl<T, const N: usize> Drop for ArrayDeque<T, N> {
     fn drop(&mut self) {
-        if !core::mem::needs_drop::<T>() || self.len == 0 {
-            return;
+        if core::mem::needs_drop::<T>() && self.len != 0 {
+            self.drop_inner();
         }
-        self.drop_inner();
     }
 }
 
@@ -138,7 +138,14 @@ impl<T, const N: usize> ArrayDeque<T, N> {
     ///
     /// Note that the capacity `0` is valid.
     #[inline(always)]
+    #[must_use]
     pub const fn new() -> Self {
+        const {
+            assert!(
+                N <= (usize::MAX >> 2),
+                "the capacity cannot exceed `usize::MAX / 4`"
+            );
+        }
         Self {
             slots: unsafe { MaybeUninit::<[MaybeUninit<T>; N]>::uninit().assume_init() },
             tail: 0,

@@ -15,8 +15,6 @@ enum InnerVec<T, const N: usize> {
     Heap(Vec<T>),
 }
 
-#[derive(Clone)]
-#[repr(transparent)]
 /// A vector that stores up to `N` elements inline and spills to heap when needed.
 ///
 /// This type combines stack-allocated fast-path storage (`N` items) with a `Vec` fallback
@@ -31,6 +29,7 @@ enum InnerVec<T, const N: usize> {
 /// vec.extend([1, 2, 3, 4, 5]);
 /// assert_eq!(vec, [1, 2, 3, 4, 5]);
 /// ```
+#[repr(transparent)]
 pub struct SmallVec<T, const N: usize>(InnerVec<T, N>);
 
 // -----------------------------------------------------------------------------
@@ -43,6 +42,18 @@ impl<T, const N: usize> Default for SmallVec<T, N> {
     #[inline(always)]
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<T: Clone, const N: usize> Clone for SmallVec<T, N> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        let src = source.as_slice();
+        self.clear();
+        self.extend(src);
     }
 }
 
@@ -60,6 +71,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     /// # use vc_utils::vec::SmallVec;
     /// let mut vec: SmallVec<i32, 8> = SmallVec::new();
     /// ```
+    #[must_use]
     #[inline]
     pub const fn new() -> Self {
         Self(InnerVec::Cache(Cache::new()))
@@ -69,6 +81,7 @@ impl<T, const N: usize> SmallVec<T, N> {
     ///
     /// If the specified capacity is less than or equal to `N`, this is equivalent
     /// to [`new`](SmallVec::new), and no heap memory will be allocated.
+    #[must_use]
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
         if capacity > N {
@@ -834,15 +847,10 @@ mod cache {
     }
 
     impl<T, const N: usize> Cache<T, N> {
-        const STATIC_ASSERT: bool = const {
-            assert!(N != usize::MAX);
-            true
-        };
-
         #[inline]
         pub(super) const fn new() -> Self {
             const {
-                assert!(Self::STATIC_ASSERT);
+                assert!(N <= isize::MAX as usize);
             }
 
             Self {
@@ -917,8 +925,9 @@ mod cache {
         #[inline(always)]
         pub unsafe fn from_vec_unchecked(vec: &mut Vec<T>) -> Self {
             const {
-                assert!(Self::STATIC_ASSERT);
+                assert!(N <= isize::MAX as usize);
             }
+
             let mut svec = Self::new();
             let length = vec.len();
             unsafe {

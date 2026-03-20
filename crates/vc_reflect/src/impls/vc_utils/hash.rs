@@ -1,4 +1,4 @@
-use crate::derive::{impl_reflect_opaque, impl_type_path};
+use crate::derive::impl_type_path;
 use crate::impls::{impl_reflect_for_fixedhashmap, impl_reflect_for_fixedhashset};
 use crate::impls::{impl_reflect_for_hashmap, impl_reflect_for_hashset};
 
@@ -8,11 +8,6 @@ use crate::impls::{impl_reflect_for_hashmap, impl_reflect_for_hashset};
 impl_type_path!(::vc_utils::hash::FixedHashState);
 impl_type_path!(::vc_utils::hash::NoOpHashState);
 impl_type_path!(::vc_utils::hash::SparseHashState);
-
-impl_reflect_opaque!(
-    ::vc_utils::hash::Hashed<V: Eq + PartialEq + Clone>
-    (clone, hash, eq)
-);
 
 impl_type_path!(
     (in foldhash::fast as RandomState)

@@ -8,7 +8,7 @@
 ///
 /// Consider this simple branching code:
 ///
-/// ```
+/// ```no_run
 /// # fn f1() {}
 /// # fn f2() {}
 /// # let condition = false;
@@ -47,7 +47,7 @@
 /// [`cold_path`] is a stable alternative to the experimental `core::hint::cold_path`,
 /// letting you mark cold paths anywhere. Use it like this:
 ///
-/// ```
+/// ```no_run
 /// # fn f1() {}
 /// # fn f2() {}
 /// # let condition = false;

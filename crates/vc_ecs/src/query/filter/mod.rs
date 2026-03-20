@@ -99,7 +99,7 @@ pub unsafe trait QueryFilter {
     /// no archetype would satisfy the filter conditions.
     ///
     /// [`QueryData::build_filter`]: crate::query::QueryData::build_filter
-    /// 
+    ///
     /// # Safety
     /// - Must correctly represent all component accesses
     /// - Must not introduce conflicting access patterns

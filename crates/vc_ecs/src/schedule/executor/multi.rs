@@ -92,7 +92,7 @@ impl<'scope, 'env: 'scope, 'sys: 'scope> Context<'scope, 'env, 'sys> {
         Self {
             world: world.unsafe_world(),
             executor,
-            systems: SyncUnsafeCell::from_mut(schedule.systems.as_mut_slice()).as_slice_of_cells(),
+            systems: SyncUnsafeCell::from_mut(schedule.systems.as_mut_slice()).transpose(),
             outgoing: &schedule.outgoing,
             scope,
             error_handler,

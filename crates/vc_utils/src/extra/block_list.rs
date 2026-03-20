@@ -4,8 +4,7 @@
 //!
 //! Currently only the most basic APIs are provided.
 //!
-//! Advanced APIs may be added in future releases
-//! based on usage patterns and community feedback.
+//! TODO: Advanced APIs.
 #![expect(unsafe_code, reason = "original implementation")]
 
 use alloc::boxed::Box;

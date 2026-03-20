@@ -11,7 +11,6 @@ extern crate alloc;
 // Modules
 
 mod cold_path;
-mod default;
 mod range_invoke;
 
 pub mod extra;
@@ -25,4 +24,3 @@ pub mod vec;
 // Top-level exports
 
 pub use cold_path::cold_path;
-pub use default::default;

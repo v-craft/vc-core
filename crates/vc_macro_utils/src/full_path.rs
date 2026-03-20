@@ -23,6 +23,8 @@ pub struct PartialEqFP;
 pub struct PartialOrdFP;
 /// Full Path (FP) for [`Eq`]
 pub struct EqFP;
+/// Full Path (FP) for [`Ord`]
+pub struct OrdFP;
 /// Full Path (FP) for [`Hash`](core::hash::Hash)
 pub struct HashFP;
 /// Full Path (FP) for [`Hasher`](core::hash::Hasher)
@@ -89,6 +91,12 @@ impl ToTokens for PartialOrdFP {
 impl ToTokens for EqFP {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         quote!(::core::cmp::Eq).to_tokens(tokens);
+    }
+}
+
+impl ToTokens for OrdFP {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        quote!(::core::cmp::Ord).to_tokens(tokens);
     }
 }
 

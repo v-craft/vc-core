@@ -219,6 +219,9 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// - or manually call [`FastVecData::refresh`] before any method call.
     #[inline]
     pub(crate) unsafe fn with_capacity(capacity: usize) -> Self {
+        const {
+            assert!(N <= (usize::MAX >> 1));
+        }
         unsafe {
             let mut vec = Self::new();
             if capacity > N {
@@ -239,6 +242,9 @@ impl<T, const N: usize> FastVecData<T, N> {
     /// - See [`Vec::from_raw_parts`]
     #[inline]
     pub(crate) const unsafe fn from_raw_parts(ptr: *mut T, length: usize, capacity: usize) -> Self {
+        const {
+            assert!(N <= (usize::MAX >> 1));
+        }
         debug_assert!(
             { capacity > 0 } || { size_of::<T>() == 0 },
             "heap size of 0 is not allowed unless it is ZST.",

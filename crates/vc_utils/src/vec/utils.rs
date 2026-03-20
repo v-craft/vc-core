@@ -1,7 +1,3 @@
-pub(super) trait IsZST {
-    const IS_ZST: bool;
-}
-
 #[inline(always)]
 pub(super) const unsafe fn zst_init<T>() -> T {
     // const { assert!(core::mem::size_of::<T>() == 0); }
@@ -9,6 +5,10 @@ pub(super) const unsafe fn zst_init<T>() -> T {
     unsafe {
         core::mem::MaybeUninit::uninit().assume_init()
     }
+}
+
+pub(super) trait IsZST {
+    const IS_ZST: bool;
 }
 
 impl<T> IsZST for T {

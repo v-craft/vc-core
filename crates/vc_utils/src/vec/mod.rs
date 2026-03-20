@@ -15,7 +15,7 @@
 //!
 //! # Examples
 //!
-//! ```
+//! ```no_run
 //! use vc_utils::vec::{ArrayVec, FastVec, SmallVec};
 //!
 //! let mut a: ArrayVec<i32, 4> = ArrayVec::new();

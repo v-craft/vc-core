@@ -1,6 +1,6 @@
 [package]
 name = "vc_task"
-version = "0.0.1" # Fixed preview version.
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -10,11 +10,8 @@ repository.workspace = true
 default = [ "std" ]
 
 web = [
+    "std",
     "vc_os/web",
-    "vc_os/std",
-    "dep:async-channel",
-    "futures-lite/std",
-    "async-task/std",
 ]
 
 std = [

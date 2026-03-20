@@ -165,19 +165,6 @@ impl<T, const N: usize> ArrayVec<T, N> {
         N
     }
 
-    /// Returns the capacity left in the `ArrayVec`.
-    ///
-    /// ```
-    /// # use vc_utils::vec::ArrayVec;
-    ///
-    /// let mut vec = ArrayVec::from([1, 2, 3]);
-    /// vec.pop();
-    /// assert_eq!(vec.remaining_capacity(), 1);
-    /// ```
-    pub const fn remaining_capacity(&self) -> usize {
-        N - self.len
-    }
-
     /// Returns a raw pointer to the vector’s buffer, or a dangling pointer
     /// valid for zero-sized reads if `T` is a zero-sized type.
     ///

@@ -219,21 +219,22 @@ impl<V> TypeIdMap<V> {
 // Traits
 
 impl<T> Default for TypeIdMap<T> {
-    #[inline(always)]
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl<T: Clone> Clone for TypeIdMap<T> {
-    #[inline(always)]
     fn clone(&self) -> Self {
         Self(self.0.clone())
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.0.clone_from(&source.0);
     }
 }
 
 impl<T: Debug> Debug for TypeIdMap<T> {
-    #[inline(always)]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         Debug::fmt(&self.0, f)
     }

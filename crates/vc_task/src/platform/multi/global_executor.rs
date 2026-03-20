@@ -39,13 +39,6 @@ use super::XorShift64Star;
 /// This balance provides good throughput while keeping cache footprint reasonable.
 const WORKER_QUEUE_SIZE: usize = 63;
 
-/// Number of tasks processed before a worker attempts to steal from the global queue.
-/// This ensures fairness between local and global task processing.
-const FAIRNESS_STEALING_INTERVAL: u32 = 61;
-
-/// If the task number of local queue > threshold, do not steal.
-const PERIODIC_STEALING_THRESHOLD: usize = (WORKER_QUEUE_SIZE >> 2) + (WORKER_QUEUE_SIZE >> 1);
-
 /// Number of tasks processed before a worker yields to the scheduler.
 /// This prevents long-running tasks from starving other work.
 const RUN_BATCH: usize = 200;
@@ -151,9 +144,6 @@ struct Worker {
     /// - true → false: Working → Sleeping (when no tasks available)
     /// - false → true: Sleeping/Waking → Working (when task obtained)
     working: Cell<bool>,
-    /// Counter for periodic global queue stealing
-    /// Reset every `FAIRNESS_INTERVAL` tasks to ensure fairness
-    ticks: Cell<u32>,
 }
 
 thread_local! {
@@ -165,7 +155,6 @@ thread_local! {
             queue: Cell::new(ptr::null()),
             seat_index: Cell::new(0),
             working: Cell::new(true),
-            ticks: Cell::new(0),
         }
     };
 }
@@ -241,10 +230,7 @@ impl Lounge {
     }
 
     /// Removes a waker (Sleeping → Working or Sleeping → Waking)
-    /// 
-    /// Returns `true` if the worker was already in waking state,
-    /// `false` if it was sleeping and is now working.
-    fn remove(&mut self, id: usize) -> bool {
+    fn remove(&mut self, id: usize) {
         debug_assert!(id < self.wakers.len());
 
         let old = unsafe{ self.wakers.get_unchecked_mut(id) };
@@ -253,12 +239,10 @@ impl Lounge {
                 // Sleeping → Working
                 *old = None;
                 self.sleeping -= 1;
-                false
             },
             None => {
                 // Waking → Working
                 self.waking -= 1;
-                true
             },
         }
     }
@@ -319,87 +303,89 @@ impl State {
                 .wake_one();
         }
     }
-
 }
 
 // -----------------------------------------------------------------------------
 // Worker Implementation
 
 impl Worker {
-    /// Periodically steals tasks from global queue to maintain local supply
-    /// 
-    /// Called when local queue isn't full. Attempts to steal up to
-    /// `WORKER_QUEUE_SIZE - current_len` tasks from the global queue.
-    fn period_steal(src: &ListQueue<Runnable>, dst: &ArrayQueue<Runnable>) {
-        let len = dst.len();
-        if len > PERIODIC_STEALING_THRESHOLD {
-            return;
-        }
-        for _ in len..WORKER_QUEUE_SIZE {
-            if let Some(runnable) = src.pop() {
-                if let Err(runnable) = dst.push(runnable) {
-                    src.push(runnable);
-                    return;
-                }
-            } else {
-                return;
-            }
-        }
-    }
-
-    /// Aggressively steals tasks from global queue when local queue is empty
-    /// 
-    /// Steals up to `WORKER_QUEUE_SIZE` tasks in one atomic operation
-    /// using the queue's lock for batch removal efficiency.
-    fn steal_global(src: &ListQueue<Runnable>, dst: &ArrayQueue<Runnable>) -> Option<Runnable> {
-        let mut deque = ArrayDeque::<Runnable, WORKER_QUEUE_SIZE>::new();
-
-        let mut guard = src.lock_pop();
-        let ret = src.pop_with_lock(&mut guard)?;
-
-        // Reduce the usage time of global queue locks.
-        for _ in 0..WORKER_QUEUE_SIZE {
-            if let Some(runnable) = src.pop_with_lock(&mut guard) {
-                // SAFETY: WORKER_QUEUE_SIZE == capacity.
-                unsafe{ deque.push_back_unchecked(runnable); }
-            } else {
-                break;
-            }
-        }
-        
-        ::core::mem::drop(guard);
-
-        while let Some(runnable) = deque.pop_front() {
-            dst.push(runnable).unwrap();
-        }
-
-        Some(ret)
-    }
-
-    /// Steals tasks from another worker's local queue
-    /// 
-    /// Takes approximately half of the victim's tasks to balance load.
-    /// This is the core of the work-stealing algorithm.
-    #[inline(always)]
-    fn steal_worker(src: &ArrayQueue<Runnable>, dst: &ArrayQueue<Runnable>) -> Option<Runnable> {
-        let ret = src.pop()?;
-
+    #[inline(never)]
+    fn steal_global(&self) -> Option<Runnable> {
         /// We assume that steal from other workers frequently failed.
-        #[cold]
+        #[inline(never)]
+        fn steal_global_inner(src: &ListQueue<Runnable>, dst: &ArrayQueue<Runnable>) {
+            let mut deque = ArrayDeque::<Runnable, WORKER_QUEUE_SIZE>::new();
+
+            let mut guard = src.lock_pop();
+            for _ in 0..WORKER_QUEUE_SIZE {
+                if let Some(runnable) = src.pop_with_lock(&mut guard) {
+                    // SAFETY: WORKER_QUEUE_SIZE == capacity.
+                    unsafe{ deque.push_back_unchecked(runnable); }
+                } else {
+                    break;
+                }
+            }
+            ::core::mem::drop(guard);
+
+            while let Some(runnable) = deque.pop_front() {
+                // dst must be not empty.
+                dst.push(runnable).unwrap();
+            }
+        }
+        let src: &ListQueue<Runnable> = &self.state().queue;
+        let dst: &ArrayQueue<Runnable> = self.queue();
+
+        if let Some(r) = src.pop() {
+            steal_global_inner(src, dst);
+            self.wake();
+            self.wake_one();
+            return Some(r);
+        }
+
+        None
+    }
+
+    #[inline(never)]
+    fn steal_worker(&self) -> Option<Runnable> {
+        /// We assume that steal from other workers frequently failed.
+        #[inline(never)]
         fn steal_woker_inner(src: &ArrayQueue<Runnable>, dst: &ArrayQueue<Runnable>) {
             let len = (src.len() + 1) >> 1;
             for _ in 0..len {
                 if let Some(runnable) = src.pop() {
+                    // dst must be not empty.
                     dst.push(runnable).unwrap();
                 } else {
                     return;
                 }
             }
         }
-        steal_woker_inner(src, dst);
 
-        Some(ret)
+        let state = self.state();
+        let dst: &ArrayQueue<Runnable> = self.queue();
+
+        // Pick a random starting point in the iterator list and rotate the list.
+        let worker_num = state.seats.len();
+        let start = self.xor_shift.next_usize(worker_num);
+        let iter = state.seats[start..]
+            .iter()
+            .chain(state.seats[..start].iter())
+            .filter(|seat| !ptr::eq(&seat.queue, dst));
+
+        // Try stealing from each local queue in the list.
+        for worker_seat in iter {
+            let src: &ArrayQueue<Runnable> = &worker_seat.queue;
+            if let Some(r) = src.pop() {
+                steal_woker_inner(src, dst);
+                self.wake();
+                self.wake_one();
+                return Some(r);
+            }
+        }
+
+        None
     }
+
 
     /// Returns a reference to the bound executor state
     /// 
@@ -419,57 +405,6 @@ impl Worker {
     const fn queue(&self) -> &ArrayQueue<Runnable> {
         debug_assert!(!self.queue.get().is_null());
         unsafe{ &*self.queue.get() }
-    }
-
-
-    /// Attempts to get a runnable task using the work-stealing hierarchy
-    /// 
-    /// Priority order (classic work-stealing algorithm):
-    /// 1. Local queue (fast path, no synchronization)
-    /// 2. Global queue (shared, requires synchronization)
-    /// 3. Other workers' queues (work stealing, random victim selection)
-    /// 
-    /// Returns `Some(Runnable)` if a task was found, `None` otherwise.
-    #[inline(always)]
-    fn get_runnable(&self) -> Option<Runnable> {
-        let local_queue = self.queue();
-        if let Some(runnable) = local_queue.pop() {
-            return Some(runnable);
-        }
-
-        let state = self.state();
-
-        // Try stealing from the global queue.
-        if let Some(runnable) = Worker::steal_global(&state.queue, local_queue) {
-            return Some(runnable);
-        }
-
-        #[inline(never)]
-        fn get_from_other_worker(this: &Worker) -> Option<Runnable> {
-            let local_queue = this.queue();
-            let state = this.state();
-
-            // Pick a random starting point in the iterator list and rotate the list.
-            let worker_num = state.seats.len();
-            let start = this.xor_shift.next_usize(worker_num);
-            let iter = state.seats
-                .iter()
-                .chain(state.seats.iter())
-                .skip(start)
-                .take(worker_num)
-                .filter(|seat| !ptr::eq(&seat.queue, local_queue));
-
-            // Try stealing from each local queue in the list.
-            for worker_seat in iter {
-                if let Some(r) = Worker::steal_worker(&worker_seat.queue, local_queue) {
-                    return Some(r);
-                }
-            }
-
-            None
-        }
-
-        get_from_other_worker(self)
     }
 
     /// Transitions worker to sleeping state, registering a waker
@@ -492,6 +427,7 @@ impl Worker {
                 // Sleeping -> Sleeping
                 return false;
             }
+            // else: Waking -> Sleeping, loop again
         }
 
         state.is_waking.store(lounge.is_waking(), Ordering::Release);
@@ -499,58 +435,76 @@ impl Worker {
         true
     }
 
-    /// Wakes this worker (transition: **Sleeping** → **Working** or **Waking** → **Working**).
-    #[cold]
+    /// Set self to `Working`.
+    #[inline]
     fn wake(&self) {
-        // debug_assert!( !self.working.get() );
-        let state = self.state();
-        let mut lounge = state.lounge
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        /// Wakes this worker (Sleeping → Working or Waking → Working).
+        #[cold]
+        #[inline(never)]
+        fn wake_internal(this: &Worker) {
+            // debug_assert!( !self.working.get() );
+            let state = this.state();
+            let mut lounge = state.lounge
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
 
-        lounge.remove(self.seat_index.get());
+            lounge.remove(this.seat_index.get());
 
+            state.is_waking.store(lounge.is_waking(), Ordering::Release);
 
-        state.is_waking.store(lounge.is_waking(), Ordering::Release);
+            this.working.set(true);
+        }
 
-        self.working.set(true);
+        if !self.working.get() {
+            wake_internal(self);
+        }
+    }
+
+    #[inline]
+    fn wake_one(&self) {
+        self.state().wake_one();
+    }
+
+    /// Attempts to get a runnable task using the work-stealing hierarchy
+    /// 
+    /// Priority order (classic work-stealing algorithm):
+    /// 1. Local queue (fast path, no synchronization)
+    /// 2. Global queue (shared, requires synchronization)
+    /// 3. Other workers' queues (work stealing, random victim selection)
+    /// 
+    /// Returns `Some(Runnable)` if a task was found, `None` otherwise.
+    #[inline(always)]
+    fn fetch_runnable(&self) -> Option<Runnable> {
+        let local_queue = self.queue();
+        if let Some(runnable) = local_queue.pop() {
+            self.wake();
+            return Some(runnable);
+        }
+
+        vc_utils::cold_path();
+        self.steal_global().or_else(|| self.steal_worker())
     }
 
     /// Wakes this worker (transition: **Sleeping** → **Working** or **Waking** → **Working**).
     async fn runnable(&self) -> Runnable {
-        let runnable = poll_fn(|cx| {
+        poll_fn(|cx| {
             loop {
-                match self.get_runnable() {
+                match self.fetch_runnable() {
                     None => {
+                        // It will only enter sleep after the second `None`.
                         if !self.sleep(cx.waker()) {
+                            // Sleeping -> Sleeping, return Pending
                             return Poll::Pending;
                         }
+                        // else: Working/Waking -> Sleeping, try again.
                     }
                     Some(r) => {
-                        // Found a task, wake up
-                        if !self.working.get() {
-                            self.wake();
-                        }
-
-                        // Notify another worker to continue processing
-                        // This ensures work continues even if this task runs long
-                        self.state().wake_one();
-
                         return Poll::Ready(r);
                     }
                 }
             }
         })
-        .await;
-
-        // Update fairness counter and steal from global periodically
-        self.ticks.update(|v| v + 1 );
-        if self.ticks.get() >= FAIRNESS_STEALING_INTERVAL {
-            Worker::period_steal(&self.state().queue, self.queue());
-            self.ticks.set(0)
-        }
-
-        runnable
+        .await
     }
 
     /// Main worker execution loop
@@ -634,6 +588,11 @@ impl<'a> GlobalExecutor<'a> {
     /// This is called when a thread joins a task pool. The worker
     /// atomically claims an unoccupied seat and stores pointers to
     /// the executor state and local queue.
+    /// 
+    /// # Safety
+    /// Worker internally retains pointers to the `GlobalExecutor` field.
+    /// To ensure its long-term validity, `GlobalExecutor` typically require
+    /// the use of smart pointer wrapping.
     pub fn bind_local_worker(&self) {
         LOCAL_WORKER.with(|worker|{
             if !worker.state.get().is_null() {
@@ -652,8 +611,7 @@ impl<'a> GlobalExecutor<'a> {
                 }
             }
 
-            // Normally, it's unreachable.
-            panic!("Failed to bind worker: No available seats in executor");
+            unreachable!("Failed to bind worker: No available seats in executor");
         })
     }
 
@@ -696,9 +654,6 @@ impl<'a> GlobalExecutor<'a> {
     /// 2. Continuously executes tasks from the pool
     /// 3. Returns when the provided future completes
     /// 
-    /// This is useful for blocking on pool completion or running
-    /// a future that depends on pool tasks.
-    /// 
     /// If called on main thread, it will directly poll the global
     /// queue without work stealing.
     #[inline]
@@ -720,6 +675,8 @@ impl RefUnwindSafe for GlobalExecutor<'_> {}
 
 impl fmt::Debug for GlobalExecutor<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("GlobalExecutor")
+        f.debug_struct("GlobalExecutor")
+            .field("worker_count", &self.state.seats.len())
+            .finish()
     }
 }

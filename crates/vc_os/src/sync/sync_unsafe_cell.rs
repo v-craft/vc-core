@@ -106,11 +106,11 @@ impl<T> SyncUnsafeCell<[T]> {
     ///
     /// let slice: &mut [i32] = &mut [1, 2, 3];
     /// let cell_slice: &SyncUnsafeCell<[i32]> = SyncUnsafeCell::from_mut(slice);
-    /// let slice_cell: &[SyncUnsafeCell<i32>] = cell_slice.as_slice_of_cells();
+    /// let slice_cell: &[SyncUnsafeCell<i32>] = cell_slice.transpose();
     ///
     /// assert_eq!(slice_cell.len(), 3);
     /// ```
-    pub fn as_slice_of_cells(&self) -> &[SyncUnsafeCell<T>] {
+    pub fn transpose(&self) -> &[SyncUnsafeCell<T>] {
         let self_ptr: *const SyncUnsafeCell<[T]> = core::ptr::from_ref(self);
         let slice_ptr = self_ptr as *const [SyncUnsafeCell<T>];
         // SAFETY: `UnsafeCell<T>` and `SyncUnsafeCell<T>` have #[repr(transparent)]

@@ -17,10 +17,6 @@
     2. `SparseHashMap` and `SparseHashSet`: Fixed `SparseHashState`, built on `hashbrown`.
     3. `NoOpHashMap` and `NoOpHashSet`: Fixed `NoOpHashState`, built on `hashbrown`.
     4. `IndexMap` and `IndexSet`: Default to `FixedHashState`, interchangeable, built on `indexmap`.
-- Note: The `Index` series maintains insertion order, ensuring deterministic iteration at the cost of
-  additional overhead.
-- Provides a pre-hashed wrapper `Hashed<T>` that computes the hash once at creation and stores it,
-  typically used with `NoOpHashState`.
 
 ## Vectors optimized for different scenarios:
 
@@ -42,7 +38,6 @@
 ## Helper Utilities
 
 - `range_invoke`: A macro that expands and invokes an inner macro multiple times.
-- `default`: A convenience function that simplifies `Default::default()`.
 - `cold_path`: Hints to the compiler that given path is cold, optimize branch prediction.
 
 ## Thread-Safe Containers
