@@ -150,13 +150,13 @@ mod tests {
     #[derive(Debug, PartialEq, Eq)]
     struct Zaz(i32);
 
-    unsafe impl Component for Foo {}
-    unsafe impl Component for Bar {}
-    unsafe impl Component for Baz {
+    impl Component for Foo {}
+    impl Component for Bar {}
+    impl Component for Baz {
         const STORAGE: ComponentStorage = ComponentStorage::Sparse;
     }
-    unsafe impl Component for Qux {}
-    unsafe impl Component for Zaz {}
+    impl Component for Qux {}
+    impl Component for Zaz {}
 
     #[test]
     fn query_raw_ref() {

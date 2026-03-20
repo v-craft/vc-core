@@ -22,16 +22,17 @@ use crate::utils::{Cloner, Dropper};
 ///
 /// # Safety
 ///
-/// This trait is unsafe because incorrect implementations can lead to:
+/// Strictly speaking this trait is unsafe because incorrect implementations can lead to:
 /// - Memory unsafety in component storage and access
 /// - Violation of thread safety guarantees
 /// - Incorrect component versioning and tick tracking
 /// - Undefined behavior in component cloning and mutation
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not a component",
-    label = "invalid component"
+    label = "invalid component",
+    note = "Consider annotating `{Self}` with `#[derive(Component)]`."
 )]
-pub unsafe trait Component: Sized + Send + Sync + 'static {
+pub trait Component: Sized + Send + Sync + 'static {
     const STORAGE: ComponentStorage = ComponentStorage::Dense;
     const MUTABLE: bool = true;
     const DROPPER: Option<Dropper> = Dropper::of::<Self>();

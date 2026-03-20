@@ -27,6 +27,7 @@ pub use label::{InternedScheduleLabel, ScheduleLabel};
 pub use schedule::{Schedule, SystemSchedule};
 pub use schedules::Schedules;
 pub use system::{SystemKey, SystemObject, UnitSystem};
+pub use vc_ecs_derive::ScheduleLabel;
 
 // -----------------------------------------------------------------------------
 // Tests
@@ -34,7 +35,7 @@ pub use system::{SystemKey, SystemObject, UnitSystem};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::component::{Component, ComponentStorage};
+    use crate::component::Component;
     use crate::query::{And, Or, With, Without};
     use crate::system::{IntoSystem, SystemName};
     use crate::world::{World, WorldIdAllocator};
@@ -42,39 +43,26 @@ mod tests {
     use alloc::string::String;
     use alloc::vec::Vec;
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Component, Debug, PartialEq, Eq)]
     struct Foo;
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Component, Debug, PartialEq, Eq)]
     struct Bar(u64);
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Component, Debug, PartialEq, Eq)]
+    #[component(storage = "sparse")]
     struct Baz(String);
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Component, Debug, PartialEq)]
     struct Qux(f32);
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Component, Debug, PartialEq, Eq)]
     struct Zaz(i32);
 
-    unsafe impl Component for Foo {}
-    unsafe impl Component for Bar {}
-    unsafe impl Component for Baz {
-        const STORAGE: ComponentStorage = ComponentStorage::Sparse;
-    }
-    unsafe impl Component for Qux {}
-    unsafe impl Component for Zaz {}
-
-    #[derive(Debug, Hash, PartialEq, Eq)]
+    #[derive(ScheduleLabel, Debug, Hash, PartialEq, Eq, Clone)]
     pub struct Testing;
 
-    impl ScheduleLabel for Testing {
-        fn dyn_clone(&self) -> Box<dyn ScheduleLabel> {
-            Box::new(Testing)
-        }
-    }
-
-    fn alloc_world() -> Box<World> {
+    fn alloc_world() -> World {
         static ALLOCATOR: WorldIdAllocator = WorldIdAllocator::new();
         World::new(ALLOCATOR.alloc())
     }

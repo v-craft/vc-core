@@ -436,12 +436,12 @@ mod tests {
     #[derive(Debug, PartialEq, Eq)]
     struct Bar(u64);
 
-    unsafe impl Resource for Foo {}
-    unsafe impl Resource for Bar {}
+    impl Resource for Foo {}
+    impl Resource for Bar {}
 
     fn new_world() -> Box<World> {
         let world_id = WorldId::new(NonZeroU64::new(1).unwrap());
-        World::new(world_id)
+        Box::new(World::new(world_id))
     }
 
     #[test]
@@ -558,7 +558,7 @@ mod tests {
 
         #[derive(Debug, PartialEq, Eq)]
         struct DropTracker(usize);
-        unsafe impl Resource for DropTracker {}
+        impl Resource for DropTracker {}
 
         impl Drop for DropTracker {
             fn drop(&mut self) {

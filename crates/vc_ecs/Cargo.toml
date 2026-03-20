@@ -23,6 +23,8 @@ vc_ptr = { path = "../vc_ptr" }
 vc_cfg = { path = "../vc_cfg" }
 vc_utils = { path = "../vc_utils" }
 
+vc_ecs_derive = { path = "derive" }
+
 vc_os = { path = "../vc_os", default-features = false }
 vc_task = { path = "../vc_task", default-features = false }
 vc_reflect = { path = "../vc_reflect", default-features = false }

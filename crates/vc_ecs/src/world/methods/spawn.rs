@@ -164,9 +164,9 @@ mod tests {
     #[derive(Debug, PartialEq, Eq)]
     struct Baz(String);
 
-    unsafe impl Component for Foo {}
-    unsafe impl Component for Bar {}
-    unsafe impl Component for Baz {
+    impl Component for Foo {}
+    impl Component for Bar {}
+    impl Component for Baz {
         const STORAGE: ComponentStorage = ComponentStorage::Sparse;
     }
 

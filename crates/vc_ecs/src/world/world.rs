@@ -1,6 +1,5 @@
 #![expect(clippy::module_inception, reason = "For better structure.")]
 
-use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::sync::atomic::Ordering;
 
@@ -13,7 +12,7 @@ use crate::entity::{Entities, EntityAllocator};
 use crate::resource::Resources;
 use crate::storage::Storages;
 use crate::tick::{CHECK_CYCLE, CheckTicks, Tick};
-use crate::world::WorldId;
+use crate::world::{WorldId, WorldIdAllocator};
 
 // -----------------------------------------------------------------------------
 // World
@@ -60,10 +59,17 @@ impl Debug for World {
     }
 }
 
+impl Default for World {
+    fn default() -> Self {
+        static DEFAULT_ALLOCATOR: WorldIdAllocator = WorldIdAllocator::new();
+        World::new(DEFAULT_ALLOCATOR.alloc())
+    }
+}
+
 impl World {
     /// Creates a new world with the given unique id.
-    pub fn new(id: WorldId) -> Box<World> {
-        Box::new(Self {
+    pub fn new(id: WorldId) -> World {
+        Self {
             id,
             thread_hash: crate::utils::thread_hash(),
             entities: Entities::new(),
@@ -76,7 +82,7 @@ impl World {
             this_run: AtomicU32::new(1),
             last_run: Tick::new(0),
             last_check: Tick::new(0),
-        })
+        }
     }
 
     /// Returns this world's unique id.

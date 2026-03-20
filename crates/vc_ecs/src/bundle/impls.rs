@@ -57,6 +57,11 @@ use crate::component::{Component, ComponentCollector, ComponentWriter};
 /// - Writes must not overflow the allocated storage
 /// - Component data must be properly aligned
 /// - Type safety: The written data must match the registered component type
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` is not a bundle",
+    label = "invalid bundle",
+    note = "Consider annotating `{Self}` with `#[derive(Bundle)]`."
+)]
 pub unsafe trait Bundle: Sized + Sync + Send + 'static {
     /// Collects all component types that this bundle can provide.
     ///

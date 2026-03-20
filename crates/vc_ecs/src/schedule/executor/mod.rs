@@ -38,7 +38,7 @@ use vc_task::ScopeExecutor;
 #[derive(Clone)]
 pub struct MainThreadExecutor(pub Arc<ScopeExecutor<'static>>);
 
-unsafe impl Resource for MainThreadExecutor {
+impl Resource for MainThreadExecutor {
     const MUTABLE: bool = false;
     const CLONER: Option<Cloner> = Some(Cloner::clonable::<Self>());
 }

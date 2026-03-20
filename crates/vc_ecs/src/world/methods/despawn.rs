@@ -90,9 +90,9 @@ mod tests {
     #[derive(Debug, PartialEq, Eq)]
     struct Baz(String);
 
-    unsafe impl Component for Foo {}
-    unsafe impl Component for Bar {}
-    unsafe impl Component for Baz {
+    impl Component for Foo {}
+    impl Component for Bar {}
+    impl Component for Baz {
         const STORAGE: ComponentStorage = ComponentStorage::Sparse;
     }
 
@@ -101,7 +101,7 @@ mod tests {
         static DROP_COUNTER: AtomicUsize = AtomicUsize::new(0);
         struct DropTracker;
 
-        unsafe impl Component for DropTracker {
+        impl Component for DropTracker {
             const STORAGE: ComponentStorage = ComponentStorage::Dense;
         }
         impl Drop for DropTracker {
@@ -139,7 +139,7 @@ mod tests {
         static DROP_COUNTER: AtomicUsize = AtomicUsize::new(0);
         struct DropTracker;
 
-        unsafe impl Component for DropTracker {
+        impl Component for DropTracker {
             const STORAGE: ComponentStorage = ComponentStorage::Sparse;
         }
         impl Drop for DropTracker {
@@ -179,10 +179,10 @@ mod tests {
         struct DenseTracker;
         struct SparseTracker;
 
-        unsafe impl Component for DenseTracker {
+        impl Component for DenseTracker {
             const STORAGE: ComponentStorage = ComponentStorage::Dense;
         }
-        unsafe impl Component for SparseTracker {
+        impl Component for SparseTracker {
             const STORAGE: ComponentStorage = ComponentStorage::Sparse;
         }
         impl Drop for DenseTracker {

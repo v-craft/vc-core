@@ -127,7 +127,7 @@ impl ErrorContext {
 #[repr(transparent)]
 pub struct DefaultErrorHandler(pub ErrorHandler);
 
-unsafe impl Resource for DefaultErrorHandler {
+impl Resource for DefaultErrorHandler {
     const MUTABLE: bool = true;
     const CLONER: Option<Cloner> = Some(Cloner::copyable::<Self>());
 }

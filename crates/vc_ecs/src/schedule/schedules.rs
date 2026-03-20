@@ -17,7 +17,7 @@ impl Default for Schedules {
     }
 }
 
-unsafe impl Resource for Schedules {}
+impl Resource for Schedules {}
 
 impl Schedules {
     pub const fn new() -> Self {

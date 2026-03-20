@@ -30,7 +30,7 @@ pub struct QueryState<D: QueryData, F: QueryFilter = ()> {
     pub(crate) f_state: F::State,
 }
 
-unsafe impl<D: QueryData + 'static, F: QueryFilter + 'static> Resource for QueryState<D, F> {}
+impl<D: QueryData + 'static, F: QueryFilter + 'static> Resource for QueryState<D, F> {}
 
 impl<D: QueryData, F: QueryFilter> Debug for QueryState<D, F> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
