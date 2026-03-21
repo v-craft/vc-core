@@ -7,12 +7,14 @@ use vc_os::sync::atomic::AtomicU32;
 
 use crate::archetype::Archetypes;
 use crate::bundle::Bundles;
+use crate::command::CommandQueue;
 use crate::component::Components;
-use crate::entity::{Entities, EntityAllocator};
+use crate::entity::{Entities, Entity, EntityAllocator};
+use crate::error::{DefaultErrorHandler, ErrorContext};
 use crate::resource::Resources;
 use crate::storage::Storages;
 use crate::tick::{CHECK_CYCLE, CheckTicks, Tick};
-use crate::world::{WorldId, WorldIdAllocator};
+use crate::world::{EntityMut, EntityOwned, EntityRef, WorldId, WorldIdAllocator};
 
 // -----------------------------------------------------------------------------
 // World
@@ -38,6 +40,7 @@ pub struct World {
     pub(crate) storages: Storages,
     pub(crate) bundles: Bundles,
     pub(crate) archetypes: Archetypes,
+    pub(crate) command_queue: CommandQueue,
     pub(crate) this_run: AtomicU32,
     pub(crate) last_run: Tick,
     pub(crate) last_check: Tick,
@@ -55,6 +58,7 @@ impl Debug for World {
             .field("storages", &self.storages)
             .field("bundles", &self.bundles)
             .field("archetypes", &self.archetypes)
+            .field("command_queue", &self.command_queue)
             .finish()
     }
 }
@@ -79,6 +83,7 @@ impl World {
             storages: Storages::new(),
             bundles: Bundles::new(),
             archetypes: Archetypes::new(),
+            command_queue: CommandQueue::new(),
             this_run: AtomicU32::new(1),
             last_run: Tick::new(0),
             last_check: Tick::new(0),
@@ -98,47 +103,6 @@ impl World {
     /// Returns the current world tick (`this_run`).
     pub fn this_run(&self) -> Tick {
         Tick::new(self.this_run.load(Ordering::Relaxed))
-    }
-
-    /// Increments `this_run` and returns the previous tick value.
-    ///
-    /// Use [`World::update_tick`] when you also need to advance `last_run`.
-    pub fn advance_tick(&self) -> Tick {
-        Tick::new(self.this_run.fetch_add(1, Ordering::Relaxed))
-    }
-
-    /// Update `last_run`, increase `this_run` and return the new value.
-    ///
-    /// If the check interval exceeds [`CHECK_CYCLE`], this function will
-    /// automatically call [`World::check_ticks`].
-    ///
-    /// Advancing `last_run` means older changes become invisible to subsequent
-    /// change checks (for example, `is_changed`/`is_added`).
-    pub fn update_tick(&mut self) -> Tick {
-        let last_run = *self.this_run.get_mut();
-        let this_run = last_run.wrapping_add(1);
-
-        self.last_run = Tick::new(last_run);
-        *self.this_run.get_mut() = this_run;
-
-        let this_run = Tick::new(this_run);
-        if this_run.relative_to(self.last_check).get() >= CHECK_CYCLE {
-            vc_utils::cold_path();
-            self.check_ticks();
-        }
-
-        this_run
-    }
-
-    /// Clamps component/resource change ticks to keep wrap-around safe.
-    ///
-    /// Returns a [`CheckTicks`] event containing the tick used for this check.
-    pub fn check_ticks(&mut self) -> CheckTicks {
-        let this_run = Tick::new(*self.this_run.get_mut());
-        let checker = CheckTicks::new(this_run);
-        self.storages.check_ticks(checker);
-        self.last_check = this_run;
-        checker
     }
 
     /// Returns the thread hash captured when the world was created.
@@ -214,5 +178,110 @@ impl World {
     /// Returns mutable access to the archetype registry.
     pub fn archetypes_mut(&mut self) -> &mut Archetypes {
         &mut self.archetypes
+    }
+
+    /// Returns the archetype registry.
+    pub fn command_queue(&self) -> &CommandQueue {
+        &self.command_queue
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Basic
+
+impl World {
+    pub fn alloc_entity(&self) -> Entity {
+        self.allocator.alloc()
+    }
+
+    pub fn entity_count(&self) -> usize {
+        self.entities.len()
+    }
+
+    pub fn entity_owned(&mut self, entity: Entity) -> EntityOwned<'_> {
+        let location = self.entities.get_spawned(entity).unwrap();
+        EntityOwned {
+            world: self.into(),
+            entity,
+            location,
+        }
+    }
+
+    pub fn entity_mut(&mut self, entity: Entity) -> EntityMut<'_> {
+        let location = self.entities.get_spawned(entity).unwrap();
+        let last_run = self.last_run();
+        let this_run = self.this_run();
+        EntityMut {
+            world: self,
+            entity,
+            location,
+            last_run,
+            this_run,
+        }
+    }
+
+    pub fn entity_ref(&self, entity: Entity) -> EntityRef<'_> {
+        let location = self.entities.get_spawned(entity).unwrap();
+        let last_run = self.last_run();
+        let this_run = self.this_run();
+        EntityRef {
+            world: self,
+            entity,
+            location,
+            last_run,
+            this_run,
+        }
+    }
+
+    pub fn advance_tick(&self) -> Tick {
+        Tick::new(self.this_run.fetch_add(1, Ordering::Relaxed))
+    }
+
+    pub fn update_tick(&mut self) -> Tick {
+        let last_run = *self.this_run.get_mut();
+        let this_run = last_run.wrapping_add(1);
+
+        self.last_run = Tick::new(last_run);
+        *self.this_run.get_mut() = this_run;
+
+        if this_run.wrapping_sub(last_run) >= CHECK_CYCLE {
+            vc_utils::cold_path();
+            self.check_ticks();
+        }
+
+        Tick::new(this_run)
+    }
+
+    pub fn check_ticks(&mut self) -> CheckTicks {
+        let this_run = Tick::new(*self.this_run.get_mut());
+        let checker = CheckTicks::new(this_run);
+        self.storages.check_ticks(checker);
+        self.last_check = this_run;
+        checker
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Advance
+
+impl World {
+    pub fn default_error_handler(&self) -> DefaultErrorHandler {
+        self.get_resource::<DefaultErrorHandler>()
+            .copied()
+            .unwrap_or_default()
+    }
+
+    pub fn apply_commands(&mut self) {
+        let handler = self.default_error_handler();
+
+        while let Some(cmd) = self.command_queue.pop() {
+            let location = cmd.location();
+            if let Err(err) = cmd.run(self) {
+                vc_utils::cold_path();
+                let this_run = self.this_run();
+                let ctx = ErrorContext::Command { location, this_run };
+                (handler)(err, ctx);
+            }
+        }
     }
 }

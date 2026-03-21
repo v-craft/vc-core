@@ -1,14 +1,4 @@
-//! TODO: Supplementary documentation.
-//!
-//! - [`ComponentStorage`] : How components are stored and accessed.
-//! - [`Archetype`] : How component queries are performed efficiently.
-//! - [`Schedule`] : How systems are executed with maximum concurrency.
-//! - ......
-//!
-//! [`ComponentStorage`]: crate::component::ComponentStorage
-//! [`Archetype`]: crate::archetype::Archetype
-//! [`Schedule`]: crate::schedule::Schedule
-
+#![doc = include_str!("../README.md")]
 #![cfg_attr(docsrs, expect(internal_features, reason = "needed for fake_variadic"))]
 #![cfg_attr(docsrs, feature(doc_cfg, rustdoc_internals))]
 #![expect(unsafe_code, reason = "ECS requires underlying operation")]
@@ -51,6 +41,7 @@ pub mod error;
 pub mod tick;
 pub mod utils;
 
+pub mod command;
 pub mod component;
 pub mod resource;
 pub mod storage;
@@ -66,3 +57,20 @@ pub mod system;
 pub mod world;
 
 pub mod __macro_exports;
+
+// -----------------------------------------------------------------------------
+// prelude
+
+pub mod prelude {
+    pub use crate::borrow::{Mut, NonSend, NonSendMut, NonSendRef, Ref, Res, ResMut, ResRef};
+    pub use crate::bundle::Bundle;
+    pub use crate::command::{Commands, EntityCommands};
+    pub use crate::component::Component;
+    pub use crate::entity::Entity;
+    pub use crate::query::{Added, And, Changed, Or, Query, With, Without};
+    pub use crate::resource::Resource;
+    pub use crate::schedule::{Schedule, ScheduleLabel};
+    pub use crate::system::{IntoSystem, Local, System};
+    pub use crate::tick::{DetectChanges, Tick};
+    pub use crate::world::{EntityMut, EntityOwned, EntityRef, World};
+}

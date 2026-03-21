@@ -5,6 +5,7 @@ use vc_utils::hash::SparseHashMap;
 use vc_os::sync::Arc;
 
 use crate::archetype::{ArcheId, ArcheRow};
+use crate::bundle::BundleId;
 use crate::component::ComponentId;
 use crate::entity::{Entity, MovedEntity};
 use crate::storage::TableId;
@@ -79,8 +80,8 @@ pub struct Archetype {
     /// The vector index = `ArcheRow`, value = `Entity`.
     /// Maintained in contiguous order for O(1) entity lookup by row.
     entities: Vec<Entity>,
-    after_insert: SparseHashMap<ComponentId, ArcheId>,
-    after_remove: SparseHashMap<ComponentId, ArcheId>,
+    after_insert: SparseHashMap<BundleId, ArcheId>,
+    after_remove: SparseHashMap<BundleId, ArcheId>,
 }
 
 impl Debug for Archetype {
@@ -360,7 +361,7 @@ impl Archetype {
     /// # Complexity
     /// - Time: O(1)
     /// - Space: O(1)
-    pub unsafe fn remove_entity(&mut self, row: ArcheRow) -> Option<MovedEntity> {
+    pub unsafe fn remove_entity(&mut self, row: ArcheRow) -> MovedEntity {
         debug_assert!((row.0 as usize) < self.entities.len());
 
         let last = self.entities.len() - 1;
@@ -369,39 +370,39 @@ impl Archetype {
         unsafe {
             if dst == last {
                 self.entities.set_len(last);
-                None
+                MovedEntity::in_arche(None, row)
             } else {
                 let entity = *self.entities.get_unchecked(last);
                 *self.entities.get_unchecked_mut(dst) = entity;
                 self.entities.set_len(last);
-                Some(MovedEntity::in_arche(entity, row))
+                MovedEntity::in_arche(Some(entity), row)
             }
         }
     }
 
     /// Obtain the new archetype id after inserting a Component.
-    pub fn after_insert(&self, component: ComponentId) -> Option<ArcheId> {
-        self.after_insert.get(&component).copied()
+    pub fn after_insert(&self, bundle: BundleId) -> Option<ArcheId> {
+        self.after_insert.get(&bundle).copied()
     }
 
     /// Obtain the new archetype id after removing a Component.
-    pub fn after_remove(&self, component: ComponentId) -> Option<ArcheId> {
-        self.after_remove.get(&component).copied()
+    pub fn after_remove(&self, bundle: BundleId) -> Option<ArcheId> {
+        self.after_remove.get(&bundle).copied()
     }
 
     /// Set a new archetype after inserting a Component.
     ///
     /// # Safety
     /// Ensure by caller.
-    pub unsafe fn set_after_insert(&mut self, component: ComponentId, arche: ArcheId) {
-        self.after_insert.insert(component, arche);
+    pub unsafe fn set_after_insert(&mut self, bundle: BundleId, arche: ArcheId) {
+        self.after_insert.insert(bundle, arche);
     }
 
     /// Set a new archetype after removing a Component.
     ///
     /// # Safety
     /// Ensure by caller.
-    pub unsafe fn set_after_remove(&mut self, component: ComponentId, arche: ArcheId) {
-        self.after_remove.insert(component, arche);
+    pub unsafe fn set_after_remove(&mut self, bundle: BundleId, arche: ArcheId) {
+        self.after_remove.insert(bundle, arche);
     }
 }

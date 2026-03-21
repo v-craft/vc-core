@@ -1,7 +1,10 @@
+use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use alloc::string::ToString;
 use core::error::Error;
 use core::fmt::{Debug, Display};
 use core::ops::{Deref, DerefMut};
+use core::panic::Location;
 
 use crate::resource::Resource;
 use crate::system::SystemName;
@@ -32,10 +35,14 @@ pub struct EcsError {
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum ErrorContext {
-    /// The error occurred in a system.
-    ///
-    /// `last_run` is the last known run tick for that system.
-    System { name: SystemName, last_run: Tick },
+    System {
+        name: SystemName,
+        last_run: Tick,
+    },
+    Command {
+        location: Location<'static>,
+        this_run: Tick,
+    },
 }
 
 // -----------------------------------------------------------------------------
@@ -101,18 +108,20 @@ impl Debug for EcsError {
 
 impl ErrorContext {
     /// The name of the ECS construct that failed.
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> Cow<'static, str> {
         match self {
-            Self::System { name, .. } => name,
+            Self::System { name, .. } => Cow::Borrowed(name.as_str()),
+            Self::Command { location, .. } => Cow::Owned(location.to_string()),
         }
     }
 
     /// A string representation of the kind of ECS construct that failed.
     ///
     /// This is a simpler helper used for logging.
-    pub fn kind(&self) -> &str {
+    pub fn kind(&self) -> &'static str {
         match self {
             Self::System { .. } => "system",
+            Self::Command { .. } => "command",
         }
     }
 }

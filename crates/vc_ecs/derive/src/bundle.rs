@@ -29,8 +29,7 @@ pub(crate) fn impl_derive_bundle(ast: DeriveInput) -> TokenStream {
                 let access: Vec<_> = fields
                     .named
                     .iter()
-                    .enumerate()
-                    .map(|(i, field)| {
+                    .map(|field| {
                         let ident = field.ident.as_ref().unwrap();
                         let ty = &field.ty;
                         (quote! { #ident }, ty)
@@ -69,7 +68,7 @@ pub(crate) fn impl_derive_bundle(ast: DeriveInput) -> TokenStream {
         }
     };
 
-    let collect_calls = field_access.iter().map(|(ident, ty)| {
+    let collect_calls = field_access.iter().map(|(_, ty)| {
         quote! {
             <#ty as #bundle_>::collect_components(__collector__);
         }
@@ -84,7 +83,7 @@ pub(crate) fn impl_derive_bundle(ast: DeriveInput) -> TokenStream {
         }
     });
 
-    let write_required_calls = field_access.iter().map(|(ident, ty)| {
+    let write_required_calls = field_access.iter().map(|(_, ty)| {
         quote! {
             unsafe {
                 <#ty as #bundle_>::write_required(__writer__);

@@ -25,6 +25,13 @@ As the core component, this project primarily includes the following modules:
     - Offers multiple async executors that work with the task pool to automatically handle asynchronous tasks and achieve multi-threaded load balancing.
     - Provides a parallel task interface that splits continuous tasks into chunks for parallel execution via the task pool.
 
-- [`vc_ecs`] : Entity-Component-System
-    - ECS for game engines, a data-oriented programming design pattern.
-    - In progress.
+- [`vc_ecs`] : Entity-Component-System (ECS)
+  A data-oriented design pattern for game engines and simulations.
+  - Entity: A unique identifier representing an object in the world
+  - Component: Plain data attached to entities
+  - System: Logic that operates on entities with specific components
+  - Resource: Global data not associated with any specific entity
+  - World: Central container holding all entities, components, and resources
+  - Schedule: System execution order manager
+  - Query: High-performance entity filtering and iteration
+  - Commands: Deferred command queue for safe world modifications

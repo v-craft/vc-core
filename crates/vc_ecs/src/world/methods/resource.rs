@@ -34,11 +34,10 @@ impl World {
     ///
     /// ```
     /// # use vc_ecs::resource::Resource;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug, PartialEq, Eq)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug, PartialEq, Eq)]
     /// struct Counter(u64);
-    /// unsafe impl Resource for Counter {}
     ///
     /// assert_eq!(*world.insert_resource(Counter(1)), Counter(1));
     /// assert_eq!(*world.insert_resource(Counter(2)), Counter(2));
@@ -58,11 +57,10 @@ impl World {
     ///
     /// ```
     /// # use vc_ecs::resource::Resource;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug, PartialEq, Eq)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug, PartialEq, Eq)]
     /// struct Foo;
-    /// unsafe impl Resource for Foo {}
     ///
     /// world.insert_resource(Foo);
     /// assert_eq!(world.remove_resource::<Foo>(), Some(Foo));
@@ -86,11 +84,10 @@ impl World {
     ///
     /// ```
     /// # use vc_ecs::resource::Resource;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug)]
     /// struct Temp;
-    /// unsafe impl Resource for Temp {}
     ///
     /// world.insert_resource(Temp);
     /// world.drop_resource::<Temp>();
@@ -112,11 +109,10 @@ impl World {
     ///
     /// ```
     /// # use vc_ecs::resource::Resource;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug, PartialEq, Eq)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug, PartialEq, Eq)]
     /// struct Bar(u64);
-    /// unsafe impl Resource for Bar {}
     ///
     /// world.insert_resource(Bar(20));
     /// assert_eq!(world.get_resource::<Bar>(), Some(&Bar(20)));
@@ -142,11 +138,10 @@ impl World {
     /// ```
     /// # use vc_ecs::resource::Resource;
     /// # use vc_ecs::tick::DetectChanges;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug, PartialEq, Eq)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug, PartialEq, Eq)]
     /// struct Bar(u64);
-    /// unsafe impl Resource for Bar {}
     ///
     /// world.insert_resource(Bar(20));
     /// let res = world.get_resource_ref::<Bar>().unwrap();
@@ -175,11 +170,10 @@ impl World {
     /// ```
     /// # use vc_ecs::resource::Resource;
     /// # use vc_ecs::tick::DetectChanges;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug, PartialEq, Eq)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug, PartialEq, Eq)]
     /// struct Bar(u64);
-    /// unsafe impl Resource for Bar {}
     ///
     /// world.insert_resource(Bar(20));
     /// let mut res = world.get_resource_mut::<Bar>().unwrap();
@@ -208,11 +202,10 @@ impl World {
     ///
     /// ```
     /// # use vc_ecs::resource::Resource;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug, PartialEq, Eq)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug, PartialEq, Eq)]
     /// struct LocalCache(u64);
-    /// unsafe impl Resource for LocalCache {}
     ///
     /// world.insert_non_send(LocalCache(1));
     /// assert_eq!(world.get_non_send::<LocalCache>(), Some(&LocalCache(1)));
@@ -239,11 +232,10 @@ impl World {
     ///
     /// ```
     /// # use vc_ecs::resource::Resource;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug, PartialEq, Eq)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug, PartialEq, Eq)]
     /// struct Foo;
-    /// unsafe impl Resource for Foo {}
     ///
     /// world.insert_non_send(Foo);
     /// assert_eq!(world.remove_non_send::<Foo>(), Some(Foo));
@@ -275,11 +267,10 @@ impl World {
     ///
     /// ```
     /// # use vc_ecs::resource::Resource;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug)]
     /// struct LocalTemp;
-    /// unsafe impl Resource for LocalTemp {}
     ///
     /// world.insert_non_send(LocalTemp);
     /// world.drop_non_send::<LocalTemp>();
@@ -307,11 +298,10 @@ impl World {
     ///
     /// ```
     /// # use vc_ecs::resource::Resource;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug, PartialEq, Eq)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug, PartialEq, Eq)]
     /// struct Bar(u64);
-    /// unsafe impl Resource for Bar {}
     ///
     /// world.insert_non_send(Bar(99));
     /// assert_eq!(world.get_non_send::<Bar>(), Some(&Bar(99)));
@@ -345,11 +335,10 @@ impl World {
     /// ```
     /// # use vc_ecs::resource::Resource;
     /// # use vc_ecs::tick::DetectChanges;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug, PartialEq, Eq)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug, PartialEq, Eq)]
     /// struct Bar(u64);
-    /// unsafe impl Resource for Bar {}
     ///
     /// world.insert_non_send(Bar(7));
     /// let res = world.get_non_send_ref::<Bar>().unwrap();
@@ -386,11 +375,10 @@ impl World {
     /// ```
     /// # use vc_ecs::resource::Resource;
     /// # use vc_ecs::tick::DetectChanges;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
-    /// #[derive(Debug, PartialEq, Eq)]
+    /// # use vc_ecs::world::World;
+    /// # let mut world = World::default();
+    /// #[derive(Resource, Debug, PartialEq, Eq)]
     /// struct Bar(u64);
-    /// unsafe impl Resource for Bar {}
     ///
     /// world.insert_non_send(Bar(7));
     /// let mut res = world.get_non_send_mut::<Bar>().unwrap();
@@ -421,32 +409,22 @@ impl World {
 
 #[cfg(test)]
 mod tests {
-    use alloc::boxed::Box;
-    use core::num::NonZeroU64;
     use core::sync::atomic::Ordering;
     use vc_os::sync::atomic::AtomicUsize;
 
     use crate::resource::Resource;
     use crate::tick::DetectChanges;
-    use crate::world::{World, WorldId};
+    use crate::world::World;
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Resource, Debug, PartialEq, Eq)]
     struct Foo;
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Resource, Debug, PartialEq, Eq)]
     struct Bar(u64);
-
-    impl Resource for Foo {}
-    impl Resource for Bar {}
-
-    fn new_world() -> Box<World> {
-        let world_id = WorldId::new(NonZeroU64::new(1).unwrap());
-        Box::new(World::new(world_id))
-    }
 
     #[test]
     fn insert_basic() {
-        let mut world = new_world();
+        let mut world = World::default();
 
         assert_eq!(*world.insert_resource(Foo), Foo);
         assert_eq!(*world.insert_resource(Bar(234)), Bar(234));
@@ -468,7 +446,7 @@ mod tests {
 
     #[test]
     fn insert_replace() {
-        let mut world = new_world();
+        let mut world = World::default();
 
         world.insert_resource(Bar(100));
         assert_eq!(world.get_resource::<Bar>(), Some(&Bar(100)));
@@ -485,7 +463,8 @@ mod tests {
 
     #[test]
     fn remove_nonexistent() {
-        let mut world = new_world();
+        let mut world = World::default();
+
         assert!(world.remove_resource::<Foo>().is_none());
         assert!(world.get_resource::<Foo>().is_none());
         assert!(world.get_resource_ref::<Foo>().is_none());
@@ -499,7 +478,7 @@ mod tests {
 
     #[test]
     fn get_ref() {
-        let mut world = new_world();
+        let mut world = World::default();
         world.insert_resource(Bar(20));
 
         let res_ref = world.get_resource_ref::<Bar>().unwrap();
@@ -521,7 +500,7 @@ mod tests {
 
     #[test]
     fn get_mut() {
-        let mut world = new_world();
+        let mut world = World::default();
         world.insert_resource(Bar(20));
 
         let res_mut = world.get_resource_mut::<Bar>().unwrap();
@@ -566,7 +545,7 @@ mod tests {
             }
         }
 
-        let mut world = new_world();
+        let mut world = World::default();
 
         // ------------------ Drop ----------------------
         DROP_COUNTER.store(0, Ordering::SeqCst);

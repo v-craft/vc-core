@@ -1,6 +1,9 @@
+use thiserror::Error;
+
 use super::{ReadOnlySystemParam, SystemParam};
 use crate::borrow::{NonSend, NonSendMut, NonSendRef};
 use crate::borrow::{Res, ResMut, ResRef};
+use crate::error::EcsError;
 use crate::resource::{Resource, ResourceId};
 use crate::system::AccessTable;
 use crate::tick::Tick;
@@ -10,11 +13,9 @@ use crate::world::{UnsafeWorld, World};
 // -----------------------------------------------------------------------------
 // Resource
 
-#[cold]
-#[inline(never)]
-fn uninit_resource(name: DebugName) -> ! {
-    panic!("Resource {name} is uninitialzed before system run.")
-}
+#[derive(Error, Debug, Clone, Copy)]
+#[error("Resource {0} is uninitialzed before system run.")]
+pub struct UninitResource(DebugName);
 
 // -----------------------------------------------------------------------------
 // Res
@@ -35,23 +36,23 @@ unsafe impl<T: Resource + Sync> SystemParam for Res<'_, T> {
         table.set_reading_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         _last_run: Tick,
         _this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.read_only();
             if let Some(data) = world.storages.res.get(*state)
                 && let Some(ptr) = data.get_data()
             {
                 ptr.debug_assert_aligned::<T>();
-                Res {
+                Ok(Res {
                     value: ptr.as_ref(),
-                }
+                })
             } else {
-                uninit_resource(DebugName::type_name::<T>());
+                Err(UninitResource(DebugName::type_name::<T>()).into())
             }
         }
     }
@@ -76,20 +77,20 @@ unsafe impl<T: Resource + Sync> SystemParam for ResRef<'_, T> {
         table.set_reading_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         last_run: Tick,
         this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.read_only();
             if let Some(data) = world.storages.res.get(*state)
                 && let Some(untyped) = data.get_ref(last_run, this_run)
             {
-                untyped.into_resource::<T>()
+                Ok(untyped.into_resource::<T>())
             } else {
-                uninit_resource(DebugName::type_name::<T>());
+                Err(UninitResource(DebugName::type_name::<T>()).into())
             }
         }
     }
@@ -112,20 +113,20 @@ unsafe impl<T: Resource + Send> SystemParam for ResMut<'_, T> {
         table.set_writing_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         last_run: Tick,
         this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.data_mut();
             if let Some(data) = world.storages.res.get_mut(*state)
                 && let Some(untyped) = data.get_mut(last_run, this_run)
             {
-                untyped.into_resource::<T>()
+                Ok(untyped.into_resource::<T>())
             } else {
-                uninit_resource(DebugName::type_name::<T>());
+                Err(UninitResource(DebugName::type_name::<T>()).into())
             }
         }
     }
@@ -150,20 +151,24 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<Res<'_, T>> {
         table.set_reading_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         _last_run: Tick,
         _this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.read_only();
-            let data = world.storages.res.get(*state)?;
-            let ptr = data.get_data()?;
+            let Some(data) = world.storages.res.get(*state) else {
+                return Ok(None);
+            };
+            let Some(ptr) = data.get_data() else {
+                return Ok(None);
+            };
             ptr.debug_assert_aligned::<T>();
-            Some(Res {
+            Ok(Some(Res {
                 value: ptr.as_ref(),
-            })
+            }))
         }
     }
 }
@@ -187,16 +192,21 @@ unsafe impl<T: Resource + Sync> SystemParam for Option<ResRef<'_, T>> {
         table.set_reading_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         last_run: Tick,
         this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.read_only();
-            let data = world.storages.res.get(*state)?;
-            Some(data.get_ref(last_run, this_run)?.into_resource::<T>())
+            let Some(data) = world.storages.res.get(*state) else {
+                return Ok(None);
+            };
+            let Some(untyped) = data.get_ref(last_run, this_run) else {
+                return Ok(None);
+            };
+            Ok(Some(untyped.into_resource::<T>()))
         }
     }
 }
@@ -218,16 +228,21 @@ unsafe impl<T: Resource + Send> SystemParam for Option<ResMut<'_, T>> {
         table.set_writing_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         last_run: Tick,
         this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.data_mut();
-            let data = world.storages.res.get_mut(*state)?;
-            Some(data.get_mut(last_run, this_run)?.into_resource::<T>())
+            let Some(data) = world.storages.res.get_mut(*state) else {
+                return Ok(None);
+            };
+            let Some(untyped) = data.get_mut(last_run, this_run) else {
+                return Ok(None);
+            };
+            Ok(Some(untyped.into_resource::<T>()))
         }
     }
 }
@@ -253,23 +268,23 @@ unsafe impl<T: Resource> SystemParam for NonSend<'_, T> {
         table.set_reading_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         _last_run: Tick,
         _this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.read_only();
             if let Some(data) = world.storages.res.get(*state)
                 && let Some(ptr) = data.get_data()
             {
                 ptr.debug_assert_aligned::<T>();
-                NonSend {
+                Ok(NonSend {
                     value: ptr.as_ref(),
-                }
+                })
             } else {
-                uninit_resource(DebugName::type_name::<T>());
+                Err(UninitResource(DebugName::type_name::<T>()).into())
             }
         }
     }
@@ -298,20 +313,20 @@ unsafe impl<T: Resource> SystemParam for NonSendRef<'_, T> {
         table.set_reading_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         last_run: Tick,
         this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.read_only();
             if let Some(data) = world.storages.res.get(*state)
                 && let Some(ptr) = data.get_ref(last_run, this_run)
             {
-                ptr.into_non_send::<T>()
+                Ok(ptr.into_non_send::<T>())
             } else {
-                uninit_resource(DebugName::type_name::<T>());
+                Err(UninitResource(DebugName::type_name::<T>()).into())
             }
         }
     }
@@ -336,20 +351,20 @@ unsafe impl<T: Resource> SystemParam for NonSendMut<'_, T> {
         table.set_writing_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         last_run: Tick,
         this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.data_mut();
             if let Some(data) = world.storages.res.get_mut(*state)
                 && let Some(ptr) = data.get_mut(last_run, this_run)
             {
-                ptr.into_non_send::<T>()
+                Ok(ptr.into_non_send::<T>())
             } else {
-                uninit_resource(DebugName::type_name::<T>());
+                Err(UninitResource(DebugName::type_name::<T>()).into())
             }
         }
     }
@@ -376,20 +391,24 @@ unsafe impl<T: Resource> SystemParam for Option<NonSend<'_, T>> {
         table.set_reading_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         _last_run: Tick,
         _this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.read_only();
-            let data = world.storages.res.get(*state)?;
-            let ptr = data.get_data()?;
+            let Some(data) = world.storages.res.get(*state) else {
+                return Ok(None);
+            };
+            let Some(ptr) = data.get_data() else {
+                return Ok(None);
+            };
             ptr.debug_assert_aligned::<T>();
-            Some(NonSend {
+            Ok(Some(NonSend {
                 value: ptr.as_ref(),
-            })
+            }))
         }
     }
 }
@@ -415,16 +434,21 @@ unsafe impl<T: Resource> SystemParam for Option<NonSendRef<'_, T>> {
         table.set_reading_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         last_run: Tick,
         this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.read_only();
-            let data = world.storages.res.get(*state)?;
-            Some(data.get_ref(last_run, this_run)?.into_non_send::<T>())
+            let Some(data) = world.storages.res.get(*state) else {
+                return Ok(None);
+            };
+            let Some(untyped) = data.get_ref(last_run, this_run) else {
+                return Ok(None);
+            };
+            Ok(Some(untyped.into_non_send::<T>()))
         }
     }
 }
@@ -448,16 +472,21 @@ unsafe impl<T: Resource> SystemParam for Option<NonSendMut<'_, T>> {
         table.set_writing_res(*state)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         last_run: Tick,
         this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         unsafe {
             let world = world.data_mut();
-            let data = world.storages.res.get_mut(*state)?;
-            Some(data.get_mut(last_run, this_run)?.into_non_send::<T>())
+            let Some(data) = world.storages.res.get_mut(*state) else {
+                return Ok(None);
+            };
+            let Some(untyped) = data.get_mut(last_run, this_run) else {
+                return Ok(None);
+            };
+            Ok(Some(untyped.into_non_send::<T>()))
         }
     }
 }

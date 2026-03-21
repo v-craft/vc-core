@@ -78,6 +78,17 @@ impl Entities {
         Self { infos: Vec::new() }
     }
 
+    pub fn len(&self) -> usize {
+        self.infos
+            .iter()
+            .filter(|info| info.location.is_some())
+            .count()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.infos.iter().all(|info| info.location.is_none())
+    }
+
     /// Resolves an entity ID to its current entity with correct generation.
     pub fn resolve(&self, id: EntityId) -> Entity {
         if let Some(info) = self.infos.get(id.index()) {
@@ -169,13 +180,13 @@ impl Entities {
     /// # Returns
     /// - `Ok(())` - Entity can be spawned
     /// - `Err(EntityError::SpawnError)` - If spawning is not possible
-    pub fn can_spawned(&mut self, entity: Entity) -> Result<(), EntityError> {
+    pub fn can_spawned(&self, entity: Entity) -> Result<(), EntityError> {
         let index = entity.index();
-        if index >= self.infos.len() {
-            self.resize(index + 1);
-        }
 
-        let info = unsafe { self.infos.get_unchecked(index) };
+        let Some(info) = self.infos.get(index) else {
+            return Ok(());
+        };
+
         if info.location.is_some() {
             return Err(SpawnError::AlreadySpawned(entity).into());
         }
@@ -212,6 +223,8 @@ impl Entities {
         let index = entity.index();
         if index >= self.infos.len() {
             self.resize(index + 1);
+            let info = unsafe { self.infos.get_unchecked_mut(index) };
+            info.generation = entity.generation();
         }
 
         let info = unsafe { self.infos.get_unchecked_mut(index) };
@@ -255,6 +268,34 @@ impl Entities {
             .ok_or(DespawnError::NotSpawned(entity).into())
     }
 
+    /// Marks an entity as despawned and returns its former location.
+    ///
+    /// # Safety
+    /// Caller must ensure the entity is actually being despawned and its
+    /// components are properly cleaned up.
+    pub unsafe fn update_spawned(
+        &mut self,
+        entity: Entity,
+        location: EntityLocation,
+    ) -> Result<(), EntityError> {
+        let Some(info) = self.infos.get_mut(entity.index()) else {
+            return Err(MoveError::NotFound(entity.id()).into());
+        };
+        if info.generation != entity.generation() {
+            return Err(MoveError::Mismatch {
+                expect: entity,
+                actual: Entity::new(entity.id(), info.generation),
+            }
+            .into());
+        }
+        if let Some(l) = &mut info.location {
+            *l = location;
+            Ok(())
+        } else {
+            Err(MoveError::NotSpawned(entity).into())
+        }
+    }
+
     /// Updates an entity's location after a move between storages.
     ///
     /// # Safety
@@ -264,7 +305,9 @@ impl Entities {
     /// - `Ok(())` - Location updated successfully
     /// - `Err(EntityError)` - If entity state is invalid
     pub unsafe fn move_spawned(&mut self, moved: MovedEntity) -> Result<(), EntityError> {
-        let entity = moved.entity;
+        let Some(entity) = moved.entity else {
+            return Ok(());
+        };
 
         let Some(info) = self.infos.get_mut(entity.index()) else {
             return Err(MoveError::NotFound(entity.id()).into());
@@ -304,14 +347,14 @@ enum Row {
 /// component storage.
 #[derive(Debug, Clone, Copy)]
 pub struct MovedEntity {
-    entity: Entity,
+    entity: Option<Entity>,
     new_row: Row,
 }
 
 impl MovedEntity {
     /// Creates a move record for a table row change.
     #[inline(always)]
-    pub const fn in_table(entity: Entity, row: TableRow) -> Self {
+    pub const fn in_table(entity: Option<Entity>, row: TableRow) -> Self {
         Self {
             entity,
             new_row: Row::Table(row),
@@ -320,7 +363,7 @@ impl MovedEntity {
 
     /// Creates a move record for an archetype row change.
     #[inline(always)]
-    pub const fn in_arche(entity: Entity, row: ArcheRow) -> Self {
+    pub const fn in_arche(entity: Option<Entity>, row: ArcheRow) -> Self {
         Self {
             entity,
             new_row: Row::Arche(row),

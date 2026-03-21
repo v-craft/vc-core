@@ -21,12 +21,11 @@ impl World {
     ///
     /// ```
     /// # use vc_ecs::component::Component;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # #[derive(Debug)]
+    /// # use vc_ecs::world::World;
+    /// # #[derive(Component, Debug)]
     /// # struct Foo;
-    /// # unsafe impl Component for Foo {}
     /// #
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// # let mut world = World::default();
     /// let entity = world.spawn(Foo).entity();
     /// assert!(world.despawn(entity).is_ok());
     ///
@@ -60,17 +59,9 @@ impl World {
         let new_entity = unsafe { self.entities.free(entity.id(), 1) };
         self.allocator.free(new_entity);
 
-        match (arche_moved, table_moved) {
-            (None, None) => Ok(()),
-            (None, Some(moved)) => unsafe { self.entities.move_spawned(moved) },
-            (Some(moved), None) => unsafe { self.entities.move_spawned(moved) },
-            (Some(moved1), Some(moved2)) => {
-                let res1 = unsafe { self.entities.move_spawned(moved1) };
-                let res2 = unsafe { self.entities.move_spawned(moved2) };
-                res1?;
-                res2
-            }
-        }
+        let res1 = unsafe { self.entities.move_spawned(arche_moved) };
+        let res2 = unsafe { self.entities.move_spawned(table_moved) };
+        res1.and(res2)
     }
 }
 

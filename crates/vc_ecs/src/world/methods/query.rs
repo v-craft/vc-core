@@ -59,12 +59,11 @@ impl World {
     ///
     /// ```
     /// # use vc_ecs::component::Component;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # #[derive(Debug)]
+    /// # use vc_ecs::world::World;
+    /// # #[derive(Component, Debug)]
     /// # struct Foo;
-    /// # unsafe impl Component for Foo {}
     /// #
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// # let mut world = World::default();
     /// world.spawn(Foo);
     /// world.spawn(Foo);
     ///
@@ -79,7 +78,7 @@ impl World {
         let last_run = read_only_world.last_run();
         let this_run = read_only_world.this_run();
 
-        unsafe { <Query<D> as SystemParam>::get_param(world, state, last_run, this_run) }
+        unsafe { <Query<D> as SystemParam>::build_param(world, state, last_run, this_run).unwrap() }
     }
 
     /// Creates a cached query with an explicit filter.
@@ -92,15 +91,13 @@ impl World {
     /// ```
     /// # use vc_ecs::component::Component;
     /// # use vc_ecs::query::With;
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
-    /// # #[derive(Debug)]
+    /// # use vc_ecs::world::World;
+    /// # #[derive(Component, Debug)]
     /// # struct Foo;
-    /// # #[derive(Debug)]
+    /// # #[derive(Component, Debug)]
     /// # struct Bar(u64);
-    /// # unsafe impl Component for Foo {}
-    /// # unsafe impl Component for Bar {}
     /// #
-    /// # let mut world = World::new(WorldIdAllocator::new().alloc());
+    /// # let mut world = World::default();
     /// world.spawn((Foo, Bar(1)));
     /// world.spawn(Bar(2));
     ///
@@ -120,7 +117,9 @@ impl World {
         let last_run = read_only_world.last_run();
         let this_run = read_only_world.this_run();
 
-        unsafe { <Query<D, F> as SystemParam>::get_param(world, state, last_run, this_run) }
+        unsafe {
+            <Query<D, F> as SystemParam>::build_param(world, state, last_run, this_run).unwrap()
+        }
     }
 }
 

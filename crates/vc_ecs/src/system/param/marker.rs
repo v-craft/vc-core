@@ -1,4 +1,5 @@
 use super::{ReadOnlySystemParam, SystemParam};
+use crate::error::EcsError;
 use crate::system::AccessTable;
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
@@ -22,13 +23,13 @@ unsafe impl SystemParam for MainThreadMarker {
         true
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         _world: UnsafeWorld<'w>,
         _state: &'s mut Self::State,
         _last_run: Tick,
         _this_run: Tick,
-    ) -> Self::Item<'w, 's> {
-        MainThreadMarker
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
+        Ok(MainThreadMarker)
     }
 }
 
@@ -51,13 +52,13 @@ unsafe impl SystemParam for NonSendMarker {
         true
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         _world: UnsafeWorld<'w>,
         _state: &'s mut Self::State,
         _last_run: Tick,
         _this_run: Tick,
-    ) -> Self::Item<'w, 's> {
-        NonSendMarker
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
+        Ok(NonSendMarker)
     }
 }
 
@@ -80,12 +81,12 @@ unsafe impl SystemParam for ExclusiveMarker {
         true
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         _world: UnsafeWorld<'w>,
         _state: &'s mut Self::State,
         _last_run: Tick,
         _this_run: Tick,
-    ) -> Self::Item<'w, 's> {
-        ExclusiveMarker
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
+        Ok(ExclusiveMarker)
     }
 }

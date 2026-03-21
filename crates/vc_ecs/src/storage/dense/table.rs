@@ -495,7 +495,7 @@ impl Table {
     /// # Safety
     /// - `table_row` must be a valid, initialized row
     /// - After this operation, the row is no longer valid
-    pub unsafe fn swap_remove_and_drop(&mut self, table_row: TableRow) -> Option<MovedEntity> {
+    pub unsafe fn swap_remove_and_drop(&mut self, table_row: TableRow) -> MovedEntity {
         let removal = table_row.0 as usize;
         let last = self.entity_count() - 1;
         debug_assert!(removal <= last);
@@ -506,15 +506,13 @@ impl Table {
                 self.columns.iter_mut().for_each(|c| {
                     c.swap_drop_not_last(removal, last);
                 });
-
-                Some(MovedEntity::in_table(swapped, table_row))
+                MovedEntity::in_table(Some(swapped), table_row)
             } else {
                 self.entities.set_len(last);
                 self.columns.iter_mut().for_each(|c| {
                     c.drop_item(last);
                 });
-
-                None
+                MovedEntity::in_table(None, table_row)
             }
         }
     }
@@ -525,7 +523,7 @@ impl Table {
     /// - `table_row` must be a valid, initialized row
     /// - Caller must ensure components are properly handled elsewhere
     /// - After this operation, the row is no longer valid
-    pub unsafe fn swap_remove_and_forget(&mut self, table_row: TableRow) -> Option<MovedEntity> {
+    pub unsafe fn swap_remove_and_forget(&mut self, table_row: TableRow) -> MovedEntity {
         let removal = table_row.0 as usize;
         let last = self.entity_count() - 1;
         debug_assert!(removal <= last);
@@ -537,11 +535,11 @@ impl Table {
                     c.swap_forget_not_last(removal, last);
                 });
 
-                Some(MovedEntity::in_table(swapped, table_row))
+                MovedEntity::in_table(Some(swapped), table_row)
             } else {
                 self.entities.set_len(last);
                 // `Column::forget_item` do nothing.
-                None
+                MovedEntity::in_table(None, table_row)
             }
         }
     }
@@ -556,7 +554,7 @@ impl Table {
         &mut self,
         table_row: TableRow,
         other: &mut Table,
-    ) -> Option<MovedEntity> {
+    ) -> (MovedEntity, TableRow) {
         let src = table_row.0 as usize;
         let last = self.entity_count() - 1;
         debug_assert!(src <= last);
@@ -581,7 +579,7 @@ impl Table {
                         }
                     });
 
-                Some(MovedEntity::in_table(swapped, new_row))
+                (MovedEntity::in_table(Some(swapped), table_row), new_row)
             } else {
                 let moved = self.entities.remove_last(last);
                 let new_row = other.allocate(moved);
@@ -599,7 +597,7 @@ impl Table {
                         }
                     });
 
-                None
+                (MovedEntity::in_table(None, table_row), new_row)
             }
         }
     }
@@ -615,7 +613,7 @@ impl Table {
         &mut self,
         table_row: TableRow,
         other: &mut Table,
-    ) -> Option<MovedEntity> {
+    ) -> (MovedEntity, TableRow) {
         let src = table_row.0 as usize;
         let last = self.entity_count() - 1;
         debug_assert!(src <= last);
@@ -638,7 +636,7 @@ impl Table {
                         col.swap_forget_not_last(src, last);
                     });
 
-                Some(MovedEntity::in_table(swapped, new_row))
+                (MovedEntity::in_table(Some(swapped), table_row), new_row)
             } else {
                 let moved = self.entities.remove_last(last);
                 let new_row = other.allocate(moved);
@@ -654,7 +652,7 @@ impl Table {
                         }
                     });
 
-                None
+                (MovedEntity::in_table(None, table_row), new_row)
             }
         }
     }

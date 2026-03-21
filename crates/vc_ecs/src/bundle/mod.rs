@@ -10,6 +10,8 @@ mod info;
 // -----------------------------------------------------------------------------
 // Exports
 
+pub use vc_ecs_derive::Bundle;
+
 pub use ident::BundleId;
 pub use impls::Bundle;
 pub use info::{BundleInfo, Bundles};

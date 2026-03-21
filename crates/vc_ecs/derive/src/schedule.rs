@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Index, parse_quote};
+use syn::{DeriveInput, parse_quote};
 
 pub(crate) fn impl_derive_schedule_label(ast: DeriveInput) -> TokenStream {
     use crate::path::fp::CloneFP;

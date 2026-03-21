@@ -1,0 +1,90 @@
+use crate::archetype::ArcheId;
+use crate::bundle::Bundle;
+use crate::utils::DebugCheckedUnwrap;
+use crate::world::EntityOwned;
+
+impl EntityOwned<'_> {
+    pub fn remove<B: Bundle>(&mut self) {
+        let world = unsafe { self.world.full_mut() };
+        let bundle_id = world.register_bundle::<B>();
+        let old_arche_id = self.location.arche_id;
+        let new_arche_id = world.arche_after_remove(old_arche_id, bundle_id);
+
+        if old_arche_id != new_arche_id {
+            self.remove_moved(new_arche_id);
+        }
+    }
+
+    #[inline(never)]
+    pub fn remove_moved(&mut self, new_arche_id: ArcheId) {
+        let old_arche_id = self.location.arche_id;
+        let old_arche = unsafe {
+            self.world
+                .data_mut()
+                .archetypes
+                .get_unchecked_mut(old_arche_id)
+        };
+        let new_arche = unsafe {
+            self.world
+                .data_mut()
+                .archetypes
+                .get_unchecked_mut(new_arche_id)
+        };
+
+        let moved = unsafe { old_arche.remove_entity(self.location.arche_row) };
+        unsafe {
+            self.world.full_mut().entities.move_spawned(moved).unwrap();
+        }
+        let new_arche_row = unsafe { new_arche.insert_entity(self.entity) };
+        self.location.arche_id = new_arche_id;
+        self.location.arche_row = new_arche_row;
+
+        let old_table_id = old_arche.table_id();
+        let new_table_id = new_arche.table_id();
+
+        if old_table_id != new_table_id {
+            let table_row = self.location.table_row;
+            let old_table = unsafe {
+                self.world
+                    .data_mut()
+                    .storages
+                    .tables
+                    .get_unchecked_mut(old_table_id)
+            };
+            let new_table = unsafe {
+                self.world
+                    .data_mut()
+                    .storages
+                    .tables
+                    .get_unchecked_mut(old_table_id)
+            };
+            let (moved, new_row) =
+                unsafe { old_table.move_to_and_drop_missing(table_row, new_table) };
+            unsafe {
+                self.world.full_mut().entities.move_spawned(moved).unwrap();
+            }
+            self.location.table_id = new_table_id;
+            self.location.table_row = new_row;
+        }
+
+        let maps = unsafe { &mut self.world.data_mut().storages.maps };
+        old_arche.sparse_components().iter().for_each(|&id| {
+            if !new_arche.contains_sparse_component(id) {
+                let map_id = unsafe { maps.get_id(id).debug_checked_unwrap() };
+                let map = unsafe { maps.get_unchecked_mut(map_id) };
+                let row = unsafe { map.free(self.entity).unwrap() };
+                unsafe {
+                    map.drop_item(row);
+                }
+            }
+        });
+
+        unsafe {
+            self.world
+                .full_mut()
+                .entities
+                .update_spawned(self.entity, self.location)
+                .unwrap();
+        }
+    }
+}

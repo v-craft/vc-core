@@ -495,7 +495,7 @@ impl dyn TupleStruct {
 /// # Examples
 ///
 /// ```
-/// use vc_reflect::{Reflect, Reflect, ops::{TupleStruct, TupleStructFieldIter}};
+/// use vc_reflect::{Reflect, ops::{TupleStruct, TupleStructFieldIter}};
 ///
 /// #[derive(Reflect)]
 /// struct Foo(i32, &'static str, bool);

@@ -3,6 +3,7 @@
 use core::fmt::Debug;
 
 use super::{QueryData, QueryFilter, QueryState, ReadOnlyQueryData};
+use crate::error::EcsError;
 use crate::system::{AccessTable, ReadOnlySystemParam, SystemParam};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
@@ -112,19 +113,19 @@ unsafe impl<D: QueryData + 'static, F: QueryFilter + 'static> SystemParam for Qu
         state.mark_assess(table)
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         last_run: Tick,
         this_run: Tick,
-    ) -> Self::Item<'w, 's> {
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
         state.update(unsafe { world.read_only() });
-        Query {
+        Ok(Query {
             world,
             state,
             last_run,
             this_run,
-        }
+        })
     }
 }
 

@@ -1,4 +1,5 @@
 use super::{ReadOnlySystemParam, SystemParam};
+use crate::error::EcsError;
 use crate::system::AccessTable;
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
@@ -18,12 +19,14 @@ macro_rules! impl_tuple {
 
             fn mark_access(_table: &mut AccessTable, _state: &Self::State) -> bool { true }
 
-            unsafe fn get_param<'w, 's>(
+            unsafe fn build_param<'w, 's>(
                 _world: UnsafeWorld<'w>,
                 _state: &'s mut Self::State,
                 _last_run: Tick,
                 _this_run: Tick,
-            ) -> Self::Item<'w, 's> {}
+            ) -> Result<Self::Item<'w, 's>, EcsError> {
+                Ok(())
+            }
         }
     };
     (1 : [ $index:tt : $name:ident ]) => {
@@ -48,13 +51,13 @@ macro_rules! impl_tuple {
                 <$name>::mark_access(table, state)
             }
 
-            unsafe fn get_param<'w, 's>(
+            unsafe fn build_param<'w, 's>(
                 world: UnsafeWorld<'w>,
                 state: &'s mut Self::State,
                 last_run: Tick,
                 this_run: Tick,
-            ) -> Self::Item<'w, 's> {
-                unsafe { ( <$name>::get_param(world, state, last_run, this_run), ) }
+            ) -> Result<Self::Item<'w, 's>, EcsError> {
+                unsafe { Ok(( <$name>::build_param(world, state, last_run, this_run)?, )) }
             }
         }
     };
@@ -78,13 +81,13 @@ macro_rules! impl_tuple {
                 true $( && <$name>::mark_access(table, &state.$index) )*
             }
 
-            unsafe fn get_param<'w, 's>(
+            unsafe fn build_param<'w, 's>(
                 world: UnsafeWorld<'w>,
                 state: &'s mut Self::State,
                 last_run: Tick,
                 this_run: Tick,
-            ) -> Self::Item<'w, 's> {
-                unsafe { ( $( <$name>::get_param(world, &mut state.$index, last_run, this_run) ),* ) }
+            ) -> Result<Self::Item<'w, 's>, EcsError> {
+                unsafe { Ok(( $( <$name>::build_param(world, &mut state.$index, last_run, this_run)? ),* )) }
             }
         }
     };

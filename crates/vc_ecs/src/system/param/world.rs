@@ -1,4 +1,5 @@
 use super::SystemParam;
+use crate::error::EcsError;
 use crate::system::AccessTable;
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
@@ -18,13 +19,13 @@ unsafe impl SystemParam for &World {
         table.set_world_ref()
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         _state: &'s mut Self::State,
         _last_run: Tick,
         _this_run: Tick,
-    ) -> Self::Item<'w, 's> {
-        unsafe { world.read_only() }
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
+        unsafe { Ok(world.read_only()) }
     }
 }
 
@@ -42,12 +43,12 @@ unsafe impl SystemParam for &mut World {
         table.set_world_mut()
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         _state: &'s mut Self::State,
         _last_run: Tick,
         _this_run: Tick,
-    ) -> Self::Item<'w, 's> {
-        unsafe { world.full_mut() }
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
+        unsafe { Ok(world.full_mut()) }
     }
 }

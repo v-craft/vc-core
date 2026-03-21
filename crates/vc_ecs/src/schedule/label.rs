@@ -1,3 +1,5 @@
+use vc_ecs_derive::ScheduleLabel;
+
 use crate::define_label;
 use crate::label::Interned;
 
@@ -18,3 +20,6 @@ define_label!(
 
 /// A shorthand for `Interned<dyn ScheduleLabel>`.
 pub type InternedScheduleLabel = Interned<dyn ScheduleLabel>;
+
+#[derive(ScheduleLabel, Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct AnonymousSchedule;

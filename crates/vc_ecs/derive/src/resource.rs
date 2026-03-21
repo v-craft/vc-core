@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, Generics, parse_quote};
+use syn::{DeriveInput, parse_quote};
 
 #[derive(PartialEq, Eq)]
 enum Cloner {

@@ -27,6 +27,7 @@ pub use marker::{ExclusiveMarker, MainThreadMarker, NonSendMarker};
 // SystemParam
 
 use super::AccessTable;
+use crate::error::EcsError;
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
@@ -45,7 +46,7 @@ use crate::world::{UnsafeWorld, World};
 ///
 /// Implementations must report access patterns accurately from
 /// [`mark_access`](SystemParam::mark_access) and must only produce items from
-/// [`get_param`](SystemParam::get_param) that are valid for the supplied world and
+/// [`build_param`](SystemParam::build_param) that are valid for the supplied world and
 /// ticks. Incorrect implementations can violate aliasing guarantees enforced by
 /// the scheduler.
 pub unsafe trait SystemParam: Sized {
@@ -59,12 +60,12 @@ pub unsafe trait SystemParam: Sized {
 
     /// # Safety
     /// TODO
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         last_run: Tick,
         this_run: Tick,
-    ) -> Self::Item<'w, 's>;
+    ) -> Result<Self::Item<'w, 's>, EcsError>;
 }
 
 /// Marker trait for parameters that only perform shared reads.

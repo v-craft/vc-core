@@ -1,6 +1,7 @@
 use core::ops::{Deref, DerefMut};
 
 use super::{ReadOnlySystemParam, SystemParam};
+use crate::error::EcsError;
 use crate::system::AccessTable;
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
@@ -39,12 +40,12 @@ unsafe impl<T: Default + Send + Sync + 'static> SystemParam for Local<'_, T> {
         true
     }
 
-    unsafe fn get_param<'w, 's>(
+    unsafe fn build_param<'w, 's>(
         _world: UnsafeWorld<'w>,
         state: &'s mut Self::State,
         _last_run: Tick,
         _this_run: Tick,
-    ) -> Self::Item<'w, 's> {
-        Local(state)
+    ) -> Result<Self::Item<'w, 's>, EcsError> {
+        Ok(Local(state))
     }
 }

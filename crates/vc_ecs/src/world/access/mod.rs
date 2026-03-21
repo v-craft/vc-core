@@ -12,6 +12,8 @@
 mod entity;
 mod fetch_component;
 mod get_component;
+mod insert;
+mod remove;
 mod unsafe_world;
 
 // -----------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 #![expect(clippy::module_inception, reason = "For better structure.")]
 
+use core::any::type_name;
 use core::fmt::Debug;
 
 use alloc::boxed::Box;
@@ -12,8 +13,8 @@ use vc_utils::hash::{HashMap, HashSet, NoOpHashMap};
 use super::{Dag, SystemKey, SystemObject, UnitSystem};
 use super::{ExecutorKind, MultiThreadedExecutor, SingleThreadedExecutor};
 use super::{InternedScheduleLabel, ScheduleLabel, SystemExecutor};
-use crate::error::DefaultErrorHandler;
-use crate::system::SystemName;
+use crate::schedule::AnonymousSchedule;
+use crate::system::{IntoSystem, SystemName};
 use crate::world::World;
 
 // -----------------------------------------------------------------------------
@@ -210,6 +211,12 @@ impl Debug for Schedule {
     }
 }
 
+impl Default for Schedule {
+    fn default() -> Self {
+        Self::new(AnonymousSchedule)
+    }
+}
+
 impl Schedule {
     fn init_systems(&mut self, world: &mut World) {
         let buffer = &mut self.buffer;
@@ -296,7 +303,7 @@ impl Schedule {
         });
     }
 
-    fn update(&mut self, world: &mut World) {
+    pub fn update(&mut self, world: &mut World) {
         if self.is_changed {
             vc_utils::cold_path();
             // self.recycle_schedule();
@@ -310,6 +317,16 @@ impl Schedule {
             self.executor.init(&self.schedule);
             self.executor_initialized = true;
         }
+    }
+
+    pub fn run(&mut self, world: &mut World) {
+        self.update(world);
+
+        let handler = world.default_error_handler();
+        self.executor.run(&mut self.schedule, world, handler.0);
+
+        world.update_tick();
+        world.apply_commands();
     }
 
     pub fn new(label: impl ScheduleLabel) -> Self {
@@ -331,19 +348,6 @@ impl Schedule {
 
     pub fn label(&self) -> InternedScheduleLabel {
         self.label
-    }
-
-    pub fn run(&mut self, world: &mut World) {
-        self.update(world);
-
-        if let Some(&handler) = world.get_resource::<DefaultErrorHandler>() {
-            self.executor.run(&mut self.schedule, world, handler.0);
-        } else {
-            vc_utils::cold_path();
-            let handler = DefaultErrorHandler::default();
-            world.insert_resource(handler);
-            self.executor.run(&mut self.schedule, world, handler.0);
-        }
     }
 
     pub fn contains(&self, name: SystemName) -> bool {
@@ -388,6 +392,16 @@ impl Schedule {
             assert!(len <= u16::MAX as usize, "too many systems in a schedule");
             true
         }
+    }
+
+    pub fn add_system<S, M>(&mut self, system: S) -> SystemName
+    where
+        S: IntoSystem<(), (), M>,
+    {
+        let name = SystemName::new(type_name::<S>());
+        let unit_system = Box::new(IntoSystem::into_system(system, name));
+        self.insert(name, unit_system);
+        name
     }
 
     pub fn insert_order(&mut self, before: SystemName, after: SystemName) -> bool {

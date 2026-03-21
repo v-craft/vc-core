@@ -300,7 +300,7 @@ impl<M: 'static, F: SystemFunction<M> + 'static> System for FunctionSystem<M, F>
         let last_run = self.meta.get_last_run();
         let this_run = unsafe { world.read_only().advance_tick() };
         let param = unsafe {
-            <F::Param as SystemParam>::get_param(world, &mut state.param, last_run, this_run)
+            <F::Param as SystemParam>::build_param(world, &mut state.param, last_run, this_run)?
         };
 
         let output = <F as SystemFunction<M>>::run(&mut self.func, input, param);

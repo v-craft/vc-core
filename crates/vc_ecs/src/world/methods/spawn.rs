@@ -3,7 +3,7 @@ use vc_ptr::OwningPtr;
 use crate::archetype::ArcheId;
 use crate::bundle::{Bundle, BundleId};
 use crate::component::ComponentWriter;
-use crate::entity::{EntityLocation, SpawnError};
+use crate::entity::{Entity, EntityLocation};
 use crate::tick::Tick;
 use crate::utils::DebugCheckedUnwrap;
 use crate::world::{EntityOwned, World};
@@ -22,18 +22,15 @@ impl World {
     /// # Examples
     ///
     /// ```
-    /// # use vc_ecs::world::{World, WorldIdAllocator};
+    /// # use vc_ecs::world::World;
     /// # use vc_ecs::component::Component;
     /// #
-    /// # #[derive(Debug, PartialEq, Eq)]
+    /// # #[derive(Component, Debug, PartialEq, Eq)]
     /// # struct Foo;
-    /// # #[derive(Debug, PartialEq, Eq)]
+    /// # #[derive(Component, Debug, PartialEq, Eq)]
     /// # struct Bar(u64);
-    /// # unsafe impl Component for Foo {}
-    /// # unsafe impl Component for Bar {}
     /// #
-    /// # let allocator = WorldIdAllocator::new();
-    /// # let mut world = World::new(allocator.alloc());
+    /// let mut world = World::default();
     /// let entity = world.spawn((Foo, Bar(123)));
     /// assert!(entity.contains::<(Foo, Bar)>());
     /// ```
@@ -42,18 +39,68 @@ impl World {
         let bundle_id = self.register_bundle::<B>();
 
         vc_ptr::into_owning!(bundle);
+        let entity = self.allocator.alloc_mut();
 
-        self.spawn_internal(bundle, bundle_id, B::write_explicit, B::write_required)
+        self.spawn_internal(
+            bundle,
+            entity,
+            bundle_id,
+            B::write_explicit,
+            B::write_required,
+        )
+    }
+
+    /// Spawns a new entity from a bundle and returns an owned handle to it.
+    ///
+    /// This method:
+    /// - Registers the bundle type (if needed).
+    /// - Resolves or creates the matching archetype/table layout.
+    /// - Allocates entity storage and writes all explicit/required components.
+    ///
+    /// The returned [`EntityOwned`] borrows the world and provides convenient
+    /// typed access to the spawned entity.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::world::World;
+    /// # use vc_ecs::component::Component;
+    /// # #[derive(Component, Debug, PartialEq, Eq)]
+    /// # struct Foo;
+    /// # #[derive(Component, Debug, PartialEq, Eq)]
+    /// # struct Bar(u64);
+    /// let mut world = World::default();
+    /// let entity = world.alloc_entity();
+    /// let entity = world.spawn_in((Foo, Bar(123)), entity);
+    /// assert!(entity.contains::<(Foo, Bar)>());
+    /// ```
+    #[inline(always)] // We enable inlining to avoid copying data
+    pub fn spawn_in<B: Bundle>(&mut self, bundle: B, entity: Entity) -> EntityOwned<'_> {
+        let bundle_id = self.register_bundle::<B>();
+        vc_ptr::into_owning!(bundle);
+
+        self.spawn_internal(
+            bundle,
+            entity,
+            bundle_id,
+            B::write_explicit,
+            B::write_required,
+        )
     }
 
     #[inline(never)]
     fn spawn_internal(
         &mut self,
         data: OwningPtr<'_>,
+        entity: Entity,
         bundle_id: BundleId,
         write_explicit: unsafe fn(&mut ComponentWriter, usize),
         write_required: unsafe fn(&mut ComponentWriter),
     ) -> EntityOwned<'_> {
+        if ::core::cfg!(debug_assertions) {
+            self.entities.can_spawned(entity).unwrap();
+        }
+
         let tick = Tick::new(*self.this_run.get_mut());
 
         let arche_id = self.register_archetype_by_bundle(bundle_id);
@@ -64,16 +111,6 @@ impl World {
 
         let maps = &mut self.storages.maps;
         let components = &self.components;
-
-        let mut entity = self.allocator.alloc_mut();
-        if let Err(e) = self.entities.can_spawned(entity) {
-            if let SpawnError::Mismatch { .. } = SpawnError::from(e) {
-                entity = unsafe { self.entities.free(entity.id(), 1) };
-                log::warn!("spawning with a unexpected Entity: {entity}");
-            } else {
-                e.handle_error();
-            }
-        }
 
         for &cid in archetype.sparse_components() {
             unsafe {
@@ -152,7 +189,7 @@ impl World {
 #[cfg(test)]
 mod tests {
     use crate::component::{Component, ComponentStorage};
-    use crate::world::{World, WorldIdAllocator};
+    use crate::world::World;
     use alloc::string::String;
 
     #[derive(Debug, PartialEq, Eq)]
@@ -172,8 +209,7 @@ mod tests {
 
     #[test]
     fn spawn_single() {
-        let allocator = WorldIdAllocator::new();
-        let mut world = World::new(allocator.alloc());
+        let mut world = World::default();
 
         let entity = world.spawn(Foo);
         assert!(entity.get::<Foo>().is_some());
@@ -190,8 +226,7 @@ mod tests {
 
     #[test]
     fn spawn_combined() {
-        let allocator = WorldIdAllocator::new();
-        let mut world = World::new(allocator.alloc());
+        let mut world = World::default();
 
         let entity = world.spawn((Foo, Bar(123), Baz(String::from("hello"))));
         assert_eq!(entity.get::<Foo>().unwrap(), &Foo);

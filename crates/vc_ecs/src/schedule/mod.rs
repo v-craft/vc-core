@@ -19,15 +19,16 @@ mod system;
 // -----------------------------------------------------------------------------
 // Exports
 
+pub use vc_ecs_derive::ScheduleLabel;
+
 pub use executor::{ExecutorKind, MainThreadExecutor, SystemExecutor};
 pub use executor::{MultiThreadedExecutor, SingleThreadedExecutor};
 pub use graph::{Dag, DiGraph, ToposortError, UnGraph};
 pub use graph::{Direction, Graph, GraphNode, SccIterator, SccNodes};
-pub use label::{InternedScheduleLabel, ScheduleLabel};
+pub use label::{AnonymousSchedule, InternedScheduleLabel, ScheduleLabel};
 pub use schedule::{Schedule, SystemSchedule};
 pub use schedules::Schedules;
 pub use system::{SystemKey, SystemObject, UnitSystem};
-pub use vc_ecs_derive::ScheduleLabel;
 
 // -----------------------------------------------------------------------------
 // Tests
