@@ -1,4 +1,4 @@
-use super::{AccessTable, System, SystemFlags, SystemIn, SystemMeta};
+use super::{AccessTable, System, SystemFlags, SystemMeta};
 use crate::error::EcsError;
 use crate::system::{IntoSystem, SystemName, UninitSystemError};
 use crate::tick::Tick;
@@ -60,8 +60,8 @@ macro_rules! impl_tuple {
             I: SystemInput + 'static,
             Func: Send + Sync + 'static,
             for<'a> &'a mut Func:
-                FnMut(SystemIn<I>) -> O +
-                FnMut(SystemIn<I::Item<'_>>) -> O +
+                FnMut(I) -> O +
+                FnMut(I::Item<'_>) -> O +
         {
             type Param = ();
             type Input = I;
@@ -80,7 +80,7 @@ macro_rules! impl_tuple {
                     func(input)
                 }
 
-                call(this, SystemIn(I::wrap(input)))
+                call(this, I::wrap(input))
             }
         }
     };
@@ -126,8 +126,8 @@ macro_rules! impl_tuple {
             $name: SystemParam + 'static,
             Func: Send + Sync + 'static,
             for<'a> &'a mut Func:
-                FnMut(SystemIn<I>, $name) -> O +
-                FnMut(SystemIn<I::Item<'_>>, <$name>::Item<'_, '_>) -> O
+                FnMut(I, $name) -> O +
+                FnMut(I::Item<'_>, <$name>::Item<'_, '_>) -> O
         {
             type Param = ( $name, );
             type Input = I;
@@ -147,7 +147,7 @@ macro_rules! impl_tuple {
                     func(input, param.0)
                 }
 
-                call(this, SystemIn(I::wrap(input)), param)
+                call(this, I::wrap(input), param)
             }
         }
     };
@@ -191,8 +191,8 @@ macro_rules! impl_tuple {
             $($name: SystemParam + 'static,)*
             Func: Send + Sync + 'static,
             for<'a> &'a mut Func:
-                FnMut(SystemIn<I>, $($name),*) -> O +
-                FnMut(SystemIn<I::Item<'_>>, $(<$name>::Item<'_, '_>),*) -> O
+                FnMut(I, $($name),*) -> O +
+                FnMut(I::Item<'_>, $(<$name>::Item<'_, '_>),*) -> O
         {
             type Param = ( $($name),* );
             type Input = I;
@@ -212,7 +212,7 @@ macro_rules! impl_tuple {
                     func(input, $(param.$index),*)
                 }
 
-                call(this, SystemIn(I::wrap(input)), param)
+                call(this, I::wrap(input), param)
             }
         }
     }

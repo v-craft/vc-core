@@ -11,6 +11,7 @@ use super::{MainThreadExecutor, SystemExecutor};
 
 use crate::cfg;
 use crate::error::{EcsError, ErrorContext};
+use crate::schedule::schedule::SystemScheduleView;
 use crate::schedule::{ExecutorKind, SystemObject, SystemSchedule};
 use crate::system::System;
 use crate::world::{UnsafeWorld, World};
@@ -23,7 +24,13 @@ struct ExecutorState {
     ready_systems: VecDeque<u16>,
 }
 
-/// Runs the schedule using multi-threads.
+/// Runs the schedule on multiple worker threads.
+///
+/// The executor tracks dependency counters (`incoming`) and a ready queue,
+/// spawning tasks for systems whose dependencies are satisfied.
+///
+/// Non-send systems are dispatched to the external/main-thread executor when
+/// available; sendable systems run on the compute task pool.
 pub struct MultiThreadedExecutor {
     state: Mutex<ExecutorState>,
     completed: ListQueue<u16>,
@@ -35,7 +42,7 @@ struct Context<'scope, 'env, 'sys> {
     world: UnsafeWorld<'env>,
     executor: &'env MultiThreadedExecutor,
     systems: &'sys [SyncUnsafeCell<SystemObject>],
-    outgoing: &'sys [Vec<u16>],
+    outgoing: &'sys [&'sys [u16]],
     scope: &'scope Scope<'scope, 'env, ()>,
     error_handler: fn(EcsError, ErrorContext),
 }
@@ -54,15 +61,21 @@ impl ExecutorState {
     }
 
     fn init(&mut self, schedule: &SystemSchedule) {
-        let systen_count = schedule.systems.len();
+        let systen_count = schedule.keys().len();
         self.ready_systems = VecDeque::with_capacity(systen_count >> 2);
         self.incoming = Vec::with_capacity(systen_count + (systen_count >> 3));
     }
 
     fn reset(&mut self, schedule: &SystemSchedule) {
+        let system_count = schedule.keys().len();
+        assert_eq!(system_count, schedule.systems().len());
+        assert_eq!(system_count, schedule.incoming().len());
+        assert_eq!(system_count, schedule.outgoing().len());
+
         // Use `clone_from` to avoid memory reallocation.
-        self.incoming.clone_from(&schedule.incoming);
+        self.incoming.clear();
         self.ready_systems.clear();
+        self.incoming.extend_from_slice(schedule.incoming());
         self.incoming.iter().enumerate().for_each(|(idx, &num)| {
             if num == 0 {
                 self.ready_systems.push_back(idx as u16);
@@ -72,6 +85,7 @@ impl ExecutorState {
 }
 
 impl MultiThreadedExecutor {
+    /// Creates a new multi-threaded executor.
     pub fn new() -> Self {
         Self {
             state: Mutex::new(ExecutorState::new()),
@@ -89,11 +103,15 @@ impl<'scope, 'env: 'scope, 'sys: 'scope> Context<'scope, 'env, 'sys> {
         scope: &'scope Scope<'scope, 'env, ()>,
         error_handler: fn(EcsError, ErrorContext),
     ) -> Self {
+        let SystemScheduleView {
+            systems, outgoing, ..
+        } = schedule.view();
+
         Self {
             world: world.unsafe_world(),
             executor,
-            systems: SyncUnsafeCell::from_mut(schedule.systems.as_mut_slice()).transpose(),
-            outgoing: &schedule.outgoing,
+            systems: SyncUnsafeCell::from_mut(systems).transpose(),
+            outgoing,
             scope,
             error_handler,
         }
@@ -201,10 +219,14 @@ impl<'scope, 'env: 'scope, 'sys: 'scope> Context<'scope, 'env, 'sys> {
 }
 
 impl SystemExecutor for MultiThreadedExecutor {
+    /// Returns [`ExecutorKind::MultiThreaded`].
     fn kind(&self) -> ExecutorKind {
         ExecutorKind::MultiThreaded
     }
 
+    /// Initializes internal scheduling buffers from a compiled schedule.
+    ///
+    /// This pre-allocates storage for dependency counters and ready queues.
     fn init(&mut self, schedule: &SystemSchedule) {
         self.state
             .get_mut()
@@ -212,13 +234,20 @@ impl SystemExecutor for MultiThreadedExecutor {
             .init(schedule);
     }
 
+    /// Executes the schedule using task-based parallel dispatch.
+    ///
+    /// Systems are launched when all incoming dependencies are resolved.
+    /// Reported system errors are forwarded to `handler`.
+    ///
+    /// If any task panics, the panic payload is captured and rethrown after the
+    /// task scope completes.
     fn run(
         &mut self,
         schedule: &mut SystemSchedule,
         world: &mut World,
         handler: fn(EcsError, ErrorContext),
     ) {
-        if schedule.systems.is_empty() {
+        if schedule.keys().is_empty() {
             return;
         }
 

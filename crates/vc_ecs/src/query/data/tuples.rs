@@ -4,7 +4,7 @@ use super::{QueryData, ReadOnlyQueryData};
 use crate::archetype::Archetype;
 use crate::entity::Entity;
 use crate::storage::{Table, TableRow};
-use crate::system::{FilterData, FilterParamBuilder};
+use crate::system::{AccessParam, FilterParamBuilder};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
@@ -19,7 +19,7 @@ macro_rules! impl_tuple {
 
             const COMPONENTS_ARE_DENSE: bool = true;
 
-            unsafe fn build_state(_world: &mut World) -> Self::State {}
+            fn build_state(_world: &mut World) -> Self::State {}
 
             unsafe fn build_cache<'w>(
                 _state: &Self::State,
@@ -28,8 +28,8 @@ macro_rules! impl_tuple {
                 _this_run: Tick,
             ) -> Self::Cache<'w> {}
 
-            unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
-            unsafe fn build_target(_state: &Self::State, _out: &mut FilterData) -> bool { true }
+            fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
+            fn build_access(_state: &Self::State, _out: &mut AccessParam) -> bool { true }
 
             unsafe fn set_for_arche<'w>(
                 _state: &Self::State,
@@ -68,8 +68,8 @@ macro_rules! impl_tuple {
 
             const COMPONENTS_ARE_DENSE: bool = <$name>::COMPONENTS_ARE_DENSE;
 
-            unsafe fn build_state(world: &mut World) -> Self::State {
-                unsafe { <$name>::build_state(world) }
+            fn build_state(world: &mut World) -> Self::State {
+                <$name>::build_state(world)
             }
 
             unsafe fn build_cache<'w>(
@@ -81,12 +81,12 @@ macro_rules! impl_tuple {
                 unsafe { <$name>::build_cache(state, world, last_run, this_run) }
             }
 
-            unsafe fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>) {
-                unsafe { <$name>::build_filter(state, out); }
+            fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>) {
+                <$name>::build_filter(state, out);
             }
 
-            unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool {
-                unsafe { <$name>::build_target(state, out) }
+            fn build_access(state: &Self::State, out: &mut AccessParam) -> bool {
+                <$name>::build_access(state, out)
             }
 
             unsafe fn set_for_arche<'w>(
@@ -128,10 +128,8 @@ macro_rules! impl_tuple {
 
             const COMPONENTS_ARE_DENSE: bool = { true $( && <$name>::COMPONENTS_ARE_DENSE )* };
 
-            unsafe fn build_state(world: &mut World) -> Self::State {
-                unsafe {
-                    ( $( <$name>::build_state(world), )* )
-                }
+            fn build_state(world: &mut World) -> Self::State {
+                ( $( <$name>::build_state(world), )* )
             }
 
             unsafe fn build_cache<'w>(
@@ -145,18 +143,12 @@ macro_rules! impl_tuple {
                 }
             }
 
-            unsafe fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>) {
-                unsafe {
-                    $( <$name>::build_filter(&state.$index, out); )*
-                }
+            fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>) {
+                $( <$name>::build_filter(&state.$index, out); )*
             }
 
-            unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool {
-                unsafe {
-                    true $(
-                        && <$name>::build_target(&state.$index, out)
-                    )*
-                }
+            fn build_access(state: &Self::State, out: &mut AccessParam) -> bool {
+                true $( && <$name>::build_access(&state.$index, out) )*
             }
 
             unsafe fn set_for_arche<'w>(

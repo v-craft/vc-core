@@ -12,6 +12,18 @@
 /// - [`InRef<'_, T>`] for shared references
 /// - [`InMut<'_, T>`] for mutable references
 /// - Tuples of types that implement `SystemInput` (up to 12 elements)
+///
+/// # Examples
+///
+/// ```ignore
+/// fn system_a(/* .. */) -> String { /* .. */ }
+/// fn system_b(input: In<String>) { /* .. */ }
+/// let system_c = system_a.pipe(system_b);
+///
+/// fn system_e(/* .. */) -> (i32, &Foo, &mut Bar) { /* .. */ }
+/// fn system_f(input: (In<i32>, InRef<Foo>, InMut<Bar>)) { /* .. */ }
+/// let system_g = system_e.pipe(system_f);
+/// ```
 pub trait SystemInput: Sized {
     /// The borrowed data type passed to system execution.  
     type Data<'i>;
@@ -20,10 +32,6 @@ pub trait SystemInput: Sized {
 
     fn wrap(this: Self::Data<'_>) -> Self::Item<'_>;
 }
-
-#[derive(Debug)]
-#[repr(transparent)]
-pub struct SystemIn<T: SystemInput>(pub T);
 
 #[derive(Debug)]
 #[repr(transparent)]

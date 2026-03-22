@@ -20,11 +20,29 @@ use alloc::vec::Vec;
 use crate::archetype::Archetype;
 use crate::entity::Entity;
 use crate::storage::{Table, TableRow};
-use crate::system::FilterParamBuilder;
+use crate::system::{AccessParam, FilterParamBuilder};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
 /// Core trait for types that can filter entities in a query.
+///
+/// The following filters are available:
+///
+/// | Filter | Description |
+/// |--------|-------------|
+/// | `And<(F1, F2, ...)>` | Logical AND - all inner filters must be satisfied |
+/// | `Or<(F1, F2, ...)>` | Logical OR - at least one inner filter must be satisfied |
+/// | `With<C>` | Requires the entity to have component `C` |
+/// | `With<(C1, C2, ...)>` | Requires the entity to have all specified components |
+/// | `Without<C>` | Requires the entity to NOT have component `C` |
+/// | `Without<(C1, C2, ...)>` | Requires the entity to have none of the specified components |
+/// | `Changed<C>` | Component `C` must have been modified in the interval `(last_run, this_run]` |
+/// | `Added<C>` | Component `C` must have been added in the interval `(last_run, this_run]` |
+///
+/// # Type Parameters
+///
+/// - [`QueryFilter::State`] - Static data shared across all query instances
+/// - [`QueryFilter::Cache`] - Per-execution cached data for a specific world state
 ///
 /// # Safety
 ///
@@ -59,11 +77,7 @@ pub unsafe trait QueryFilter {
     ///
     /// This is called once when the query is first created. The state is
     /// shared across all query executions.
-    ///
-    /// # Safety
-    /// - Implementations must properly register any component accesses
-    /// - Must not modify world state in ways that violate invariants
-    unsafe fn build_state(world: &mut World) -> Self::State;
+    fn build_state(world: &mut World) -> Self::State;
 
     /// Builds a per-execution cache for this filter.
     ///
@@ -80,30 +94,46 @@ pub unsafe trait QueryFilter {
         this_run: Tick,
     ) -> Self::Cache<'w>;
 
-    /// Builds filter parameters for query planning.
+    /// Builds archetype-level filter parameters.
     ///
-    /// This converts the filter into a list of [`FilterParamBuilder`]s that
-    /// are used to construct the final query access patterns.
+    /// This contributes constraints used during archetype filtering.
+    /// The `out` vector is in disjunctive-normal-form style: each item is one
+    /// `Or` branch, and the query matches if any branch is satisfied.
     ///
     /// # Note
     ///
-    /// The caller must ensure that [`QueryFilter::build_filter`] is called before
+    /// The caller must ensure that [`QueryFilter::build_filter`] is called **before**
     /// [`QueryData::build_filter`].
-    ///
-    /// The `out` parameter is a vector where each entry represents one branch of
-    /// an `Or` condition - i.e., multiple alternative paths where satisfying any
-    /// one is sufficient.
     ///
     /// For [`QueryFilter::build_filter`] implementations, new branches typically
     /// need to be added. By default, the input `out` is an empty vector, meaning
     /// no archetype would satisfy the filter conditions.
     ///
     /// [`QueryData::build_filter`]: crate::query::QueryData::build_filter
+    fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>);
+
+    /// Builds the set of data this query may access.
     ///
-    /// # Safety
-    /// - Must correctly represent all component accesses
-    /// - Must not introduce conflicting access patterns
-    unsafe fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>);
+    /// Unlike [`QueryFilter::build_filter`], which describes archetype matching,
+    /// this method describes potential component/resource accesses for system
+    /// safety checks (mutual exclusion and aliasing validation).
+    ///
+    /// For example, `Query<(..), Changed<Foo>>` need to access the change tick of `Foo`.
+    ///
+    /// Because `QueryFilter` is read only and evaluated during iterator filtering,
+    /// it's always valid.
+    ///
+    /// # Note
+    ///
+    /// The caller must ensure that [`QueryFilter::build_access`] is called **after**
+    /// [`QueryData::build_access`].
+    ///
+    /// `QueryFilter` target accesses are evaluated during iterator filtering and
+    /// do not conflict with `QueryData` target registration, so `QueryData`
+    /// should register first.
+    ///
+    /// [`QueryData::build_access`]: crate::query::QueryData::build_access
+    fn build_access(state: &Self::State, out: &mut AccessParam);
 
     /// Updates the cache for a specific archetype.
     ///
@@ -157,7 +187,7 @@ unsafe impl QueryFilter for () {
     const COMPONENTS_ARE_DENSE: bool = true;
     const ENABLE_ENTITY_FILTER: bool = false;
 
-    unsafe fn build_state(_world: &mut World) -> Self::State {}
+    fn build_state(_world: &mut World) -> Self::State {}
 
     unsafe fn build_cache<'w>(
         _state: &Self::State,
@@ -167,9 +197,11 @@ unsafe impl QueryFilter for () {
     ) -> Self::Cache<'w> {
     }
 
-    unsafe fn build_filter(_state: &Self::State, outer: &mut Vec<FilterParamBuilder>) {
+    fn build_filter(_state: &Self::State, outer: &mut Vec<FilterParamBuilder>) {
         outer.push(FilterParamBuilder::new());
     }
+
+    fn build_access(_state: &Self::State, _out: &mut AccessParam) {}
 
     unsafe fn set_for_arche<'w>(
         _state: &Self::State,

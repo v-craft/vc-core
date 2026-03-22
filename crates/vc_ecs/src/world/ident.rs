@@ -70,6 +70,9 @@ impl From<WorldId> for NonZeroU64 {
 
 /// A thread-safe allocator for generating unique [`WorldId`]s.
 ///
+/// If you create an object using [`World::default`],
+/// this allocator will be used implicitly.
+///
 /// # Examples
 ///
 /// ```
@@ -86,6 +89,8 @@ impl From<WorldId> for NonZeroU64 {
 ///
 /// The allocator will panic if more than `u64::MAX` worlds are
 /// created in a single program execution.
+///
+/// [`World::default`]: crate::world::World::default
 #[derive(Debug, Default)]
 pub struct WorldIdAllocator {
     next: AtomicU64,

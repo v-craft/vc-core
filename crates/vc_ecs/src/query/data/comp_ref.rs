@@ -8,7 +8,7 @@ use crate::borrow::{Mut, Ref};
 use crate::component::{Component, ComponentId, ComponentStorage};
 use crate::entity::Entity;
 use crate::storage::{Column, Map, Table, TableRow};
-use crate::system::{FilterData, FilterParamBuilder};
+use crate::system::{AccessParam, FilterParamBuilder};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
@@ -83,7 +83,7 @@ unsafe impl<T: Component> QueryData for Ref<'_, T> {
 
     const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
 
-    unsafe fn build_state(world: &mut World) -> Self::State {
+    fn build_state(world: &mut World) -> Self::State {
         world.register_component::<T>()
     }
 
@@ -101,13 +101,13 @@ unsafe impl<T: Component> QueryData for Ref<'_, T> {
         }
     }
 
-    unsafe fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>) {
+    fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>) {
         out.iter_mut().for_each(|param| {
             param.with(*state);
         });
     }
 
-    unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool {
+    fn build_access(state: &Self::State, out: &mut AccessParam) -> bool {
         out.set_reading(*state)
     }
 
@@ -172,7 +172,7 @@ unsafe impl<T: Component> QueryData for Option<Ref<'_, T>> {
     // Due to `Option`, this data will not affect the filter.
     const COMPONENTS_ARE_DENSE: bool = false;
 
-    unsafe fn build_state(world: &mut World) -> Self::State {
+    fn build_state(world: &mut World) -> Self::State {
         world.register_component::<T>()
     }
 
@@ -185,12 +185,12 @@ unsafe impl<T: Component> QueryData for Option<Ref<'_, T>> {
         unsafe { <Ref<T> as QueryData>::build_cache(state, world, last_run, this_run) }
     }
 
-    unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {
+    fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {
         // Because `Option`, we do not set filter.
     }
 
-    unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool {
-        unsafe { <Ref<T> as QueryData>::build_target(state, out) }
+    fn build_access(state: &Self::State, out: &mut AccessParam) -> bool {
+        <Ref<T> as QueryData>::build_access(state, out)
     }
 
     unsafe fn set_for_arche<'w>(
@@ -230,7 +230,7 @@ unsafe impl<T: Component> QueryData for Mut<'_, T> {
 
     const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
 
-    unsafe fn build_state(world: &mut World) -> Self::State {
+    fn build_state(world: &mut World) -> Self::State {
         world.register_component::<T>()
     }
 
@@ -248,13 +248,13 @@ unsafe impl<T: Component> QueryData for Mut<'_, T> {
         }
     }
 
-    unsafe fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>) {
+    fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>) {
         out.iter_mut().for_each(|param| {
             param.with(*state);
         });
     }
 
-    unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool {
+    fn build_access(state: &Self::State, out: &mut AccessParam) -> bool {
         out.set_writing(*state)
     }
 
@@ -317,7 +317,7 @@ unsafe impl<T: Component> QueryData for Option<Mut<'_, T>> {
     // Due to `Option`, this data will not affect the filter.
     const COMPONENTS_ARE_DENSE: bool = false;
 
-    unsafe fn build_state(world: &mut World) -> Self::State {
+    fn build_state(world: &mut World) -> Self::State {
         world.register_component::<T>()
     }
 
@@ -330,12 +330,12 @@ unsafe impl<T: Component> QueryData for Option<Mut<'_, T>> {
         unsafe { <Mut<T> as QueryData>::build_cache(state, world, last_run, this_run) }
     }
 
-    unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {
+    fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {
         // Because `Option`, we do not set filter.
     }
 
-    unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool {
-        unsafe { <Mut<T> as QueryData>::build_target(state, out) }
+    fn build_access(state: &Self::State, out: &mut AccessParam) -> bool {
+        <Mut<T> as QueryData>::build_access(state, out)
     }
 
     unsafe fn set_for_arche<'w>(

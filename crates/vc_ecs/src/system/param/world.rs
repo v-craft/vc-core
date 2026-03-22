@@ -32,7 +32,9 @@ unsafe impl SystemParam for &World {
 unsafe impl SystemParam for &mut World {
     type State = ();
     type Item<'world, 'state> = &'world mut World;
-    const NON_SEND: bool = false;
+    // `&mut World` is treated as `NonSend` because mutable world
+    // access may include operations on `NonSend` resources.
+    const NON_SEND: bool = true;
     // We hold the mutable borrowing of this world,
     // so we cannot parallelize with other systems.
     const EXCLUSIVE: bool = true;

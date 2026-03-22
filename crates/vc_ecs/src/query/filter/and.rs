@@ -4,7 +4,7 @@ use super::QueryFilter;
 use crate::archetype::Archetype;
 use crate::entity::Entity;
 use crate::storage::{Table, TableRow};
-use crate::system::FilterParamBuilder;
+use crate::system::{AccessParam, FilterParamBuilder};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
@@ -42,12 +42,10 @@ macro_rules! impl_tuple {
             const COMPONENTS_ARE_DENSE: bool = <$name>::COMPONENTS_ARE_DENSE;
             const ENABLE_ENTITY_FILTER: bool = <$name>::ENABLE_ENTITY_FILTER;
 
-            unsafe fn build_state(
+            fn build_state(
                 world: &mut World,
             ) -> Self::State {
-                unsafe {
-                    <$name>::build_state(world)
-                }
+                <$name>::build_state(world)
             }
 
             unsafe fn build_cache<'w>(
@@ -61,14 +59,14 @@ macro_rules! impl_tuple {
                 }
             }
 
-            unsafe fn build_filter(
+            fn build_filter(
                 state: &Self::State,
                 outer: &mut Vec<FilterParamBuilder>,
             ) {
-                unsafe {
-                    <$name>::build_filter(state, outer);
-                }
+                <$name>::build_filter(state, outer);
             }
+
+            fn build_access(_state: &Self::State, _out: &mut AccessParam) {}
 
             unsafe fn set_for_arche<'w>(
                 state: &Self::State,
@@ -120,12 +118,10 @@ macro_rules! impl_tuple {
             };
 
 
-            unsafe fn build_state(
+            fn build_state(
                 world: &mut World,
             ) -> Self::State {
-                unsafe {
-                    ( $( <$name>::build_state(world), )* )
-                }
+                ( $( <$name>::build_state(world), )* )
             }
 
             unsafe fn build_cache<'w>(
@@ -139,7 +135,7 @@ macro_rules! impl_tuple {
                 }
             }
 
-            unsafe fn build_filter(
+            fn build_filter(
                 state: &Self::State,
                 outer: &mut Vec<FilterParamBuilder>,
             ) {
@@ -149,7 +145,7 @@ macro_rules! impl_tuple {
                 $({
                     let x = ::core::mem::take(&mut ret);
                     let mut y = Vec::<FilterParamBuilder>::new();
-                    unsafe { <$name>::build_filter(&state.$index, &mut y); }
+                    <$name>::build_filter(&state.$index, &mut y);
                     ret.reserve(x.len() * y.len());
                     x.iter().for_each(|a| {
                         y.iter().for_each(|b| {
@@ -162,6 +158,8 @@ macro_rules! impl_tuple {
 
                 outer.append(&mut ret);
             }
+
+            fn build_access(_state: &Self::State, _out: &mut AccessParam) {}
 
             unsafe fn set_for_arche<'w>(
                 state: &Self::State,

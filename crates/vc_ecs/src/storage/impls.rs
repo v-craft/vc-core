@@ -58,7 +58,6 @@ impl Storages {
     /// | **Unprepared**   | `Id` allocated, but no memory reserved | `ResData` not initialized            |
     /// | **Prepared**     | Memory allocated, ready for insertion  | Storage reserved, data uninitialized |
     /// | **Inserted**     | Memory allocated and initialized       | Active resource                      |
-    /// | **Removed**      | Data dropped, storage be reused        | Inactive resource                    |
     ///
     /// This method transitions a resource from **unprepared** to **prepared** state.
     /// First call may allocate, subsequent calls are no-op

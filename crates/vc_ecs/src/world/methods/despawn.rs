@@ -52,15 +52,15 @@ impl World {
             .for_each(|&cid| unsafe {
                 let map_id = maps.get_id(cid).debug_checked_unwrap();
                 let map = maps.get_unchecked_mut(map_id);
-                let map_row = map.free(entity).debug_checked_unwrap();
+                let map_row = map.deallocate(entity).debug_checked_unwrap();
                 map.drop_item(map_row);
             });
 
         let new_entity = unsafe { self.entities.free(entity.id(), 1) };
         self.allocator.free(new_entity);
 
-        let res1 = unsafe { self.entities.move_spawned(arche_moved) };
-        let res2 = unsafe { self.entities.move_spawned(table_moved) };
+        let res1 = unsafe { self.entities.update_row(arche_moved) };
+        let res2 = unsafe { self.entities.update_row(table_moved) };
         res1.and(res2)
     }
 }

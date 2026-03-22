@@ -14,7 +14,7 @@ use crate::storage::{TableId, TableRow};
 /// An `EntityLocation` contains both archetype and table coordinates, allowing
 /// direct access to the entity's component data. This is used internally by
 /// the ECS to track and retrieve entities efficiently.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EntityLocation {
     pub arche_id: ArcheId,
     pub table_id: TableId,
@@ -60,13 +60,18 @@ pub struct Entities {
 
 impl Debug for Entities {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        fn entity_from(id: usize, generation: EntityGeneration) -> Entity {
+            let id = Entity::from_bits(id as u64).id();
+            Entity::new(id, generation)
+        }
+
         f.debug_list()
             .entries(
                 self.infos
                     .iter()
                     .enumerate()
                     .filter(|(_, info)| info.location.is_some())
-                    .map(|(id, info)| alloc::format!("{id}v{}", info.generation)),
+                    .map(|(id, info)| entity_from(id, info.generation)),
             )
             .finish()
     }
@@ -78,6 +83,10 @@ impl Entities {
         Self { infos: Vec::new() }
     }
 
+    /// Return the number of spawned entities.
+    ///
+    /// # Complexity
+    /// time: O(N)
     pub fn len(&self) -> usize {
         self.infos
             .iter()
@@ -85,11 +94,18 @@ impl Entities {
             .count()
     }
 
+    /// Return true if there are no spawned entities.
+    ///
+    /// # Complexity
+    /// time: O(N)
     pub fn is_empty(&self) -> bool {
         self.infos.iter().all(|info| info.location.is_none())
     }
 
     /// Resolves an entity ID to its current entity with correct generation.
+    ///
+    /// # Complexity
+    /// time: O(1)
     pub fn resolve(&self, id: EntityId) -> Entity {
         if let Some(info) = self.infos.get(id.index()) {
             Entity::new(id, info.generation)
@@ -109,7 +125,7 @@ impl Entities {
     /// - `FetchError::NotFound` - Entity index out of bounds
     /// - `FetchError::Mismatch` - Generation counter mismatch (stale entity)
     /// - `FetchError::NotSpawned` - Entity exists but is not spawned
-    pub fn get_spawned(&self, entity: Entity) -> Result<EntityLocation, EntityError> {
+    pub fn locate(&self, entity: Entity) -> Result<EntityLocation, EntityError> {
         let Some(info) = self.infos.get(entity.index()) else {
             return Err(FetchError::NotFound(entity.id()).into());
         };
@@ -180,7 +196,7 @@ impl Entities {
     /// # Returns
     /// - `Ok(())` - Entity can be spawned
     /// - `Err(EntityError::SpawnError)` - If spawning is not possible
-    pub fn can_spawned(&self, entity: Entity) -> Result<(), EntityError> {
+    pub fn can_spawn(&self, entity: Entity) -> Result<(), EntityError> {
         let index = entity.index();
 
         let Some(info) = self.infos.get(index) else {
@@ -273,7 +289,7 @@ impl Entities {
     /// # Safety
     /// Caller must ensure the entity is actually being despawned and its
     /// components are properly cleaned up.
-    pub unsafe fn update_spawned(
+    pub unsafe fn update_location(
         &mut self,
         entity: Entity,
         location: EntityLocation,
@@ -304,7 +320,7 @@ impl Entities {
     /// # Returns
     /// - `Ok(())` - Location updated successfully
     /// - `Err(EntityError)` - If entity state is invalid
-    pub unsafe fn move_spawned(&mut self, moved: MovedEntity) -> Result<(), EntityError> {
+    pub unsafe fn update_row(&mut self, moved: MovedEntityRow) -> Result<(), EntityError> {
         let Some(entity) = moved.entity else {
             return Ok(());
         };
@@ -346,12 +362,12 @@ enum Row {
 /// within tables, ensuring that entity locations stay in sync with
 /// component storage.
 #[derive(Debug, Clone, Copy)]
-pub struct MovedEntity {
+pub struct MovedEntityRow {
     entity: Option<Entity>,
     new_row: Row,
 }
 
-impl MovedEntity {
+impl MovedEntityRow {
     /// Creates a move record for a table row change.
     #[inline(always)]
     pub const fn in_table(entity: Option<Entity>, row: TableRow) -> Self {

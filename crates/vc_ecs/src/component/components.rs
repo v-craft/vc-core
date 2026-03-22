@@ -85,6 +85,8 @@ impl Components {
     /// Otherwise, it creates a new descriptor, assigns a new ID, and stores the metadata.
     #[inline]
     pub fn register<T: Component>(&mut self) -> ComponentId {
+        // Separate to reduce the stack frame of external functions,
+        // thereby improving the execution speed of the hot path.
         #[cold]
         #[inline(never)]
         fn register_internal<T: Component>(this: &mut Components) -> ComponentId {

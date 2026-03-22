@@ -1,5 +1,6 @@
-use alloc::vec::Vec;
+use alloc::collections::BinaryHeap;
 use core::alloc::Layout;
+use core::cmp::Reverse;
 use core::fmt::Debug;
 use core::num::NonZeroUsize;
 
@@ -24,7 +25,7 @@ use crate::utils::Dropper;
 /// - `mapper`: Maps entities to their corresponding storage rows
 pub struct Map {
     column: Column,
-    free: Vec<MapRow>,
+    free: BinaryHeap<Reverse<MapRow>>,
     capacity: usize,
     mapper: SparseHashMap<Entity, MapRow>,
 }
@@ -56,7 +57,7 @@ impl Map {
     pub(crate) fn new(layout: Layout, dropper: Option<Dropper>) -> Self {
         Self {
             column: unsafe { Column::new(layout, dropper) },
-            free: Vec::new(),
+            free: BinaryHeap::new(),
             capacity: 0,
             mapper: SparseHashMap::new(),
         }
@@ -70,10 +71,11 @@ impl Map {
     /// - The entity must not already exist in the map
     /// - The returned `MapRow` is valid until explicitly removed
     #[inline]
-    pub unsafe fn alloc(&mut self, entity: Entity) -> MapRow {
+    #[must_use]
+    pub unsafe fn allocate(&mut self, entity: Entity) -> MapRow {
         #[cold]
         #[inline(never)]
-        fn reserve_many(this: &mut Map) -> MapRow {
+        fn reserve_many(this: &mut Map) -> Reverse<MapRow> {
             let guard = AbortOnPanic;
 
             let new_cap = (this.capacity << 1).max(4);
@@ -89,21 +91,20 @@ impl Map {
                     this.column.realloc(current, new_capacity);
                 }
             }
-            // Reverse order to keep smaller indices near
-            // the end for better LIFO performance
+
             let range = (this.capacity as u32 + 1)..(new_cap as u32);
-            this.free.extend(range.rev().map(MapRow));
+            this.free.extend(range.map(MapRow).map(Reverse));
 
             this.capacity = new_cap;
 
             ::core::mem::forget(guard);
-            row
+            Reverse(row)
         }
 
         debug_assert!(!self.mapper.contains_key(&entity));
         let row = self.free.pop().unwrap_or_else(|| reserve_many(self));
-        self.mapper.insert(entity, row);
-        row
+        self.mapper.insert(entity, row.0);
+        row.0
     }
 
     /// Frees the storage row associated with an entity.
@@ -119,9 +120,10 @@ impl Map {
     /// - The component data at that row has been properly handled
     /// - The row will not be used after this call
     #[inline]
-    pub unsafe fn free(&mut self, entity: Entity) -> Option<MapRow> {
+    #[must_use]
+    pub unsafe fn deallocate(&mut self, entity: Entity) -> Option<MapRow> {
         let map_row = self.mapper.remove(&entity)?;
-        self.free.push(map_row);
+        self.free.push(Reverse(map_row));
         Some(map_row)
     }
 
@@ -258,7 +260,7 @@ impl Map {
     /// # Safety
     /// - `map_row` must be valid and initialized
     /// - The caller is responsible for properly dropping the returned pointer
-    /// - Call [`Map::free`] before this function if the entity is removed.
+    /// - Call [`Map::deallocate`] before this function if the entity is removed.
     #[inline]
     #[must_use = "The returned pointer should be used."]
     pub unsafe fn remove_item(&mut self, map_row: MapRow) -> OwningPtr<'_> {
@@ -270,7 +272,7 @@ impl Map {
     ///
     /// # Safety
     /// - `map_row` must be valid and initialized
-    /// - Call [`Map::free`] before this function if the entity is removed.
+    /// - Call [`Map::deallocate`] before this function if the entity is removed.
     #[inline]
     pub unsafe fn drop_item(&mut self, map_row: MapRow) {
         debug_assert!((map_row.0 as usize) < self.capacity);

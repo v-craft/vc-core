@@ -4,7 +4,7 @@ use super::{QueryData, ReadOnlyQueryData};
 use crate::archetype::Archetype;
 use crate::entity::Entity;
 use crate::storage::{Table, TableRow};
-use crate::system::{FilterData, FilterParamBuilder};
+use crate::system::{AccessParam, FilterParamBuilder};
 use crate::tick::Tick;
 use crate::world::{EntityMut, EntityRef, UnsafeWorld, World};
 
@@ -20,7 +20,7 @@ unsafe impl QueryData for Entity {
 
     const COMPONENTS_ARE_DENSE: bool = true;
 
-    unsafe fn build_state(_world: &mut World) -> Self::State {}
+    fn build_state(_world: &mut World) -> Self::State {}
 
     unsafe fn build_cache<'w>(
         _state: &Self::State,
@@ -30,9 +30,9 @@ unsafe impl QueryData for Entity {
     ) -> Self::Cache<'w> {
     }
 
-    unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
+    fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
 
-    unsafe fn build_target(_state: &Self::State, _out: &mut FilterData) -> bool {
+    fn build_access(_state: &Self::State, _out: &mut AccessParam) -> bool {
         true // We did not access any components
     }
 
@@ -79,7 +79,7 @@ unsafe impl QueryData for EntityRef<'_> {
 
     const COMPONENTS_ARE_DENSE: bool = true;
 
-    unsafe fn build_state(_world: &mut World) -> Self::State {}
+    fn build_state(_world: &mut World) -> Self::State {}
 
     unsafe fn build_cache<'w>(
         _state: &Self::State,
@@ -94,9 +94,9 @@ unsafe impl QueryData for EntityRef<'_> {
         }
     }
 
-    unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
+    fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
 
-    unsafe fn build_target(_state: &Self::State, out: &mut FilterData) -> bool {
+    fn build_access(_state: &Self::State, out: &mut AccessParam) -> bool {
         out.set_entity_ref()
     }
 
@@ -122,7 +122,7 @@ unsafe impl QueryData for EntityRef<'_> {
         _table_row: TableRow,
     ) -> Option<Self::Item<'w>> {
         let world = unsafe { cache.world.read_only() };
-        let location = world.entities.get_spawned(entity).unwrap();
+        let location = world.entities.locate(entity).unwrap();
         Some(EntityRef {
             world,
             entity,
@@ -140,7 +140,7 @@ unsafe impl QueryData for EntityMut<'_> {
 
     const COMPONENTS_ARE_DENSE: bool = true;
 
-    unsafe fn build_state(_world: &mut World) -> Self::State {}
+    fn build_state(_world: &mut World) -> Self::State {}
 
     unsafe fn build_cache<'w>(
         _state: &Self::State,
@@ -155,9 +155,9 @@ unsafe impl QueryData for EntityMut<'_> {
         }
     }
 
-    unsafe fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
+    fn build_filter(_state: &Self::State, _out: &mut Vec<FilterParamBuilder>) {}
 
-    unsafe fn build_target(_state: &Self::State, out: &mut FilterData) -> bool {
+    fn build_access(_state: &Self::State, out: &mut AccessParam) -> bool {
         out.set_entity_mut()
     }
 
@@ -183,7 +183,7 @@ unsafe impl QueryData for EntityMut<'_> {
         _table_row: TableRow,
     ) -> Option<Self::Item<'w>> {
         let world = unsafe { cache.world.data_mut() };
-        let location = world.entities.get_spawned(entity).unwrap();
+        let location = world.entities.locate(entity).unwrap();
         Some(EntityMut {
             world,
             entity,

@@ -87,7 +87,7 @@ impl ResData {
 
     /// Returns whether the resource is currently initialized.
     #[inline(always)]
-    pub const fn is_active(&self) -> bool {
+    pub fn is_active(&self) -> bool {
         !self.data.is_null()
     }
 
@@ -149,6 +149,23 @@ impl ResData {
         }
     }
 
+    /// Drop the resource in situ.
+    ///
+    /// # Safety
+    /// - `T` must matche the resource's layout
+    /// - If the data is NonSend, the function must be call in correct thread.
+    pub unsafe fn drop_in_place<T: Resource>(&mut self) {
+        if !self.data.is_null() {
+            unsafe {
+                self.data.cast::<T>().drop_in_place();
+            }
+            if self.layout.size() != 0 {
+                unsafe { malloc::dealloc(self.data, self.layout) };
+            }
+            self.data = ptr::null_mut();
+        }
+    }
+
     /// Removes the resource and returns ownership of its data.
     ///
     /// # Safety
@@ -167,23 +184,6 @@ impl ResData {
         self.data = ptr::null_mut();
 
         Some(ret)
-    }
-
-    /// Drop the resource in situ.
-    ///
-    /// # Safety
-    /// - `T` must matche the resource's layout
-    /// - If the data is NonSend, the function must be call in correct thread.
-    pub unsafe fn drop_in_place<T: Resource>(&mut self) {
-        if !self.data.is_null() {
-            unsafe {
-                self.data.cast::<T>().drop_in_place();
-            }
-            if self.layout.size() != 0 {
-                unsafe { malloc::dealloc(self.data, self.layout) };
-            }
-            self.data = ptr::null_mut();
-        }
     }
 
     /// Inserts a new resource value.

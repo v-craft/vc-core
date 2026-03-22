@@ -1,6 +1,3 @@
-#![allow(clippy::needless_lifetimes, reason = "todo")]
-#![allow(clippy::missing_safety_doc, reason = "todo")]
-
 use alloc::boxed::Box;
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
@@ -12,22 +9,52 @@ use crate::archetype::{ArcheId, Archetypes};
 use crate::entity::StorageId;
 use crate::query::{QueryData, QueryFilter};
 use crate::resource::Resource;
-use crate::system::{AccessTable, FilterData, FilterParam, FilterParamBuilder};
+use crate::system::{AccessParam, AccessTable, FilterParam, FilterParamBuilder};
 use crate::utils::DebugName;
 use crate::world::{World, WorldId};
 
 // -----------------------------------------------------------------------------
 // QueryState
 
+/// Reusable query state for a specific query type.
+///
+/// `QueryState` roughly contains:
+/// - The owning world ID
+/// - A state version used for incremental updates
+/// - The set of matched archetypes or tables at the current version
+/// - Cached state for query data and query filters
+///
+/// # Incremental Updates
+///
+/// As described in [`Query`], query filtering happens in two phases:
+/// archetype filtering and entity filtering. [`QueryState`] caches the
+/// archetype-filtering result.
+///
+/// If a query involves sparse components, the archetype-filtering output is an
+/// archetype set (by [`ArcheId`]). If the query is fully dense, the cached
+/// output is a table set.
+///
+/// In `World`, archetype count only grows and never shrinks, and each generated
+/// archetype represents a fixed component set. Therefore, the archetype count
+/// is used as a version number, and updates only need to process newly added
+/// archetypes.
+///
+/// # Usage
+///
+/// [`Query`] is effectively a typed view over [`QueryState`]. In most contexts,
+/// operations that work with [`Query`] can also be performed directly with
+/// [`QueryState`], such as iterating with `iter_mut`.
+///
+/// [`Query`]: crate::query::Query
 #[derive(Clone)]
 pub struct QueryState<D: QueryData, F: QueryFilter = ()> {
-    pub(crate) world_id: WorldId,
-    pub(crate) version: usize,
-    pub(crate) storages: Vec<StorageId>,
-    pub(crate) filter_data: FilterData,
-    pub(crate) filter_params: Box<[FilterParam]>,
-    pub(crate) d_state: D::State,
-    pub(crate) f_state: F::State,
+    pub(super) world_id: WorldId,
+    pub(super) version: usize,
+    pub(super) storages: Vec<StorageId>,
+    pub(super) filter_data: AccessParam,
+    pub(super) filter_params: Box<[FilterParam]>,
+    pub(super) d_state: D::State,
+    pub(super) f_state: F::State,
 }
 
 impl<D: QueryData + 'static, F: QueryFilter + 'static> Resource for QueryState<D, F> {}
@@ -45,35 +72,42 @@ impl<D: QueryData, F: QueryFilter> Debug for QueryState<D, F> {
 }
 
 impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
+    /// Compile-time flag indicating whether this query is fully dense.
+    ///
+    /// `true` means neither query data nor query filters involve sparse
+    /// components, so table-based caching can be used.
     pub const IS_DENSE: bool = D::COMPONENTS_ARE_DENSE && F::COMPONENTS_ARE_DENSE;
 
+    /// Returns the world ID this query state belongs to.
     pub fn world_id(&self) -> WorldId {
         self.world_id
     }
 
+    fn invalid_query_data() -> ! {
+        panic!("invalid query data: {}", DebugName::type_name::<D>())
+    }
+
+    /// Builds a new query state from the given world.
+    ///
+    /// This initializes query/filter internal states, computes filter params,
+    /// and collects the initial matched storage set.
     pub fn new(world: &mut World) -> Self {
         let world_id = world.id();
         let version = world.archetypes.len();
 
-        let d_state = unsafe { D::build_state(world) };
-        let f_state = unsafe { F::build_state(world) };
+        let d_state = D::build_state(world);
+        let f_state = F::build_state(world);
 
-        let mut filter_data = FilterData::new();
-        unsafe {
-            if !D::build_target(&d_state, &mut filter_data) {
-                panic!(
-                    "invalid query params: {}",
-                    DebugName::type_name::<QueryState<D, F>>()
-                );
-            }
-        }
+        let mut filter_data = AccessParam::new();
+        if !D::build_access(&d_state, &mut filter_data) {
+            Self::invalid_query_data();
+        } // `F::build_access` function must be called after `D::build_access`.
+        F::build_access(&f_state, &mut filter_data);
 
         let mut builders = Vec::<FilterParamBuilder>::new();
-        unsafe {
-            // `F::build_filter` function must be called before `D::build_filter`.
-            F::build_filter(&f_state, &mut builders);
-            D::build_filter(&d_state, &mut builders);
-        }
+        // `F::build_filter` function must be called before `D::build_filter`.
+        F::build_filter(&f_state, &mut builders);
+        D::build_filter(&d_state, &mut builders);
         let filter_params: Box<[FilterParam]> = collect_param(builders);
 
         let storages: Vec<StorageId> = if Self::IS_DENSE {
@@ -93,6 +127,10 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
         }
     }
 
+    /// Incrementally updates cached storage matches against the current world.
+    ///
+    /// Only archetypes added since the last recorded version are processed.
+    /// Panics if `world` does not match [`QueryState::world_id`].
     pub fn update(&mut self, world: &World) {
         assert!(self.world_id == world.id());
 
@@ -116,8 +154,11 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
         }
     }
 
+    /// Records this query's access requirements into an [`AccessTable`].
+    ///
+    /// Returns `false` when access conflicts are detected.
     pub(crate) fn mark_assess(&self, access_table: &mut AccessTable) -> bool {
-        let data: &FilterData = &self.filter_data;
+        let data: &AccessParam = &self.filter_data;
         let params: &[FilterParam] = &self.filter_params;
         access_table.set_query(data, params)
     }
@@ -130,25 +171,30 @@ fn updata_dense_state(
     filter_params: &[FilterParam],
     archetypes: &Archetypes,
 ) {
+    let old_len = storages.len();
     let new_version = archetypes.len();
 
     for arche_id in (*version)..new_version {
         let arche_id = unsafe { ArcheId::new_unchecked(arche_id as u32) };
         let archetype = unsafe { archetypes.get_unchecked(arche_id) };
-        let table_id = archetype.table_id();
+        let storage_id = StorageId {
+            table_id: archetype.table_id(),
+        };
 
         let matched = filter_params
             .iter()
             .any(|param| archetype.matches_sorted(param.with(), param.without()));
-        if matched {
-            storages.push(StorageId { table_id });
+        if matched && storages.binary_search(&storage_id).is_err() {
+            storages.push(storage_id);
         }
     }
 
-    // storages is partially sorted,
-    // so we choose `sort` instead of `unstable_sort`.
-    storages.sort();
-    storages.dedup();
+    if storages.len() != old_len {
+        // storages is partially sorted,
+        // so we choose `sort` instead of `unstable_sort`.
+        storages.sort();
+        storages.dedup(); // optional
+    }
 
     *version = new_version;
 }
@@ -165,6 +211,7 @@ fn updata_sparse_state(
     for arche_id in (*version)..new_version {
         let arche_id = unsafe { ArcheId::new_unchecked(arche_id as u32) };
         let archetype = unsafe { archetypes.get_unchecked(arche_id) };
+
         let matched = filter_params
             .iter()
             .any(|param| archetype.matches_sorted(param.with(), param.without()));

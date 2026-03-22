@@ -62,12 +62,7 @@ impl Hash for TableId {
 impl PartialEq for TableId {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        use core::mem::transmute_copy;
-        // SAFETY: `TableId` is transparent to `NonMaxU32/u32`
-        unsafe {
-            // `transmute` is faster then `NonMaxU32::get`
-            transmute_copy::<Self, u32>(self) == transmute_copy::<Self, u32>(other)
-        }
+        self.0 == other.0
     }
 }
 

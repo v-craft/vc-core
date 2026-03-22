@@ -5,7 +5,7 @@ use crate::archetype::Archetype;
 use crate::component::{Component, ComponentId, ComponentStorage};
 use crate::entity::Entity;
 use crate::storage::{Table, TableRow};
-use crate::system::FilterParamBuilder;
+use crate::system::{AccessParam, FilterParamBuilder};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
@@ -42,7 +42,7 @@ unsafe impl<T: Component> QueryFilter for Without<T> {
     const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
     const ENABLE_ENTITY_FILTER: bool = false;
 
-    unsafe fn build_state(world: &mut World) -> Self::State {
+    fn build_state(world: &mut World) -> Self::State {
         world.register_component::<T>()
     }
 
@@ -55,11 +55,13 @@ unsafe impl<T: Component> QueryFilter for Without<T> {
         false
     }
 
-    unsafe fn build_filter(state: &Self::State, outer: &mut Vec<FilterParamBuilder>) {
+    fn build_filter(state: &Self::State, outer: &mut Vec<FilterParamBuilder>) {
         let mut builder = FilterParamBuilder::new();
         builder.without(*state);
         outer.push(builder);
     }
+
+    fn build_access(_state: &Self::State, _out: &mut AccessParam) {}
 
     unsafe fn set_for_arche<'w>(
         state: &Self::State,
@@ -127,7 +129,7 @@ macro_rules! impl_tuple {
             const COMPONENTS_ARE_DENSE: bool = <$name>::STORAGE.is_dense();
             const ENABLE_ENTITY_FILTER: bool = false;
 
-            unsafe fn build_state(
+            fn build_state(
                 world: &mut World,
             ) -> Self::State {
                 world.register_component::<$name>()
@@ -142,7 +144,7 @@ macro_rules! impl_tuple {
                 false
             }
 
-            unsafe fn build_filter(
+            fn build_filter(
                 state: &Self::State,
                 outer: &mut Vec<FilterParamBuilder>,
             ) {
@@ -150,6 +152,8 @@ macro_rules! impl_tuple {
                 builder.without(*state);
                 outer.push(builder);
             }
+
+            fn build_access(_state: &Self::State, _out: &mut AccessParam) {}
 
             unsafe fn set_for_arche<'w>(
                 state: &Self::State,
@@ -206,7 +210,7 @@ macro_rules! impl_tuple {
             };
             const ENABLE_ENTITY_FILTER: bool = false;
 
-            unsafe fn build_state(
+            fn build_state(
                 world: &mut World,
             ) -> Self::State {
                 ( $( world.register_component::<$name>(), )* )
@@ -221,7 +225,7 @@ macro_rules! impl_tuple {
                 false
             }
 
-            unsafe fn build_filter(
+            fn build_filter(
                 state: &Self::State,
                 outer: &mut Vec<FilterParamBuilder>,
             ) {
@@ -229,6 +233,8 @@ macro_rules! impl_tuple {
                 $( builder.without(state.$index); )*
                 outer.push(builder);
             }
+
+            fn build_access(_state: &Self::State, _out: &mut AccessParam) {}
 
             unsafe fn set_for_arche<'w>(
                 state: &Self::State,

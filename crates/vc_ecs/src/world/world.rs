@@ -199,7 +199,7 @@ impl World {
     }
 
     pub fn entity_owned(&mut self, entity: Entity) -> EntityOwned<'_> {
-        let location = self.entities.get_spawned(entity).unwrap();
+        let location = self.entities.locate(entity).unwrap();
         EntityOwned {
             world: self.into(),
             entity,
@@ -208,7 +208,7 @@ impl World {
     }
 
     pub fn entity_mut(&mut self, entity: Entity) -> EntityMut<'_> {
-        let location = self.entities.get_spawned(entity).unwrap();
+        let location = self.entities.locate(entity).unwrap();
         let last_run = self.last_run();
         let this_run = self.this_run();
         EntityMut {
@@ -221,7 +221,7 @@ impl World {
     }
 
     pub fn entity_ref(&self, entity: Entity) -> EntityRef<'_> {
-        let location = self.entities.get_spawned(entity).unwrap();
+        let location = self.entities.locate(entity).unwrap();
         let last_run = self.last_run();
         let this_run = self.this_run();
         EntityRef {

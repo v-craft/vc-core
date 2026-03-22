@@ -6,6 +6,22 @@ use crate::system::AccessTable;
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
+/// A system-local variable.
+///
+/// When used as a system parameter, each compiled system instance owns one
+/// independent value of `T`. This makes `Local<T>` a convenient alternative to
+/// global `static` state for per-system counters, caches, and temporary state.
+///
+/// The value is initialized from `T::default()` during system initialization
+/// and then reused across subsequent runs of that system.
+///
+/// # Examples
+///
+/// ```ignore
+/// fn system(mut counter: Local<u64>) {
+///     *counter += 1;
+/// }
+/// ```
 #[derive(Debug)]
 pub struct Local<'s, T: Default + Send + Sync + 'static>(&'s mut T);
 

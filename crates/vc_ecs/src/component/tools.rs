@@ -21,8 +21,9 @@ use crate::utils::DebugCheckedUnwrap;
 
 /// A registrar for component types.
 ///
-/// This struct provides a safe interface for registering component types
-/// with the component system during the registration phase.
+/// Provided for [`RequiredComponents`] implementation.
+///
+/// [`RequiredComponents`]: crate::component::RequiredComponents
 #[repr(transparent)]
 pub struct ComponentRegistrar<'a> {
     components: &'a mut Components,
@@ -39,7 +40,7 @@ impl<'a> ComponentRegistrar<'a> {
     ///
     /// This method ensures the component type is registered and assigned
     /// a unique ID for future operations.
-    #[inline(never)]
+    #[inline(never)] // we prohibit inlining to speed up compilation.
     pub fn register<T: Component>(&mut self) {
         self.components.register::<T>();
     }
@@ -86,7 +87,7 @@ impl<'a> ComponentCollector<'a> {
     ///
     /// This method registers the component if needed, then recursively
     /// collects all components required by it.
-    #[inline(never)]
+    #[inline(never)] // we prohibit inlining to speed up compilation.
     pub fn collect<T: Component>(&mut self) {
         let id = self.components.register::<T>();
         if self.collected.insert(id) {
@@ -108,7 +109,6 @@ impl<'a> ComponentCollector<'a> {
     ///
     /// The component lists are sorted and deduplicated to ensure
     /// deterministic order and uniqueness.
-    #[inline]
     pub fn sorted(self) -> CollectResult {
         let mut dense = self.dense;
         let mut sparse = self.sparse;
@@ -125,7 +125,6 @@ impl<'a> ComponentCollector<'a> {
     ///
     /// This preserves the original collection order, which may be
     /// more efficient when order is not important.
-    #[inline]
     pub fn unsorted(self) -> CollectResult {
         CollectResult {
             dense: self.dense,
@@ -151,6 +150,32 @@ enum WritedState {
 /// This struct manages the writing of component data to either dense tables
 /// or sparse maps, handling both required and explicit writes.
 ///
+/// # Writing Model
+///
+/// The writer is entity-scoped. Callers must provide the target [`Entity`],
+/// along with the corresponding [`Table`] and [`TableRow`] context.
+///
+/// Internally, one `WritedState` is tracked per component ID to indicate
+/// whether a component has already been written. This ensures repeated writes
+/// replace prior values correctly and prevents memory leaks.
+///
+/// By default, components are treated as not yet written. If some component
+/// slots are already initialized before using this writer, callers must mark
+/// them with [`ComponentWriter::set_writed`] to avoid double initialization.
+///
+/// # Explicit vs Required Writes
+///
+/// Explicit writes have higher priority than automatically generated required
+/// writes. For this reason, the API provides both [`write_required`] and
+/// [`write_explicit`], with matching states in `WritedState`.
+///
+/// Intuitively, `Explicit` values may overwrite `Required` values, but not the
+/// other way around. Entries marked by [`set_writed`] are always treated as `Explicit`.
+///
+/// [`write_required`]: ComponentWriter::write_required
+/// [`write_explicit`]: ComponentWriter::write_explicit
+/// [`set_writed`]: ComponentWriter::set_writed
+///
 /// # Safety
 ///
 /// The writing operations require careful handling of memory safety:
@@ -170,7 +195,7 @@ pub struct ComponentWriter<'a> {
 
 impl ComponentWriter<'_> {
     /// # Safety
-    /// Ensure by caller.
+    /// Guaranteed by the caller.
     #[inline]
     pub unsafe fn new<'a>(
         data: OwningPtr<'a>,
@@ -193,17 +218,18 @@ impl ComponentWriter<'_> {
         }
     }
 
-    /// Mark a component as having been written explicitly.
+    /// Marks a component as already written explicitly.
     ///
-    /// If `write_required/write_explicit` has already been called,
-    /// there is no need to call this function.
+    /// If [`ComponentWriter::write_required`] or
+    /// [`ComponentWriter::write_explicit`] has already been called for this
+    /// component, calling this method is unnecessary.
     ///
-    /// This function usually be used for component inserting,
-    /// then we need to mask all component that already existing.
+    /// This is typically used during insertion when some target component slots
+    /// are already initialized and must be marked to prevent re-initialization.
     ///
     /// # Safety
-    /// - Component T must be registered and prepared.
-    /// - Component T must be writed properly.
+    /// - `component` must be registered.
+    /// - The corresponding component value must already be initialized.
     #[inline]
     pub unsafe fn set_writed(&mut self, component: ComponentId) {
         self.writed.insert(component, WritedState::Explicit);
@@ -215,8 +241,8 @@ impl ComponentWriter<'_> {
     /// the system, using the provided constructor.
     ///
     /// # Safety
-    /// - Component T must be a part of target entity.
-    /// - Component T must be registered and prepared.
+    /// - `T` must be part of the target entity layout.
+    /// - `T` must be registered and storage for it must be prepared.
     #[inline(never)]
     pub unsafe fn write_required<T: Component>(&mut self, func: impl FnOnce() -> T) {
         let type_id = TypeId::of::<T>();
@@ -241,9 +267,9 @@ impl ComponentWriter<'_> {
     /// reading it from the internal data buffer at the specified offset.
     ///
     /// # Safety
-    /// - Component T must be a part of target entity.
-    /// - Component T must be registered and prepared.
-    /// - offset must be valid.
+    /// - `T` must be part of the target entity layout.
+    /// - `T` must be registered and storage for it must be prepared.
+    /// - `offset` must be valid in `self.data`.
     #[inline(never)]
     pub unsafe fn write_explicit<T: Component>(&mut self, offset: usize) {
         let type_id = TypeId::of::<T>();
@@ -261,7 +287,7 @@ impl ComponentWriter<'_> {
     /// Initializes a new component in dense storage.
     ///
     /// # Safety
-    /// Ensure by caller.
+    /// Guaranteed by the caller.
     #[inline(never)]
     unsafe fn init_dense(&mut self, component: ComponentId, data: OwningPtr<'_>) {
         unsafe {
@@ -274,7 +300,7 @@ impl ComponentWriter<'_> {
     /// Initializes a new component in sparse storage.
     ///
     /// # Safety
-    /// Ensure by caller.
+    /// Guaranteed by the caller.
     #[inline(never)]
     unsafe fn init_sparse(&mut self, component: ComponentId, data: OwningPtr<'_>) {
         unsafe {
@@ -289,7 +315,7 @@ impl ComponentWriter<'_> {
     /// Writes or replaces a component in dense storage.
     ///
     /// # Safety
-    /// Ensure by caller.
+    /// Guaranteed by the caller.
     #[inline(never)]
     unsafe fn write_dense(&mut self, component: ComponentId, offset: usize) {
         use vc_utils::hash::hash_map::Entry;
@@ -313,7 +339,7 @@ impl ComponentWriter<'_> {
     /// Writes or replaces a component in sparse storage.
     ///
     /// # Safety
-    /// Ensure by caller.
+    /// Guaranteed by the caller.
     #[inline(never)]
     unsafe fn write_sparse(&mut self, component: ComponentId, offset: usize) {
         use vc_utils::hash::hash_map::Entry;

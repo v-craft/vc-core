@@ -6,12 +6,42 @@ use crate::archetype::Archetype;
 use crate::component::{Component, ComponentId, ComponentStorage};
 use crate::entity::Entity;
 use crate::storage::{Map, Table, TableRow};
-use crate::system::FilterParamBuilder;
+use crate::system::{AccessParam, FilterParamBuilder};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
 // -----------------------------------------------------------------------------
 // Changed
+
+/// Query filter that matches entities whose component `T` changed
+/// in the current system run interval.
+///
+/// This checks whether the component's changed tick is newer than
+/// `(last_run, this_run]`.
+///
+/// Notes:
+/// - The filter only matches entities that currently contain `T`.
+/// - It performs entity-level filtering during iteration.
+/// - It supports both dense and sparse component storage.
+///
+/// # Examples
+///
+/// ```no_run
+/// use vc_ecs::prelude::*;
+///
+/// #[derive(Component)]
+/// struct Velocity(f32);
+///
+/// fn changed_velocity(query: Query<Entity, Changed<Velocity>>) {
+///     for _entity in query {
+///         // Entities where `Velocity` changed since last run.
+///     }
+/// }
+/// ```
+pub struct Changed<T: Component>(T);
+
+// -----------------------------------------------------------------------------
+// QueryFilter Implementation
 
 union StorageSwitch<'w> {
     dense: Option<ThinSlice<'w, Tick>>,
@@ -24,8 +54,6 @@ pub struct ChangedView<'w> {
     this_run: Tick,
 }
 
-pub struct Changed<T: Component>(T);
-
 unsafe impl<T: Component> QueryFilter for Changed<T> {
     type State = ComponentId;
     type Cache<'world> = ChangedView<'world>;
@@ -33,7 +61,7 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
     const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
     const ENABLE_ENTITY_FILTER: bool = true;
 
-    unsafe fn build_state(world: &mut World) -> Self::State {
+    fn build_state(world: &mut World) -> Self::State {
         world.register_component::<T>()
     }
 
@@ -70,10 +98,14 @@ unsafe impl<T: Component> QueryFilter for Changed<T> {
         }
     }
 
-    unsafe fn build_filter(state: &Self::State, outer: &mut Vec<FilterParamBuilder>) {
+    fn build_filter(state: &Self::State, outer: &mut Vec<FilterParamBuilder>) {
         let mut builder = FilterParamBuilder::new();
         builder.with(*state);
         outer.push(builder);
+    }
+
+    fn build_access(state: &Self::State, out: &mut AccessParam) {
+        out.force_reading(*state);
     }
 
     unsafe fn set_for_arche<'w>(

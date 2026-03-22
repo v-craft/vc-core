@@ -9,6 +9,7 @@
 mod access;
 mod ident;
 mod methods;
+mod unsafe_world;
 mod world;
 
 // -----------------------------------------------------------------------------
@@ -16,4 +17,5 @@ mod world;
 
 pub use access::*;
 pub use ident::{WorldId, WorldIdAllocator};
+pub use unsafe_world::UnsafeWorld;
 pub use world::World;

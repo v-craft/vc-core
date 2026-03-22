@@ -6,12 +6,42 @@ use crate::archetype::Archetype;
 use crate::component::{Component, ComponentId, ComponentStorage};
 use crate::entity::Entity;
 use crate::storage::{Map, Table, TableRow};
-use crate::system::FilterParamBuilder;
+use crate::system::{AccessParam, FilterParamBuilder};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
 // -----------------------------------------------------------------------------
-// Changed
+// Added
+
+/// Query filter that matches entities whose component `T` was added
+/// in the current system run interval.
+///
+/// This checks whether the component's added tick is newer than
+/// `(last_run, this_run]`.
+///
+/// Notes:
+/// - The filter only matches entities that currently contain `T`.
+/// - It applies entity-level filtering at iteration time.
+/// - It works for both dense and sparse component storage.
+///
+/// # Examples
+///
+/// ```no_run
+/// use vc_ecs::prelude::*;
+///
+/// #[derive(Component)]
+/// struct Health(u32);
+///
+/// fn only_new_health(query: Query<Entity, Added<Health>>) {
+///     for entity in query {
+///         // Entities where `Health` was added since last run.
+///     }
+/// }
+/// ```
+pub struct Added<T: Component>(T);
+
+// -----------------------------------------------------------------------------
+// QueryFilter implementaion
 
 union StorageSwitch<'w> {
     dense: Option<ThinSlice<'w, Tick>>,
@@ -24,8 +54,6 @@ pub struct AddedView<'w> {
     this_run: Tick,
 }
 
-pub struct Added<T: Component>(T);
-
 unsafe impl<T: Component> QueryFilter for Added<T> {
     type State = ComponentId;
     type Cache<'world> = AddedView<'world>;
@@ -33,7 +61,7 @@ unsafe impl<T: Component> QueryFilter for Added<T> {
     const COMPONENTS_ARE_DENSE: bool = T::STORAGE.is_dense();
     const ENABLE_ENTITY_FILTER: bool = true;
 
-    unsafe fn build_state(world: &mut World) -> Self::State {
+    fn build_state(world: &mut World) -> Self::State {
         world.register_component::<T>()
     }
 
@@ -70,10 +98,14 @@ unsafe impl<T: Component> QueryFilter for Added<T> {
         }
     }
 
-    unsafe fn build_filter(state: &Self::State, outer: &mut Vec<FilterParamBuilder>) {
+    fn build_filter(state: &Self::State, outer: &mut Vec<FilterParamBuilder>) {
         let mut builder = FilterParamBuilder::new();
         builder.with(*state);
         outer.push(builder);
+    }
+
+    fn build_access(state: &Self::State, out: &mut AccessParam) {
+        out.force_reading(*state);
     }
 
     unsafe fn set_for_arche<'w>(

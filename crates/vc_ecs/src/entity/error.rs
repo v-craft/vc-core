@@ -72,32 +72,6 @@ pub enum SpawnError {
 
 #[derive(Debug, Error, Clone, Copy)]
 #[non_exhaustive]
-pub enum InsertError {
-    #[error("Entity with ID {0} was not found during component insertion")]
-    NotFound(EntityId),
-
-    #[error("Entity {0} has not been spawned yet")]
-    NotSpawned(Entity),
-
-    #[error("Entity mismatch during component insertion: expected {expect:?}, found {actual:?}")]
-    Mismatch { expect: Entity, actual: Entity },
-}
-
-#[derive(Debug, Error, Clone, Copy)]
-#[non_exhaustive]
-pub enum RemoveError {
-    #[error("Entity with ID {0} was not found during component removal")]
-    NotFound(EntityId),
-
-    #[error("Entity {0} has not been spawned yet")]
-    NotSpawned(Entity),
-
-    #[error("Entity mismatch during component removal: expected {expect:?}, found {actual:?}")]
-    Mismatch { expect: Entity, actual: Entity },
-}
-
-#[derive(Debug, Error, Clone, Copy)]
-#[non_exhaustive]
 pub enum EntityError {
     #[error("Spawn operation failed: {0}")]
     Spawn(SpawnError),
@@ -113,12 +87,6 @@ pub enum EntityError {
 
     #[error("Move operation failed: {0}")]
     Move(MoveError),
-
-    #[error("Insert operation failed: {0}")]
-    Insert(InsertError),
-
-    #[error("Remove operation failed: {0}")]
-    Remove(RemoveError),
 }
 
 impl EntityError {
@@ -157,7 +125,7 @@ macro_rules! impl_from {
             }
 
             #[inline]
-            pub fn promote(self) -> EntityError {
+            pub const fn promote(self) -> EntityError {
                 EntityError::$variant(self)
             }
         }
@@ -169,5 +137,3 @@ impl_from!(FetchError, Fetch);
 impl_from!(MoveError, Move);
 impl_from!(SpawnError, Spawn);
 impl_from!(DespawnError, Despawn);
-impl_from!(InsertError, Insert);
-impl_from!(RemoveError, Remove);

@@ -17,6 +17,76 @@ use super::SystemInput;
 /// A `System` encapsulates executable logic that can operate on the ECS world,
 /// with clearly defined input and output types. Systems are the fundamental
 /// building blocks for game logic, simulation steps, and reactive behaviors.
+///
+/// Any Rust function with a compatible signature can be used as a system, for example:
+///
+/// ```ignore
+/// fn system_a(query: Query<&Name, Changed<Health>>) {
+///     /* do something */
+/// }
+/// ```
+///
+/// # Parallelism
+///
+/// At the moment, systems run through [`Schedule`](crate::schedule::Schedule),
+/// which builds an execution graph from system parameters to maximize parallel
+/// execution.
+///
+/// Two systems can run in parallel when their accesses do not conflict under
+/// read/write exclusion rules.
+///
+/// For example, these two systems can run in parallel because they access
+/// different data:
+///
+/// ```ignore
+/// fn system_a(query: Query<&Bar>, res: Res<Baz>) { }
+/// fn system_b(query: Query<&mut Foo>) { }
+/// ```
+///
+/// For `Query`, systems can also run in parallel if their filter constraints
+/// guarantee they never touch the same data:
+///
+/// ```ignore
+/// fn system_a(query: Query<&mut Foo, With<Bar>) { }
+/// fn system_b(query: Query<&mut Foo, Without<Bar>>) { }
+/// ```
+///
+/// ## Special Cases
+///
+/// There are two special categories of systems.
+///
+/// A system that accesses `NonSend` data cannot be moved across threads,
+/// so it must be scheduled on the main thread:
+///
+/// ```ignore
+/// fn system_a(foo: NonSend<Foo>) {
+///     /* do something */
+/// }
+/// ```
+///
+/// A system that takes `&mut World` is fully exclusive and cannot run in
+/// parallel with any other system:
+///
+/// ```ignore
+/// fn system_a(world: &mut World) {
+///     /* do something */
+/// }
+/// ```
+///
+/// Fully exclusive systems can limit parallel performance. For workloads such
+/// as spawning/despawning entities that require world mutation, prefer
+/// [`Commands`](crate::command::Commands) as a deferred alternative:
+///
+/// ```ignore
+/// fn system_a(mut commands: Commands) {
+///     /* do something */
+/// }
+/// ```
+///
+/// Commands submitted through `Commands` are not executed immediately. They are
+/// pushed into the world's deferred command queue, which is thread-safe.
+/// Therefore, `Commands` does not count as direct component/resource access and
+/// does not reduce system parallelism.
 #[diagnostic::on_unimplemented(message = "`{Self}` is not a system", label = "invalid system")]
 pub trait System: Send + Sync + 'static {
     /// The system's input.

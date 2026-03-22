@@ -7,6 +7,33 @@ use crate::tick::Tick;
 use crate::world::EntityOwned;
 
 impl EntityOwned<'_> {
+    /// Insert component.
+    ///
+    /// # Rules
+    ///
+    /// Existing components will be overwritten.
+    ///
+    /// If need required components will be create,
+    /// but will not overwrite existing components.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::world::World;
+    /// # use vc_ecs::component::Component;
+    /// # #[derive(Component, Debug)]
+    /// # struct Foo;
+    /// # #[derive(Component, Debug)]
+    /// # struct Bar;
+    /// let mut world = World::default();
+    ///
+    /// let mut entity = world.spawn(Foo);
+    /// assert!(entity.contains::<Foo>());
+    /// assert!(!entity.contains::<Bar>());
+    ///
+    /// entity.insert(Bar);
+    /// assert!(entity.contains::<Bar>());
+    /// ```
     pub fn insert<B: Bundle>(&mut self, bundle: B) {
         let world = unsafe { self.world.full_mut() };
         let bundle_id = world.register_bundle::<B>();
@@ -23,7 +50,7 @@ impl EntityOwned<'_> {
     }
 
     #[inline(never)]
-    pub fn insert_local(
+    fn insert_local(
         &mut self,
         data: OwningPtr<'_>,
         write_explicit: unsafe fn(&mut ComponentWriter, usize),
@@ -54,7 +81,7 @@ impl EntityOwned<'_> {
     }
 
     #[inline(never)]
-    pub fn insert_moved(
+    fn insert_moved(
         &mut self,
         data: OwningPtr<'_>,
         new_arche_id: ArcheId,
@@ -66,20 +93,21 @@ impl EntityOwned<'_> {
         let old_arche_id = self.location.arche_id;
         let old_arche = unsafe {
             self.world
-                .data_mut()
+                .full_mut()
                 .archetypes
                 .get_unchecked_mut(old_arche_id)
         };
         let new_arche = unsafe {
             self.world
-                .data_mut()
+                .full_mut()
                 .archetypes
                 .get_unchecked_mut(new_arche_id)
         };
+        assert_eq!(old_arche.table_id(), self.location.table_id);
 
         let moved = unsafe { old_arche.remove_entity(self.location.arche_row) };
         unsafe {
-            self.world.full_mut().entities.move_spawned(moved).unwrap();
+            self.world.full_mut().entities.update_row(moved).unwrap();
         }
         let new_arche_row = unsafe { new_arche.insert_entity(self.entity) };
         self.location.arche_id = new_arche_id;
@@ -102,12 +130,12 @@ impl EntityOwned<'_> {
                     .data_mut()
                     .storages
                     .tables
-                    .get_unchecked_mut(old_table_id)
+                    .get_unchecked_mut(new_table_id)
             };
             let (moved, new_row) =
                 unsafe { old_table.move_to_and_forget_missing(table_row, new_table) };
             unsafe {
-                self.world.full_mut().entities.move_spawned(moved).unwrap();
+                self.world.full_mut().entities.update_row(moved).unwrap();
             }
             self.location.table_id = new_table_id;
             self.location.table_row = new_row;
@@ -115,12 +143,12 @@ impl EntityOwned<'_> {
 
         let world = unsafe { self.world.data_mut() };
         let old_arche = unsafe { world.archetypes.get_unchecked(old_arche_id) };
+        let table_row = self.location.table_row;
         let table_id = self.location.table_id;
         let table = unsafe { world.storages.tables.get_unchecked_mut(table_id) };
         let maps = &mut world.storages.maps;
         let components = &world.components;
         let entity = self.entity;
-        let table_row = self.location.table_row;
 
         unsafe {
             let mut writer =
@@ -136,7 +164,7 @@ impl EntityOwned<'_> {
         unsafe {
             world
                 .entities
-                .update_spawned(self.entity, self.location)
+                .update_location(self.entity, self.location)
                 .unwrap();
         }
     }

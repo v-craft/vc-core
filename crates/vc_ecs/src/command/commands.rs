@@ -11,6 +11,45 @@ use crate::system::{AccessTable, ReadOnlySystemParam, SystemParam};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World, WorldId};
 
+/// A deferred command buffer used to optimize System parallelism.
+///
+/// Functions submitted via [`Commands`] are not executed immediately, but are
+/// instead submitted to the World's deferred command queue. Since the command
+/// queue is thread-safe, `Commands` is considered to not access any components
+/// or resources, thereby optimizing System parallelism.
+///
+/// For performance optimization, `Commands` maintains a local command buffer.
+/// Commands are first accumulated in this local buffer and only transferred
+/// to the global command queue when [`flush`] is called. The local buffer is
+/// automatically flushed when the `Commands` instance is dropped.
+///
+/// For a single `Commands` instance, commands are guaranteed to execute in
+/// order. However, when multiple `Commands` instances exist concurrently,
+/// commands from different instances are interleaved in the global queue
+/// based on when each instance flushes its local buffer. This can affect the
+/// relative order of commands from different sources. To control ordering,
+/// users can explicitly call [`flush`] to submit accumulated commands to the
+/// global queue at specific points.
+///
+/// [`flush`]: Commands::flush
+///
+/// # Examples
+///
+/// ```no_run
+/// use vc_ecs::prelude::*;
+///
+/// #[derive(Component)]
+/// struct Disabled;
+///
+/// fn despawn_entities(
+///     mut commands: Commands,
+///     query: Query<Entity, With<Disabled>>,
+/// ) {
+///     for entity in query {
+///         commands.despawn(entity);
+///     }
+/// }
+/// ```
 pub struct Commands<'a> {
     world: &'a World,
     buffer: Vec<CommandObject>,
@@ -58,6 +97,25 @@ impl Drop for Commands<'_> {
 }
 
 impl<'a> Commands<'a> {
+    /// Flushes all commands from the local buffer to the global queue.
+    ///
+    /// The submitted commands maintain their original order.
+    ///
+    /// Note that this function will be called in [`Drop::drop`] automatically.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use vc_ecs::prelude::*;
+    ///
+    /// # #[derive(Component)]
+    /// # struct Foo;
+    /// #
+    /// fn example(mut commands: Commands) {
+    ///     commands.spawn(Foo);
+    ///     commands.flush(); // optional
+    /// }
+    /// ```
     pub fn flush(&mut self) {
         if !self.buffer.is_empty() {
             let commands = ::core::mem::take(&mut self.buffer);
@@ -65,6 +123,9 @@ impl<'a> Commands<'a> {
         }
     }
 
+    /// Creates a new `Commands` instance associated with the given world.
+    #[inline]
+    #[must_use]
     pub fn new(world: &'a World) -> Self {
         Self {
             world,
@@ -72,10 +133,38 @@ impl<'a> Commands<'a> {
         }
     }
 
+    /// Returns the ID of the world associated with this command buffer.
+    #[inline]
+    #[must_use]
     pub fn world_id(&self) -> WorldId {
         self.world.id()
     }
 
+    /// Creates a new `Commands` instance that shares the same world.
+    ///
+    /// This method flushes any pending commands in the current buffer before
+    /// returning a new instance. The new instance starts with an empty buffer,
+    /// ensuring that commands from the original instance are submitted in
+    /// the correct order relative to commands from the new instance.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use vc_ecs::prelude::*;
+    ///
+    /// # #[derive(Component)]
+    /// # struct Foo;
+    /// #
+    /// fn example(mut commands: Commands) {
+    ///     fn helper(mut commands: Commands) {
+    ///         /* ...... */
+    ///     }
+    ///     
+    ///     helper(commands.reborrow());
+    ///     commands.spawn(Foo);
+    /// }
+    /// ```
+    #[must_use]
     pub fn reborrow(&mut self) -> Commands<'_> {
         self.flush();
         Commands {
@@ -84,6 +173,33 @@ impl<'a> Commands<'a> {
         }
     }
 
+    /// Allocates a new entity ID without spawning it.
+    ///
+    /// This entity is uninitialized, can be used for [`Commands::spawn_in`].
+    #[must_use]
+    pub fn alloc_entity(&self) -> Entity {
+        self.world.alloc_entity()
+    }
+
+    /// Pushes a custom command function into the buffer.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use vc_ecs::prelude::*;
+    ///
+    /// # #[derive(Component)]
+    /// # struct Foo;
+    /// #
+    /// fn example(mut commands: Commands) {
+    ///     commands.push(|world| {
+    ///         if world.entity_count() == 0 {
+    ///             world.spawn(Foo);
+    ///         }
+    ///         Ok(())
+    ///     });
+    /// }
+    /// ```
     #[inline]
     #[track_caller]
     pub fn push<F>(&mut self, func: F)
@@ -94,15 +210,29 @@ impl<'a> Commands<'a> {
         self.buffer.push(CommandObject::new(func));
     }
 
-    pub fn alloc_entity(&self) -> Entity {
-        self.world.alloc_entity()
-    }
-
+    /// Spawns an entity with the given bundle at a specific entity ID.
+    ///
+    /// Flushes any pending commands in the current buffer and return an
+    /// `EntityCommands` instance for further operations on the spawned entity.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use vc_ecs::prelude::*;
+    ///
+    /// # #[derive(Component)]
+    /// # struct Foo;
+    /// #
+    /// fn example(mut commands: Commands) {
+    ///     let entity = commands.alloc_entity();
+    ///     commands.spawn_in(Foo, entity);
+    /// }
+    /// ```
     #[inline]
     #[track_caller]
     pub fn spawn_in<B: Bundle>(&mut self, bundle: B, entity: Entity) -> EntityCommands<'_> {
         self.buffer.push(CommandObject::new(move |world| {
-            world.entities.can_spawned(entity)?;
+            world.entities.can_spawn(entity)?;
             world.spawn_in(bundle, entity);
             Ok(())
         }));
@@ -110,6 +240,24 @@ impl<'a> Commands<'a> {
         self.with_entity(entity)
     }
 
+    /// Spawns an entity with the given bundle.
+    ///
+    /// Flushes any pending commands in the current buffer and return an
+    /// `EntityCommands` instance for further operations on the spawned entity.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use vc_ecs::prelude::*;
+    ///
+    /// # #[derive(Component)]
+    /// # struct Foo;
+    /// #
+    /// fn example(mut commands: Commands) {
+    ///     let entity_cmd = commands.spawn(Foo);
+    ///     entity_cmd.despawn();
+    /// }
+    /// ```
     #[inline]
     #[track_caller]
     pub fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands<'_> {
@@ -123,6 +271,24 @@ impl<'a> Commands<'a> {
         self.with_entity(entity)
     }
 
+    /// Despawns an entity.
+    ///
+    /// The entity and all its components will be removed.
+    /// Any subsequent operations on this entity will fail.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use vc_ecs::prelude::*;
+    ///
+    /// # #[derive(Component)]
+    /// # struct Foo;
+    /// #
+    /// fn example(mut commands: Commands) {
+    ///     let entity = commands.spawn(Foo).entity();
+    ///     commands.despawn(entity);
+    /// }
+    /// ```
     #[inline]
     #[track_caller]
     pub fn despawn(&mut self, entity: Entity) {
@@ -131,6 +297,23 @@ impl<'a> Commands<'a> {
         }));
     }
 
+    /// Attempts to despawn an entity, silently ignoring failures.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use vc_ecs::prelude::*;
+    ///
+    /// # #[derive(Component)]
+    /// # struct Foo;
+    /// #
+    /// fn example(mut commands: Commands) {
+    ///     let entity = commands.alloc_entity();
+    ///     commands.try_despawn(entity);
+    ///     // ↑ This is safe, but this entity will leak
+    ///     // because it will not be recycled
+    /// }
+    /// ```
     #[inline]
     #[track_caller]
     pub fn try_despawn(&mut self, entity: Entity) {
@@ -140,10 +323,13 @@ impl<'a> Commands<'a> {
         }));
     }
 
+    /// Return an `EntityCommands` instance for further operations on the spawned entity.
+    ///
+    /// This function will flushes any pending commands in the current buffer,
+    /// to ensure the orderliness of the commands.
     #[inline]
+    #[must_use]
     pub fn with_entity(&mut self, entity: Entity) -> EntityCommands<'_> {
-        // We need to flush in advance to ensure that the
-        // entity spawn is earlier than all entity operation.
         self.flush();
 
         EntityCommands {

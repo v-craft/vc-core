@@ -11,30 +11,40 @@ use crate::component::{CollectResult, ComponentCollector, ComponentId};
 use crate::world::World;
 
 impl World {
+    /// Returns the archetype ID after inserting a bundle into the given archetype.
+    ///
+    /// This is primarily used when inserting components into an entity to determine
+    /// whether its archetype changes. If the target archetype does not exist yet,
+    /// it will be created, so this function requires mutable access to [`World`].
     pub fn arche_after_insert(&mut self, arche_id: ArcheId, bundle_id: BundleId) -> ArcheId {
         let arche = unsafe { self.archetypes.get_unchecked(arche_id) };
         if let Some(cached) = arche.after_insert(bundle_id) {
             return cached;
         }
-        unsafe { self.after_insert_slow(arche_id, bundle_id) }
+        unsafe { self.arche_after_insert_slow(arche_id, bundle_id) }
     }
 
     #[cold]
     #[inline(never)]
-    unsafe fn after_insert_slow(&mut self, arche_id: ArcheId, bundle_id: BundleId) -> ArcheId {
+    unsafe fn arche_after_insert_slow(
+        &mut self,
+        arche_id: ArcheId,
+        bundle_id: BundleId,
+    ) -> ArcheId {
         let arche = unsafe { self.archetypes.get_unchecked(arche_id) };
         let bundle = unsafe { self.bundles.get_unchecked(bundle_id) };
 
-        let expect_dense_len = arche.dense_components().len() + bundle.dense_components().len();
-        let expect_sparse_len = arche.sparse_components().len() + bundle.sparse_components().len();
+        let dense_upper = arche.dense_components().len() + bundle.dense_components().len();
+        let sparse_upper = arche.sparse_components().len() + bundle.sparse_components().len();
 
-        let mut dense = Vec::with_capacity(expect_dense_len + expect_sparse_len);
+        // `dense` will later append `sparse`, so pre-allocate full capacity.
+        let mut dense: Vec<ComponentId> = Vec::with_capacity(dense_upper + sparse_upper);
         dense.extend_from_slice(arche.dense_components());
         dense.extend_from_slice(bundle.dense_components());
         dense.sort();
         dense.dedup();
 
-        let mut sparse = Vec::with_capacity(expect_sparse_len);
+        let mut sparse: Vec<ComponentId> = Vec::with_capacity(sparse_upper);
         sparse.extend_from_slice(arche.sparse_components());
         sparse.extend_from_slice(bundle.sparse_components());
         sparse.sort();
@@ -45,9 +55,7 @@ impl World {
 
         if let Some(result) = self.archetypes.get_id(&dense) {
             let arche = unsafe { self.archetypes.get_unchecked_mut(arche_id) };
-            unsafe {
-                arche.set_after_insert(bundle_id, result);
-            }
+            arche.set_after_insert(bundle_id, result);
             return result;
         }
 
@@ -68,26 +76,31 @@ impl World {
         }
     }
 
+    /// Returns the archetype ID after removing a bundle from the given archetype.
+    ///
+    /// This function remains valid even if some components in the bundle are not
+    /// present in the archetype; missing components are ignored.
+    ///
+    /// This is primarily used when removing components from an entity to determine
+    /// whether its archetype changes. If the target archetype does not exist yet,
+    /// it will be created, so this function requires mutable access to [`World`].
     pub fn arche_after_remove(&mut self, arche_id: ArcheId, bundle_id: BundleId) -> ArcheId {
         let arche = unsafe { self.archetypes.get_unchecked(arche_id) };
         if let Some(cached) = arche.after_remove(bundle_id) {
             return cached;
         }
-        unsafe { self.after_remove_slow(arche_id, bundle_id) }
+        unsafe { self.arche_after_remove_slow(arche_id, bundle_id) }
     }
 
     #[cold]
     #[inline(never)]
-    unsafe fn after_remove_slow(&mut self, arche_id: ArcheId, bundle_id: BundleId) -> ArcheId {
+    unsafe fn arche_after_remove_slow(
+        &mut self,
+        arche_id: ArcheId,
+        bundle_id: BundleId,
+    ) -> ArcheId {
         let arche = unsafe { self.archetypes.get_unchecked(arche_id) };
         let bundle = unsafe { self.bundles.get_unchecked(bundle_id) };
-
-        assert! {
-            bundle.components().iter().all(|&id|arche.contains_component(id)),
-            "invalid remove operation: remove {:?} from {:?}",
-            bundle.components(),
-            arche.components(),
-        }
 
         let dense_upper = arche.dense_components().len();
         let mut dense: SparseHashSet<ComponentId> = SparseHashSet::with_capacity(dense_upper);
@@ -100,7 +113,7 @@ impl World {
         let mut sparse: SparseHashSet<ComponentId> = SparseHashSet::with_capacity(sparse_upper);
         sparse.extend(arche.sparse_components());
         bundle.sparse_components().iter().for_each(|&id| {
-            dense.remove(&id);
+            sparse.remove(&id);
         });
 
         // HACK: `Collector` requires a mutable reference to `Components`, but accessing
@@ -132,9 +145,7 @@ impl World {
 
         if let Some(result) = self.archetypes.get_id(&dense_vec) {
             let arche = unsafe { self.archetypes.get_unchecked_mut(arche_id) };
-            unsafe {
-                arche.set_after_insert(bundle_id, result);
-            }
+            arche.set_after_remove(bundle_id, result);
             return result;
         }
 
@@ -150,7 +161,7 @@ impl World {
         unsafe {
             let result = self.archetypes.register(table_id, dense_len, components);
             let arche = self.archetypes.get_unchecked_mut(arche_id);
-            arche.set_after_insert(bundle_id, result);
+            arche.set_after_remove(bundle_id, result);
             result
         }
     }

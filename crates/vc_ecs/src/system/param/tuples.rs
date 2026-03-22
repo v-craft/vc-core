@@ -31,11 +31,11 @@ macro_rules! impl_tuple {
     };
     (1 : [ $index:tt : $name:ident ]) => {
         #[cfg_attr(docsrs, doc(fake_variadic))]
-        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 15 items long.")]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         unsafe impl<$name: ReadOnlySystemParam> ReadOnlySystemParam for ($name,) {}
 
         #[cfg_attr(docsrs, doc(fake_variadic))]
-        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 15 items long.")]
+        #[cfg_attr(docsrs, doc = "This trait is implemented for tuples up to 12 items long.")]
         unsafe impl<$name: SystemParam> SystemParam for ($name,) {
             type State = <$name>::State;
             type Item<'world, 'state> = ( <$name>::Item<'world, 'state>, );

@@ -60,6 +60,10 @@ impl World {
     /// The returned [`EntityOwned`] borrows the world and provides convenient
     /// typed access to the spawned entity.
     ///
+    /// # Panic
+    ///
+    /// Panic if the entity is already spawned or invalid generation.
+    ///
     /// # Examples
     ///
     /// ```
@@ -98,7 +102,7 @@ impl World {
         write_required: unsafe fn(&mut ComponentWriter),
     ) -> EntityOwned<'_> {
         if ::core::cfg!(debug_assertions) {
-            self.entities.can_spawned(entity).unwrap();
+            self.entities.can_spawn(entity).unwrap();
         }
 
         let tick = Tick::new(*self.this_run.get_mut());
@@ -116,7 +120,7 @@ impl World {
             unsafe {
                 let map_id = maps.get_id(cid).debug_checked_unwrap();
                 let map = maps.get_unchecked_mut(map_id);
-                let _ = map.alloc(entity); // `MapRow` may be cached in the future.
+                let _ = map.allocate(entity); // `MapRow` may be cached in the future.
             }
         }
 

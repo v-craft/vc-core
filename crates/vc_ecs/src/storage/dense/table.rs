@@ -15,7 +15,7 @@ use crate::borrow::UntypedSliceMut;
 use crate::borrow::UntypedSliceRef;
 use crate::component::ComponentId;
 use crate::entity::Entity;
-use crate::entity::MovedEntity;
+use crate::entity::MovedEntityRow;
 use crate::storage::{AbortOnPanic, Column, VecRemoveExt};
 use crate::tick::CheckTicks;
 use crate::tick::Tick;
@@ -32,6 +32,7 @@ pub(super) struct TableBuilder {
 
 impl TableBuilder {
     /// Creates a new builder with pre-allocated capacity for the given column count.
+    #[must_use]
     pub fn new(column_count: usize) -> Self {
         Self {
             columns: Vec::with_capacity(column_count),
@@ -65,9 +66,9 @@ impl TableBuilder {
     /// Panics if component IDs are not unique or not properly sorted.
     #[must_use]
     pub fn build(mut self) -> Table {
-        assert!(self.idents.is_sorted());
         let len = self.idents.len();
         self.idents.dedup();
+        assert!(self.idents.is_sorted());
         assert!(self.idents.len() == len);
 
         Table {
@@ -84,8 +85,14 @@ impl TableBuilder {
 
 /// A dense columnar storage table for ECS components.
 ///
-/// Organizes components by type (columns) and entities (rows), providing
-/// efficient batch access and cache-friendly iteration.
+/// |  TableId  | Component A | Component B | Component C | .. |
+/// |-----------|-------------|-------------|-------------|----|
+/// | Entity A  | /* data */  | /* data */  | /* data */  | .. |
+/// | Entity B  | /* data */  | /* data */  | /* data */  | .. |
+/// | Entity C  | /* data */  | /* data */  | /* data */  | .. |
+/// | ........  | ..........  | ..........  | ..........  | .. |
+///
+/// This structure provides optimal cache locality during iteration.
 pub struct Table {
     columns: Box<[Column]>,
     idents: Box<[ComponentId]>,
@@ -495,7 +502,7 @@ impl Table {
     /// # Safety
     /// - `table_row` must be a valid, initialized row
     /// - After this operation, the row is no longer valid
-    pub unsafe fn swap_remove_and_drop(&mut self, table_row: TableRow) -> MovedEntity {
+    pub unsafe fn swap_remove_and_drop(&mut self, table_row: TableRow) -> MovedEntityRow {
         let removal = table_row.0 as usize;
         let last = self.entity_count() - 1;
         debug_assert!(removal <= last);
@@ -506,13 +513,14 @@ impl Table {
                 self.columns.iter_mut().for_each(|c| {
                     c.swap_drop_not_last(removal, last);
                 });
-                MovedEntity::in_table(Some(swapped), table_row)
+                MovedEntityRow::in_table(Some(swapped), table_row)
             } else {
+                vc_utils::cold_path();
                 self.entities.set_len(last);
                 self.columns.iter_mut().for_each(|c| {
                     c.drop_item(last);
                 });
-                MovedEntity::in_table(None, table_row)
+                MovedEntityRow::in_table(None, table_row)
             }
         }
     }
@@ -523,7 +531,7 @@ impl Table {
     /// - `table_row` must be a valid, initialized row
     /// - Caller must ensure components are properly handled elsewhere
     /// - After this operation, the row is no longer valid
-    pub unsafe fn swap_remove_and_forget(&mut self, table_row: TableRow) -> MovedEntity {
+    pub unsafe fn swap_remove_and_forget(&mut self, table_row: TableRow) -> MovedEntityRow {
         let removal = table_row.0 as usize;
         let last = self.entity_count() - 1;
         debug_assert!(removal <= last);
@@ -535,11 +543,12 @@ impl Table {
                     c.swap_forget_not_last(removal, last);
                 });
 
-                MovedEntity::in_table(Some(swapped), table_row)
+                MovedEntityRow::in_table(Some(swapped), table_row)
             } else {
+                vc_utils::cold_path();
                 self.entities.set_len(last);
                 // `Column::forget_item` do nothing.
-                MovedEntity::in_table(None, table_row)
+                MovedEntityRow::in_table(None, table_row)
             }
         }
     }
@@ -554,7 +563,7 @@ impl Table {
         &mut self,
         table_row: TableRow,
         other: &mut Table,
-    ) -> (MovedEntity, TableRow) {
+    ) -> (MovedEntityRow, TableRow) {
         let src = table_row.0 as usize;
         let last = self.entity_count() - 1;
         debug_assert!(src <= last);
@@ -579,8 +588,9 @@ impl Table {
                         }
                     });
 
-                (MovedEntity::in_table(Some(swapped), table_row), new_row)
+                (MovedEntityRow::in_table(Some(swapped), table_row), new_row)
             } else {
+                vc_utils::cold_path();
                 let moved = self.entities.remove_last(last);
                 let new_row = other.allocate(moved);
                 let dst = new_row.0 as usize;
@@ -597,7 +607,7 @@ impl Table {
                         }
                     });
 
-                (MovedEntity::in_table(None, table_row), new_row)
+                (MovedEntityRow::in_table(None, table_row), new_row)
             }
         }
     }
@@ -613,7 +623,7 @@ impl Table {
         &mut self,
         table_row: TableRow,
         other: &mut Table,
-    ) -> (MovedEntity, TableRow) {
+    ) -> (MovedEntityRow, TableRow) {
         let src = table_row.0 as usize;
         let last = self.entity_count() - 1;
         debug_assert!(src <= last);
@@ -636,8 +646,9 @@ impl Table {
                         col.swap_forget_not_last(src, last);
                     });
 
-                (MovedEntity::in_table(Some(swapped), table_row), new_row)
+                (MovedEntityRow::in_table(Some(swapped), table_row), new_row)
             } else {
+                vc_utils::cold_path();
                 let moved = self.entities.remove_last(last);
                 let new_row = other.allocate(moved);
                 let dst = new_row.0 as usize;
@@ -650,9 +661,10 @@ impl Table {
                             let other_col = other.get_column_mut(table_col);
                             col.move_item_to(other_col, src, dst);
                         }
+                        col.forget_item(src);
                     });
 
-                (MovedEntity::in_table(None, table_row), new_row)
+                (MovedEntityRow::in_table(None, table_row), new_row)
             }
         }
     }

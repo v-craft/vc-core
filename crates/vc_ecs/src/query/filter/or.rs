@@ -4,7 +4,7 @@ use super::QueryFilter;
 use crate::archetype::Archetype;
 use crate::entity::Entity;
 use crate::storage::{Table, TableRow};
-use crate::system::FilterParamBuilder;
+use crate::system::{AccessParam, FilterParamBuilder};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
@@ -42,12 +42,10 @@ macro_rules! impl_tuple {
             const COMPONENTS_ARE_DENSE: bool = <$name>::COMPONENTS_ARE_DENSE;
             const ENABLE_ENTITY_FILTER: bool = <$name>::ENABLE_ENTITY_FILTER;
 
-            unsafe fn build_state(
+            fn build_state(
                 world: &mut World,
             ) -> Self::State {
-                unsafe {
-                    <$name>::build_state(world)
-                }
+                <$name>::build_state(world)
             }
 
             unsafe fn build_cache<'w>(
@@ -61,14 +59,14 @@ macro_rules! impl_tuple {
                 }
             }
 
-            unsafe fn build_filter(
+            fn build_filter(
                 state: &Self::State,
                 outer: &mut Vec<FilterParamBuilder>,
             ) {
-                unsafe {
-                    <$name>::build_filter(state, outer);
-                }
+                <$name>::build_filter(state, outer);
             }
+
+            fn build_access(_state: &Self::State, _out: &mut AccessParam) {}
 
             unsafe fn set_for_arche<'w>(
                 state: &Self::State,
@@ -120,12 +118,10 @@ macro_rules! impl_tuple {
             // filtering, thus entity filtering must be enabled.
             const ENABLE_ENTITY_FILTER: bool = true;
 
-            unsafe fn build_state(
+            fn build_state(
                 world: &mut World,
             ) -> Self::State {
-                unsafe {
-                    ( $( <$name>::build_state(world), )* )
-                }
+                ( $( <$name>::build_state(world), )* )
             }
 
             unsafe fn build_cache<'w>(
@@ -139,17 +135,16 @@ macro_rules! impl_tuple {
                 }
             }
 
-            unsafe fn build_filter(
+            fn build_filter(
                 state: &Self::State,
                 outer: &mut Vec<FilterParamBuilder>,
             ) {
                 let mut ret = Vec::<FilterParamBuilder>::new();
-                unsafe {
-                    $( <$name>::build_filter(&state.$index, &mut ret); )*
-                }
+                $( <$name>::build_filter(&state.$index, &mut ret); )*
                 outer.append(&mut ret);
             }
 
+            fn build_access(_state: &Self::State, _out: &mut AccessParam) {}
 
             unsafe fn set_for_arche<'w>(
                 state: &Self::State,

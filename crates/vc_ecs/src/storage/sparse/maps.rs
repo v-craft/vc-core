@@ -11,6 +11,10 @@ use crate::storage::{Map, MapId};
 
 /// A collection of sparse component maps.
 ///
+/// |    Component A     |    Component B     |    Component C    | .. |
+/// |--------------------|--------------------|-------------------|----|
+/// | Map<Entity, Data>  | Map<Entity, Data>  | Map<Entity, Data> | .. |
+///
 /// `Maps` manages all [`Map`] instances for components that use sparse storage.
 /// Each component type with sparse storage gets its own dedicated map that
 /// maintains the mapping from entities to their component data.

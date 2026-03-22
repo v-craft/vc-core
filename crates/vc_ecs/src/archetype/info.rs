@@ -7,7 +7,7 @@ use vc_os::sync::Arc;
 use crate::archetype::{ArcheId, ArcheRow};
 use crate::bundle::BundleId;
 use crate::component::ComponentId;
-use crate::entity::{Entity, MovedEntity};
+use crate::entity::{Entity, MovedEntityRow};
 use crate::storage::TableId;
 
 // -----------------------------------------------------------------------------
@@ -89,9 +89,8 @@ impl Debug for Archetype {
         f.debug_struct("Archetype")
             .field("id", &self.id)
             .field("table_id", &self.table_id)
-            .field("dense_components", &self.dense_components())
-            .field("sparse_components", &self.sparse_components())
-            .field("entity_count", &self.entities.len())
+            .field("components", &self.components)
+            .field("entities", &self.entities)
             .finish()
     }
 }
@@ -164,7 +163,6 @@ impl Archetype {
     /// # Complexity
     /// - Time: O(log n) where n is the total number of component types
     /// - Space: O(1)
-    #[inline]
     pub fn contains_component(&self, id: ComponentId) -> bool {
         self.contains_dense_component(id) || self.contains_sparse_component(id)
     }
@@ -174,7 +172,6 @@ impl Archetype {
     /// # Complexity
     /// - Time: O(log n) where n is the number of dense components
     /// - Space: O(1)
-    #[inline]
     pub fn contains_dense_component(&self, id: ComponentId) -> bool {
         self.dense_components().binary_search(&id).is_ok()
     }
@@ -184,7 +181,6 @@ impl Archetype {
     /// # Complexity
     /// - Time: O(log s) where s is the number of sparse components
     /// - Space: O(1)
-    #[inline]
     pub fn contains_sparse_component(&self, id: ComponentId) -> bool {
         self.sparse_components().binary_search(&id).is_ok()
     }
@@ -196,8 +192,10 @@ impl Archetype {
     /// examining individual entities.
     ///
     /// # Parameters
-    /// - `with` - Component types that must be present (order doesn't matter)
-    /// - `without` - Component types that must be absent (order doesn't matter)
+    /// - `with` - Component types that must be present
+    ///   (order doesn't matter, allow duplicates)
+    /// - `without` - Component types that must be absent
+    ///   (order doesn't matter, allow duplicates)
     ///
     /// # Complexity
     /// - Time: O(m * log n) where m = len(with) + len(without), n = total components
@@ -215,33 +213,60 @@ impl Archetype {
     /// particularly when filtering many archetypes with the same query.
     ///
     /// # Parameters
-    /// - `with` - Component types that must be present (must be sorted ascending)
-    /// - `without` - Component types that must be absent (must be sorted ascending)
+    /// - `with` - Component types that must be present
+    ///   (**must be sorted and deduplicated**)
+    /// - `without` - Component types that must be absent
+    ///   (**must be sorted and deduplicated**)
     ///
     /// # Requirements
     /// Both input slices **MUST** be sorted in ascending order. Duplicate entries
-    /// are allowed but may affect performance. Violating the sorting requirement
-    /// leads to unspecified results (but not memory unsafety).
+    /// are **not** allowed. Violating the requirement leads to unspecified results
+    /// (but not memory unsafety).
     ///
     /// # Complexity
-    /// - Time: O(m + n) where m = len(with) + len(without), n = total components
+    /// - Time: O(min(m + n, m * log n)) where m = len(with) + len(without), n = total components
     /// - Space: O(1)
     pub fn matches_sorted(&self, with: &[ComponentId], without: &[ComponentId]) -> bool {
-        {
-            let mut dense = self.dense_components();
-            let mut sparse = self.sparse_components();
-            let result = with.iter().all(|id| {
-                if let Some(idx) = dense.iter().position(|it| *it >= *id) {
-                    dense = &dense[idx..];
-                    if dense[0] == *id {
-                        return true;
+        fn jump_search(id: ComponentId, slice: &[ComponentId]) -> Result<usize, usize> {
+            let mut index = 0usize;
+            let len = slice.len();
+
+            loop {
+                if index == len || slice[index] > id {
+                    return Err(index);
+                }
+                if slice[index] == id {
+                    return Ok(index);
+                }
+
+                let mut step = 1usize;
+                loop {
+                    let offset = index + step;
+                    if offset < len && slice[offset] <= id {
+                        step <<= 1;
+                    } else {
+                        break;
                     }
                 }
-                if let Some(idx) = sparse.iter().position(|it| *it >= *id) {
-                    sparse = &sparse[idx..];
-                    if sparse[0] == *id {
-                        return true;
-                    }
+                // index + (step >> 1) < len
+                // index + min(step >> 1, 1) <= len
+                index += core::cmp::max(step >> 1, 1);
+            }
+        }
+        {
+            // with
+            let mut dense = self.dense_components();
+            let mut sparse = self.sparse_components();
+            let result = with.iter().all(|&id| {
+                // `with` has been sorted and deduplicated, the `[..=idx]` can be skipped.
+                // we can skip `[idx]` because it's `==` specific id.
+                if let Ok(idx) = jump_search(id, dense) {
+                    dense = &dense[(idx + 1)..];
+                    return true;
+                }
+                if let Ok(idx) = jump_search(id, sparse) {
+                    sparse = &sparse[(idx + 1)..];
+                    return true;
                 }
                 false
             });
@@ -250,20 +275,21 @@ impl Archetype {
             }
         }
         {
+            // without
             let mut dense = self.dense_components();
             let mut sparse = self.sparse_components();
-            without.iter().all(|id| {
-                if let Some(idx) = dense.iter().position(|it| *it >= *id) {
+            // `without` has been sorted and deduplicated, the `[..idx]` can be skipped.
+            // cannot skip `[idx]` because it's `>` specific id (or the end of slice).
+            without.iter().all(|&id| {
+                if let Err(idx) = jump_search(id, dense) {
                     dense = &dense[idx..];
-                    if dense[0] == *id {
-                        return false;
-                    }
+                } else {
+                    return false;
                 }
-                if let Some(idx) = sparse.iter().position(|it| *it >= *id) {
+                if let Err(idx) = jump_search(id, sparse) {
                     sparse = &sparse[idx..];
-                    if sparse[0] == *id {
-                        return false;
-                    }
+                } else {
+                    return false;
                 }
                 true
             })
@@ -279,20 +305,18 @@ impl Archetype {
         &self.entities
     }
 
-    /// Returns the entity at the specified archetype row, if any.
+    /// Returns the entity at the specified archetype row.
     ///
-    /// # Parameters
-    /// - `row` - The archetype row index to query
-    ///
-    /// # Returns
-    /// `Some(Entity)` if the row is currently occupied, `None` otherwise.
+    /// # Safety
+    /// The provided `row` must be currently occupied by an entity.
+    /// Calling with an invalid or empty row leads to undefined behavior.
     ///
     /// # Complexity
     /// - Time: O(1)
     /// - Space: O(1)
-    #[inline(always)]
-    pub fn get_entity(&mut self, row: ArcheRow) -> Option<Entity> {
-        self.entities.get(row.0 as usize).copied()
+    pub unsafe fn entity_at(&mut self, row: ArcheRow) -> Entity {
+        debug_assert!((row.0 as usize) < self.entities.len());
+        unsafe { *self.entities.get_unchecked(row.0 as usize) }
     }
 
     /// Inserts a new entity into this archetype, reserving space at the end.
@@ -350,7 +374,7 @@ impl Archetype {
     /// - **Row validity**: The provided `row` must be currently occupied by an
     ///   entity. Calling with an invalid or empty row leads to undefined behavior.
     ///
-    /// - **External reference updates**: If this method returns `Some(MovedEntity)`,
+    /// - **External reference updates**: If this method returns `MovedEntity`,
     ///   the caller MUST update any external references that pointed to the moved
     ///   entity's old location.
     ///
@@ -361,7 +385,7 @@ impl Archetype {
     /// # Complexity
     /// - Time: O(1)
     /// - Space: O(1)
-    pub unsafe fn remove_entity(&mut self, row: ArcheRow) -> MovedEntity {
+    pub unsafe fn remove_entity(&mut self, row: ArcheRow) -> MovedEntityRow {
         debug_assert!((row.0 as usize) < self.entities.len());
 
         let last = self.entities.len() - 1;
@@ -370,12 +394,12 @@ impl Archetype {
         unsafe {
             if dst == last {
                 self.entities.set_len(last);
-                MovedEntity::in_arche(None, row)
+                MovedEntityRow::in_arche(None, row)
             } else {
                 let entity = *self.entities.get_unchecked(last);
                 *self.entities.get_unchecked_mut(dst) = entity;
                 self.entities.set_len(last);
-                MovedEntity::in_arche(Some(entity), row)
+                MovedEntityRow::in_arche(Some(entity), row)
             }
         }
     }
@@ -391,18 +415,12 @@ impl Archetype {
     }
 
     /// Set a new archetype after inserting a Component.
-    ///
-    /// # Safety
-    /// Ensure by caller.
-    pub unsafe fn set_after_insert(&mut self, bundle: BundleId, arche: ArcheId) {
+    pub fn set_after_insert(&mut self, bundle: BundleId, arche: ArcheId) {
         self.after_insert.insert(bundle, arche);
     }
 
     /// Set a new archetype after removing a Component.
-    ///
-    /// # Safety
-    /// Ensure by caller.
-    pub unsafe fn set_after_remove(&mut self, bundle: BundleId, arche: ArcheId) {
+    pub fn set_after_remove(&mut self, bundle: BundleId, arche: ArcheId) {
         self.after_remove.insert(bundle, arche);
     }
 }

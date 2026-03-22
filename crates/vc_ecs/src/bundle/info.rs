@@ -47,21 +47,25 @@ impl BundleInfo {
 
 impl BundleInfo {
     /// Returns the unique identifier of this bundle.
+    #[inline(always)]
     pub fn id(&self) -> BundleId {
         self.id
     }
 
     /// Returns the complete list of component types in this bundle.
+    #[inline(always)]
     pub fn components(&self) -> &[ComponentId] {
         &self.components
     }
 
     /// Returns the list of dense component types in this bundle.
+    #[inline(always)]
     pub fn dense_components(&self) -> &[ComponentId] {
         &self.components[..self.dense_len as usize]
     }
 
     /// Returns the list of sparse component types in this bundle.
+    #[inline(always)]
     pub fn sparse_components(&self) -> &[ComponentId] {
         &self.components[self.dense_len as usize..]
     }
@@ -71,7 +75,6 @@ impl BundleInfo {
     /// # Complexity
     /// - Time: O(log n) where n is the total number of component types
     /// - Space: O(1)
-    #[inline]
     pub fn contains_component(&self, id: ComponentId) -> bool {
         self.contains_dense_component(id) || self.contains_sparse_component(id)
     }
@@ -81,7 +84,6 @@ impl BundleInfo {
     /// # Complexity
     /// - Time: O(log n) where n is the number of dense components
     /// - Space: O(1)
-    #[inline]
     pub fn contains_dense_component(&self, id: ComponentId) -> bool {
         self.dense_components().binary_search(&id).is_ok()
     }
@@ -91,7 +93,6 @@ impl BundleInfo {
     /// # Complexity
     /// - Time: O(log s) where s is the number of sparse components
     /// - Space: O(1)
-    #[inline]
     pub fn contains_sparse_component(&self, id: ComponentId) -> bool {
         self.sparse_components().binary_search(&id).is_ok()
     }
@@ -214,13 +215,11 @@ impl Bundles {
     }
 
     /// Returns the bundle ID associated with ComponentIds, if it exists.
-    #[inline]
     pub fn get_id(&self, components: &[ComponentId]) -> Option<BundleId> {
         self.mapper.get(components).copied()
     }
 
     /// Returns the bundle ID associated with a type ID, if it exists.
-    #[inline]
     pub fn get_id_by_type(&self, id: TypeId) -> Option<BundleId> {
         self.type_mapper.get(&id).copied()
     }

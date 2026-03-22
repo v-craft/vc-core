@@ -37,10 +37,8 @@ pub use system::{SystemKey, SystemObject, UnitSystem};
 mod tests {
     use super::*;
     use crate::component::Component;
-    use crate::query::{And, Or, With, Without};
-    use crate::system::{IntoSystem, SystemName};
-    use crate::world::{World, WorldIdAllocator};
-    use alloc::boxed::Box;
+    use crate::query::With;
+    use crate::world::World;
     use alloc::string::String;
     use alloc::vec::Vec;
 
@@ -63,28 +61,19 @@ mod tests {
     #[derive(ScheduleLabel, Debug, Hash, PartialEq, Eq, Clone)]
     pub struct Testing;
 
-    fn alloc_world() -> World {
-        static ALLOCATOR: WorldIdAllocator = WorldIdAllocator::new();
-        World::new(ALLOCATOR.alloc())
-    }
-
     #[test]
     fn basic() {
-        let mut world = alloc_world();
+        let mut world = World::default();
         let mut schedules = Schedules::new();
-        let name = SystemName::new("spawn_entities");
-        let system = IntoSystem::into_system(spawn_entities, name);
 
-        schedules.insert_system(Testing, Box::new(system));
+        schedules.add_system(Testing, spawn_entities);
         schedules.entry(Testing).run(&mut world);
 
-        let query =
-            world.query_with::<&Foo, And<(With<Bar>, Without<Baz>, Or<(With<Qux>, With<Zaz>)>)>>();
-
-        assert_eq!(query.into_iter().count(), 1);
+        let query = world.query_with::<&Foo, With<Zaz>>();
+        assert_eq!(query.iter().count(), 1);
 
         let query = world.query::<&Qux>();
-        let qux_values: Vec<f32> = query.into_iter().map(|q| q.0).collect();
+        let qux_values: Vec<f32> = query.iter().map(|q| q.0).collect();
         assert!(qux_values.contains(&3.0));
     }
 

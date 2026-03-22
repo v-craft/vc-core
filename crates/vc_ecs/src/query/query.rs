@@ -8,6 +8,9 @@ use crate::system::{AccessTable, ReadOnlySystemParam, SystemParam};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
+// -----------------------------------------------------------------------------
+// Query
+
 /// A parameter for querying components and entities from the ECS world.
 ///
 /// `Query` contains two type parameters: [`QueryData`] (what to fetch) and
@@ -17,13 +20,25 @@ use crate::world::{UnsafeWorld, World};
 ///
 /// ```ignore
 /// // Basic component query
-/// fn system1(query: Query<&Foo>) { /* .. */ }
+/// fn system1(query: Query<&Foo>) {
+///     for foo in query {
+///         /* ... */
+///     }
+/// }
 ///
 /// // Query with tuple and filter
-/// fn system2(query: Query<(Entity, &Foo), With<Bar>>) { /* .. */ }
+/// fn system2(query: Query<(Entity, &Foo), With<Bar>>) {
+///     for (entity, foo) in query {
+///         /* ... */
+///     }
+/// }
 ///
 /// // Complex filter composition
-/// fn system3(query: Query<(Entity, &Foo), And<(With<Bar>, Without<Baz>, Changed<Foo>)>>) { /* .. */ }
+/// fn system3(query: Query<(Entity, &Foo), And<(With<Bar>, Without<Baz>, Changed<Foo>)>>) {
+///     for (entity, foo) in query {
+///         /* ... */
+///     }
+/// }
 /// ```
 ///
 /// # Query Data Types
@@ -98,6 +113,9 @@ pub struct Query<'world, 'state, D: QueryData, F: QueryFilter = ()> {
     pub(super) this_run: Tick,
 }
 
+// -----------------------------------------------------------------------------
+// Query -> SystemParam
+
 unsafe impl<D: QueryData + 'static, F: QueryFilter + 'static> SystemParam for Query<'_, '_, D, F> {
     type State = QueryState<D, F>;
     type Item<'world, 'state> = Query<'world, 'state, D, F>;
@@ -136,6 +154,28 @@ impl<D: QueryData, F: QueryFilter> Debug for Query<'_, '_, D, F> {
             .field("last_run", &self.last_run)
             .field("this_run", &self.this_run)
             .finish()
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Query implementation
+
+impl<'w, 's, D: QueryData, F: QueryFilter> Query<'w, 's, D, F> {
+    /// Returns a reborrowed query with a shorter world lifetime.
+    ///
+    /// This is mainly useful when the query contains mutable borrows and you
+    /// need to pass a temporary query handle to helper functions while keeping
+    /// the original query available afterward.
+    ///
+    /// If the query is read-only, [`Query`] itself implements [`Copy`], so
+    /// reborrowing is usually unnecessary.
+    pub fn reborrow(&self) -> Query<'_, 's, D, F> {
+        Query {
+            world: self.world,
+            state: self.state,
+            last_run: self.last_run,
+            this_run: self.this_run,
+        }
     }
 }
 

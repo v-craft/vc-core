@@ -5,14 +5,14 @@ use super::Entity;
 // -----------------------------------------------------------------------------
 // EntityHashMap
 
-pub type EntityHashMap<T> = SparseHashMap<Entity, T>;
+pub type EntityMap<T> = SparseHashMap<Entity, T>;
 
 // -----------------------------------------------------------------------------
 // EntityMapper
 
 /// An implementor of this trait knows how to map an [`Entity`] into another [`Entity`].
 ///
-/// Usually this is done by using an [`EntityHashMap<Entity>`] to map source entities
+/// Usually this is done by using an [`EntityMap<Entity>`] to map source entities
 /// (mapper inputs) to the current world's entities (mapper outputs).
 pub trait EntityMapper {
     /// Returns the "target" entity that maps to the given `source`.
@@ -45,7 +45,7 @@ impl EntityMapper for (Entity, Entity) {
     fn set_mapped(&mut self, _source: Entity, _target: Entity) {}
 }
 
-impl EntityMapper for EntityHashMap<Entity> {
+impl EntityMapper for EntityMap<Entity> {
     fn get_mapped(&mut self, source: Entity) -> Entity {
         self.get(&source).cloned().unwrap_or(source)
     }

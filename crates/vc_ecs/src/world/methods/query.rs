@@ -68,7 +68,7 @@ impl World {
     /// world.spawn(Foo);
     ///
     /// let query = world.query::<&Foo>();
-    /// assert_eq!(query.into_iter().count(), 2);
+    /// assert_eq!(query.iter().count(), 2);
     /// ```
     pub fn query<D: QueryData + 'static>(&mut self) -> Query<'_, '_, D> {
         let world: UnsafeWorld<'_> = self.unsafe_world();
@@ -102,7 +102,7 @@ impl World {
     /// world.spawn(Bar(2));
     ///
     /// let query = world.query_with::<&Bar, With<Foo>>();
-    /// assert_eq!(query.into_iter().count(), 1);
+    /// assert_eq!(query.iter().count(), 1);
     /// for bar in query {
     ///     assert_eq!(bar.0, 1);
     /// }

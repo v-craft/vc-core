@@ -3,7 +3,7 @@ use core::fmt::Debug;
 use fixedbitset::FixedBitSet;
 use vc_utils::hash::NoOpHashMap;
 
-use super::{FilterData, FilterParam};
+use super::{AccessParam, FilterParam};
 use crate::resource::ResourceId;
 
 /// Tracks access patterns for system execution and conflict detection.
@@ -13,7 +13,7 @@ pub struct AccessTable {
     world_ref: bool,          // holding `&world`
     res_reading: FixedBitSet, // resource reading
     res_writing: FixedBitSet, // resource writing
-    filter: NoOpHashMap<FilterParam, FilterData>,
+    filter: NoOpHashMap<FilterParam, AccessParam>,
 }
 
 // `#[derive(Clone)]` does not generate optimized `clone_from`.
@@ -79,7 +79,7 @@ impl AccessTable {
         self.world_ref
             || (!self.world_mut
                 && self.res_writing.is_clear()
-                && self.filter.values().all(FilterData::is_read_only))
+                && self.filter.values().all(AccessParam::is_read_only))
     }
 
     pub fn set_world_mut(&mut self) -> bool {
@@ -138,7 +138,7 @@ impl AccessTable {
         }
     }
 
-    pub fn can_query(&self, data: &FilterData, params: &[FilterParam]) -> bool {
+    pub fn can_query(&self, data: &AccessParam, params: &[FilterParam]) -> bool {
         if self.world_mut {
             return false;
         }
@@ -156,7 +156,7 @@ impl AccessTable {
         })
     }
 
-    pub fn set_query(&mut self, data: &FilterData, params: &[FilterParam]) -> bool {
+    pub fn set_query(&mut self, data: &AccessParam, params: &[FilterParam]) -> bool {
         if self.can_query(data, params) {
             if !self.world_ref {
                 params.iter().for_each(|param| {

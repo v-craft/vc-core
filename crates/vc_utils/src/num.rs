@@ -118,7 +118,7 @@ macro_rules! impl_non_max {
         }
 
         impl PartialEq for $NonMax {
-            #[inline]
+            #[inline(always)]
             fn eq(&self, other: &Self) -> bool {
                 unsafe {
                     mem::transmute_copy::<Self, $Int>(self)

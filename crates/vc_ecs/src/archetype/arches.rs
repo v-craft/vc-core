@@ -197,13 +197,11 @@ impl Archetypes {
     }
 
     /// Finds the archetype ID for an exact component set.
-    #[inline]
     pub fn get_id(&self, components: &[ComponentId]) -> Option<ArcheId> {
         self.precise_map.get(components).copied()
     }
 
     /// Returns the archetype ID associated with a specific bundle.
-    #[inline]
     pub fn get_id_by_bundle(&self, id: BundleId) -> Option<ArcheId> {
         self.bundle_map.get(id.index()).and_then(|t| *t)
     }
@@ -223,6 +221,20 @@ impl Archetypes {
 // ArcheFilter
 
 /// A builder for filtering archetypes based on component requirements.
+///
+/// # Examples
+///
+/// ```ignore
+/// let arches: Archetypes = todo!();
+///
+/// let filter = arches.filter();
+/// filter.with(a);
+/// filter.with(b);
+/// filter.without(c);
+///
+/// let mut result =  BTreeSet::<StorageId>::new();
+/// filter.collect_arche(&mut result);
+/// ```
 #[derive(Debug, Clone)]
 pub struct ArcheFilter<'a> {
     /// Reference to the parent archetypes collection

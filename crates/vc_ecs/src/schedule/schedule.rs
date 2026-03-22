@@ -1,6 +1,5 @@
 #![expect(clippy::module_inception, reason = "For better structure.")]
 
-use core::any::type_name;
 use core::fmt::Debug;
 
 use alloc::boxed::Box;
@@ -8,6 +7,7 @@ use alloc::vec::Vec;
 
 use fixedbitset::FixedBitSet;
 use slotmap::{SecondaryMap, SlotMap};
+use vc_utils::extra::PagePool;
 use vc_utils::hash::{HashMap, HashSet, NoOpHashMap};
 
 use super::{Dag, SystemKey, SystemObject, UnitSystem};
@@ -20,6 +20,27 @@ use crate::world::World;
 // -----------------------------------------------------------------------------
 // Schedule
 
+/// A schedulable collection of systems with ordering and conflict constraints.
+///
+/// `Schedule` stores systems, explicit ordering edges, and access metadata, then
+/// compiles them into an executable graph.
+///
+/// # Execution Graph and Parallelism
+///
+/// On [`Schedule::update`], when the schedule is marked as changed:
+/// - New/updated systems are initialized to collect their [`AccessTable`].
+/// - Pairwise access conflicts are recorded.
+/// - User-provided ordering edges are merged with conflict/exclusive constraints.
+/// - A reduced DAG is built and converted into compact runtime arrays
+///   (`incoming` / `outgoing`) for the executor.
+///
+/// During [`Schedule::run`], the selected executor uses that DAG to run
+/// independent systems in parallel while respecting:
+/// - explicit ordering constraints,
+/// - access conflicts,
+/// - and exclusive systems.
+///
+/// [`AccessTable`]: crate::system::AccessTable
 pub struct Schedule {
     label: InternedScheduleLabel,
     allocator: Allocator,
@@ -70,12 +91,74 @@ struct ConflictTable {
 // -----------------------------------------------------------------------------
 // SystemSchedule
 
+/// Compiled schedule data consumed by executors.
+///
+/// This is a dense runtime representation derived from `Schedule` internals.
+/// `keys` and `systems` share the same index. `incoming` stores dependency
+/// counts, and `outgoing` stores adjacency lists by index.
 #[derive(Default)]
 pub struct SystemSchedule {
-    pub keys: Vec<SystemKey>,
-    pub systems: Vec<SystemObject>,
-    pub incoming: Vec<u16>,
-    pub outgoing: Vec<Vec<u16>>,
+    /// Collection of system keys
+    keys: Vec<SystemKey>,
+    /// Collection of system objects
+    systems: Vec<SystemObject>,
+    /// In-degree of each system in the execution graph
+    incoming: Vec<u16>,
+    /// Successor nodes of each system in the execution graph
+    ///
+    /// When a system completes, we iterate through its successors and decrement
+    /// their in-degree. Systems with an in-degree of zero are ready to run.
+    ///
+    /// A local memory pool is used here to manage data and avoid excessive
+    /// memory fragmentation.
+    outgoing: Vec<&'static [u16]>,
+    pool: PagePool,
+}
+
+unsafe impl Sync for SystemSchedule {}
+unsafe impl Send for SystemSchedule {}
+
+/// View of `SystemSchedule` for encapsulating internal implementation
+pub struct SystemScheduleView<'s> {
+    pub keys: &'s [SystemKey],
+    pub systems: &'s mut [SystemObject],
+    pub incoming: &'s [u16],
+    pub outgoing: &'s [&'s [u16]],
+}
+
+impl SystemSchedule {
+    pub fn view(&mut self) -> SystemScheduleView<'_> {
+        let SystemSchedule {
+            keys,
+            systems,
+            incoming,
+            outgoing,
+            ..
+        } = self;
+
+        SystemScheduleView {
+            keys,
+            systems,
+            incoming,
+            outgoing,
+        }
+    }
+
+    pub fn keys(&self) -> &[SystemKey] {
+        &self.keys
+    }
+
+    pub fn systems(&self) -> &[SystemObject] {
+        &self.systems
+    }
+
+    pub fn incoming(&self) -> &[u16] {
+        &self.incoming
+    }
+
+    pub fn outgoing(&self) -> &[&[u16]] {
+        &self.outgoing
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -259,6 +342,7 @@ impl Schedule {
         let buffer = &mut self.buffer;
         schedule.incoming.clear();
         schedule.outgoing.clear();
+        schedule.pool = PagePool::new();
         schedule
             .keys
             .drain(..)
@@ -287,7 +371,8 @@ impl Schedule {
         debug_assert_eq!(schedule.keys.len(), schedule.systems.len());
 
         schedule.incoming.resize(topo.len(), 0);
-        schedule.outgoing.resize(topo.len(), Vec::new());
+        schedule.outgoing.resize(topo.len(), &[]);
+        let mut outgoing: Vec<Vec<u16>> = Vec::with_capacity(topo.len());
 
         let mut indices: HashMap<SystemKey, usize> = HashMap::with_capacity(topo.len());
         topo.iter().enumerate().for_each(|(idx, &key)| {
@@ -298,11 +383,23 @@ impl Schedule {
             dag.neighbors(key).for_each(|to| {
                 let neighbor_index = indices[&to];
                 schedule.incoming[neighbor_index] += 1;
-                schedule.outgoing[idx].push(neighbor_index as u16);
+                outgoing[idx].push(neighbor_index as u16);
             });
+        });
+
+        schedule.pool = PagePool::new();
+        outgoing.iter().enumerate().for_each(|(idx, slice)| {
+            let item: &[u16] = schedule.pool.alloc_slice(slice.as_slice());
+
+            schedule.outgoing[idx] =
+                unsafe { core::mem::transmute::<&[u16], &'static [u16]>(item) };
         });
     }
 
+    /// Rebuilds the executable schedule if structure or systems changed.
+    ///
+    /// This step initializes newly inserted systems, recomputes conflicts,
+    /// rebuilds the execution DAG, and initializes the executor if needed.
     pub fn update(&mut self, world: &mut World) {
         if self.is_changed {
             vc_utils::cold_path();
@@ -319,6 +416,11 @@ impl Schedule {
         }
     }
 
+    /// Executes the schedule once.
+    ///
+    /// This performs [`Schedule::update`] first, runs all systems through the
+    /// configured executor, then updates world ticks and applies deferred
+    /// commands.
     pub fn run(&mut self, world: &mut World) {
         self.update(world);
 
@@ -329,6 +431,9 @@ impl Schedule {
         world.apply_commands();
     }
 
+    /// Creates a new schedule with the given label.
+    ///
+    /// The concrete executor is selected from [`ExecutorKind::default`].
     pub fn new(label: impl ScheduleLabel) -> Self {
         Self {
             label: label.intern(),
@@ -346,14 +451,19 @@ impl Schedule {
         }
     }
 
+    /// Returns this schedule's interned label.
     pub fn label(&self) -> InternedScheduleLabel {
         self.label
     }
 
+    /// Returns `true` if a system with `name` exists in this schedule.
     pub fn contains(&self, name: SystemName) -> bool {
         self.allocator.contains(name)
     }
 
+    /// Removes a system by name.
+    ///
+    /// Returns `true` if a system was removed.
     pub fn remove(&mut self, name: SystemName) -> bool {
         let Some(key) = self.allocator.remove(name) else {
             return false;
@@ -371,6 +481,10 @@ impl Schedule {
         true
     }
 
+    /// Inserts or replaces a system under `name`.
+    ///
+    /// Returns `true` if this is a new insertion, `false` if an existing system
+    /// with the same name was replaced.
     pub fn insert(&mut self, name: SystemName, system: UnitSystem) -> bool {
         if !self.is_changed {
             self.recycle_schedule();
@@ -378,32 +492,50 @@ impl Schedule {
         }
 
         if let Some(key) = self.allocator.get_key(name) {
-            log::info!("Insert system {} repeatedly.", system.name());
             self.buffer.remove(key);
             self.buffer.insert(key, system);
             let len = self.allocator.names.len();
-            assert!(len <= u16::MAX as usize, "too many systems in a schedule");
+            assert!(
+                len <= u16::MAX as usize,
+                "too many systems in schedule {:?}",
+                self.label
+            );
             false
         } else {
             let key = self.allocator.insert(name);
             self.buffer.insert(key, system);
             self.ordering.insert_node(key);
             let len = self.allocator.names.len();
-            assert!(len <= u16::MAX as usize, "too many systems in a schedule");
+            assert!(
+                len <= u16::MAX as usize,
+                "too many systems in schedule {:?}",
+                self.label
+            );
             true
         }
     }
 
+    /// Adds a system using its Rust type name as [`SystemName`].
+    ///
+    /// Returns the generated name used for insertion.
+    ///
+    /// It is usually **not recommended** to use this function
+    /// because the system name is often unreadable.
+    ///
+    /// Recommended only for testing or documentation purposes.
     pub fn add_system<S, M>(&mut self, system: S) -> SystemName
     where
         S: IntoSystem<(), (), M>,
     {
-        let name = SystemName::new(type_name::<S>());
+        let name = SystemName::new(core::any::type_name::<S>());
         let unit_system = Box::new(IntoSystem::into_system(system, name));
         self.insert(name, unit_system);
         name
     }
 
+    /// Adds an explicit ordering edge: `before -> after`.
+    ///
+    /// Returns `false` if either system name is not present.
     pub fn insert_order(&mut self, before: SystemName, after: SystemName) -> bool {
         let Some(a) = self.allocator.get_key(before) else {
             return false;
@@ -422,6 +554,9 @@ impl Schedule {
         true
     }
 
+    /// Removes an explicit ordering edge: `before -> after`.
+    ///
+    /// Returns `false` if either system name is not present or the order is not present.
     pub fn remove_order(&mut self, before: SystemName, after: SystemName) -> bool {
         let Some(a) = self.allocator.get_key(before) else {
             return false;
@@ -438,18 +573,22 @@ impl Schedule {
         self.ordering.remove(a, b)
     }
 
+    /// Returns the internal key for a system name.
     pub fn get_key(&self, name: SystemName) -> Option<SystemKey> {
         self.allocator.get_key(name)
     }
 
+    /// Returns the system name for an internal key.
     pub fn get_name(&self, key: SystemKey) -> Option<SystemName> {
         self.allocator.get_name(key)
     }
 
+    /// Iterates over all registered systems as `(name, key)` pairs.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = (&SystemName, &SystemKey)> + '_ {
         self.allocator.iter()
     }
 
+    /// Returns the explicit ordering graph (without conflict-derived edges).
     pub fn order_graph(&self) -> &Dag<SystemKey> {
         &self.ordering.ordering
     }

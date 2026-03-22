@@ -1,9 +1,4 @@
 //! Required components handling for the component system.
-//!
-//! This module provides a trait-based system for managing component dependencies
-//! and requirements. It allows components to specify their dependencies through
-//! tuple composition, enabling automatic registration, collection, and writing
-//! of required components.
 
 use vc_utils::range_invoke;
 

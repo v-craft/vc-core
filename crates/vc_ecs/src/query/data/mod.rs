@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 use crate::archetype::Archetype;
 use crate::entity::Entity;
 use crate::storage::{Table, TableRow};
-use crate::system::{FilterData, FilterParamBuilder};
+use crate::system::{AccessParam, FilterParamBuilder};
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
@@ -22,16 +22,33 @@ use crate::world::{UnsafeWorld, World};
 /// This trait defines how a query accesses data from entities. It is implemented
 /// for component references, tuples of components, and other data sources.
 ///
-/// # Type Parameters
+/// # Available Params
 ///
-/// - [`State`](Self::State) - Static data shared across all query instances
-/// - [`Cache`](Self::Cache) - Per-execution cached data for a specific world state
-/// - [`Item`](Self::Item) - The type returned when fetching data for an entity
+/// The following query data forms are supported:
 ///
-/// # Performance Considerations
+/// - **Entity handles**: `Entity`, `EntityRef`, `EntityMut`
+/// - **Component references**: `&T`, `&mut T`, `Ref<T>`, `Mut<T>` where `T` is a component type
+/// - **Optional components**: `Option<&T>`, `Option<&mut T>`, `Option<Ref<T>>`, `Option<Mut<T>>`
 ///
-/// - [`COMPONENTS_ARE_DENSE`](Self::COMPONENTS_ARE_DENSE) allows optimizations
-///   when all accessed components use dense storage
+/// Tuples composed from these forms are also valid, for example `(&Foo, &mut Bar)`.
+///
+/// # Aliasing rules
+///
+/// `QueryData` must obey Rust aliasing rules. For example, `(&Foo, &mut Foo)` is
+/// invalid and will panic at runtime.
+///
+/// Also note the difference between entity-only and entity-wide access:
+/// - `Entity` carries only an entity ID and does not access components.
+/// - `EntityRef` represents shared access to all components on that entity.
+/// - `EntityMut` represents exclusive access to all components on that entity.
+///
+/// Therefore, `(EntityRef, &Foo)` is valid, while `(EntityRef, &mut Foo)` and
+/// `(EntityMut, &Foo)` are invalid and will panic at runtime.
+///
+/// # Safety
+///
+/// Implementing this trait requires careful attention to memory safety and
+/// component access patterns. See trait methods for specific safety requirements.
 pub unsafe trait QueryData {
     /// Static data shared across all query instances.
     ///
@@ -59,12 +76,7 @@ pub unsafe trait QueryData {
     /// This is called once when the query is first created. The state is
     /// shared across all query executions and contains metadata needed for
     /// future cache building and fetching.
-    ///
-    /// # Safety
-    /// - Must properly register all component accesses with the world
-    /// - Must not modify world state in ways that violate invariants
-    /// - Returned state must remain valid for the lifetime of the query
-    unsafe fn build_state(world: &mut World) -> Self::State;
+    fn build_state(world: &mut World) -> Self::State;
 
     /// Builds a per-execution cache for this query data.
     ///
@@ -83,41 +95,43 @@ pub unsafe trait QueryData {
         this_run: Tick,
     ) -> Self::Cache<'w>;
 
-    /// Builds filter parameters for query planning.
+    /// Builds archetype-level filter parameters.
     ///
-    /// This converts the query data into a list of [`FilterParamBuilder`]s that
-    /// describe which components are accessed. These parameters are used by the
-    /// query planner to construct efficient access patterns.
+    /// This contributes constraints used during archetype filtering.
+    /// The `out` vector is in disjunctive-normal-form style: each item is one
+    /// `Or` branch, and the query matches if any branch is satisfied.
     ///
     /// # Note
     ///
-    /// The caller must ensure that [`QueryFilter::build_filter`] is called before
+    /// The caller must ensure that [`QueryFilter::build_filter`] is called **before**
     /// [`QueryData::build_filter`].
     ///
-    /// The `out` parameter is a vector where each entry represents one branch of
-    /// an `Or` condition - i.e., multiple alternative paths where satisfying any
-    /// one is sufficient.
-    ///
-    /// For [`QueryData::build_filter`], no new branches need to be created; instead,
-    /// constraints are added to each existing branch.
+    /// Therefore, implementations of [`QueryData::build_filter`] usually add
+    /// requirements to every existing branch, instead of creating new branches.
     ///
     /// [`QueryFilter::build_filter`]: crate::query::QueryFilter::build_filter
-    ///
-    /// # Safety
-    /// - Must correctly represent all component accesses
-    /// - Must not introduce conflicting access patterns
-    /// - Must maintain correct order for component dependencies
-    unsafe fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>);
+    fn build_filter(state: &Self::State, out: &mut Vec<FilterParamBuilder>);
 
-    /// Builds target information for data fetching.
+    /// Builds the set of data this query may access.
     ///
-    /// This configures how the fetched data will be stored or processed.
-    /// Returns `true` if the target requires per-entity processing.
+    /// Unlike [`QueryData::build_filter`], which describes archetype matching,
+    /// this method describes potential component/resource accesses for system
+    /// safety checks (mutual exclusion and aliasing validation).
     ///
-    /// # Safety
-    /// - Target configuration must match actual data layout
-    /// - Must correctly set access flags for change detection
-    unsafe fn build_target(state: &Self::State, out: &mut FilterData) -> bool;
+    /// For example, `Query<(&mut Foo, &Foo)>` is an invalid access target,
+    /// and this function should return `false`.
+    ///
+    /// # Note
+    ///
+    /// The caller must ensure that [`QueryFilter::build_access`] is called **after**
+    /// [`QueryData::build_access`].
+    ///
+    /// `QueryFilter` target accesses are evaluated during iterator filtering and
+    /// do not conflict with `QueryData` target registration, so `QueryData`
+    /// should register first.
+    ///
+    /// [`QueryFilter::build_access`]: crate::query::QueryFilter::build_access
+    fn build_access(state: &Self::State, out: &mut AccessParam) -> bool;
 
     /// Prepares the cache for a specific archetype.
     ///

@@ -60,12 +60,7 @@ impl Hash for ArcheId {
 impl PartialEq for ArcheId {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
-        use core::mem::transmute_copy;
-        // SAFETY: `ArcheId` is transparent to `NonMaxU32/u32`
-        unsafe {
-            // `transmute` is faster then `NonMaxU32::get`
-            transmute_copy::<Self, u32>(self) == transmute_copy::<Self, u32>(other)
-        }
+        self.0 == other.0
     }
 }
 

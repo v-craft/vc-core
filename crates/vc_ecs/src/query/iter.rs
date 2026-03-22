@@ -6,19 +6,50 @@ use crate::storage::TableRow;
 use crate::tick::Tick;
 use crate::world::{UnsafeWorld, World};
 
+// -----------------------------------------------------------------------------
+// QueryIter
+
+/// Iterator over query results.
+///
+/// This iterator traverses matched storages from [`QueryState`], applies
+/// optional entity-level filtering, and fetches query items lazily.
+///
+/// It can be obtained from:
+/// - [`QueryState::iter_mut`]
+/// - [`QueryState::iter`] for read-only data
+/// - [`Query::iter_mut`]
+/// - [`Query::iter`] for read-only data
+/// - `Query` by value via [`IntoIterator::into_iter`]
+/// - `&mut Query` via [`IntoIterator::into_iter`]
+/// - `&Query` via [`IntoIterator::into_iter`] for read-only data
+///
+/// # Examples
+///
+/// ```ignore
+/// fn system(query: Query<(Entity, &Foo), With<Bar>>) {
+///     for (entity, foo) in &query {
+///         /* ... */
+///     }
+/// }
+/// ```
 pub struct QueryIter<'w, 's, D: QueryData, F: QueryFilter> {
-    pub(super) world: UnsafeWorld<'w>,
-    pub(super) state: &'s QueryState<D, F>,
-    pub(super) d_cache: D::Cache<'w>,
-    pub(super) f_cache: F::Cache<'w>,
-    pub(super) storages: core::slice::Iter<'s, StorageId>,
-    pub(super) entities: &'w [Entity],
-    pub(super) row: usize,
+    world: UnsafeWorld<'w>,
+    state: &'s QueryState<D, F>,
+    d_cache: D::Cache<'w>,
+    f_cache: F::Cache<'w>,
+    storages: core::slice::Iter<'s, StorageId>,
+    entities: &'w [Entity],
+    row: usize,
 }
+
+// -----------------------------------------------------------------------------
+// QueryIter Implementation
+
+const EMPTY_ENTITIES: &[Entity] = &[];
 
 impl<D: QueryData, F: QueryFilter> QueryIter<'_, '_, D, F> {
     /// # Safety
-    /// Ensure by caller.
+    /// Guaranteed by the caller.
     unsafe fn new<'w, 's>(
         world: UnsafeWorld<'w>,
         state: &'s QueryState<D, F>,
@@ -38,6 +69,9 @@ impl<D: QueryData, F: QueryFilter> QueryIter<'_, '_, D, F> {
         }
     }
 
+    /// Advances to the next non-empty storage slice and refreshes caches.
+    ///
+    /// Returns `None` when no storage remains.
     #[cold]
     #[inline(never)]
     fn update_slice(&mut self) -> Option<()> {
@@ -98,14 +132,15 @@ impl<'w, D: QueryData, F: QueryFilter> Iterator for QueryIter<'w, '_, D, F> {
                 TableRow(old_row as u32)
             } else {
                 let infos = unsafe { &self.world.read_only().entities };
-                infos.get_spawned(entity).unwrap().table_row
+                infos.locate(entity).unwrap().table_row
             };
 
+            // Important optimization: skip entity filtering when the filter
+            // type guarantees no entity-level checks are needed.
             if F::ENABLE_ENTITY_FILTER {
                 let f_state = &self.state.f_state;
                 let f_cache = &mut self.f_cache;
-                let filter = unsafe { F::filter(f_state, f_cache, entity, table_row) };
-                if !filter {
+                if unsafe { !F::filter(f_state, f_cache, entity, table_row) } {
                     continue 'looper;
                 }
             }
@@ -121,36 +156,45 @@ impl<'w, D: QueryData, F: QueryFilter> Iterator for QueryIter<'w, '_, D, F> {
 
 impl<D: QueryData, F: QueryFilter> FusedIterator for QueryIter<'_, '_, D, F> {}
 
-const EMPTY_ENTITIES: &[Entity] = &[];
+// -----------------------------------------------------------------------------
+// Query -> QueryIter
 
 impl<'w, 's, D: QueryData, F: QueryFilter> IntoIterator for Query<'w, 's, D, F> {
     type Item = D::Item<'w>;
     type IntoIter = QueryIter<'w, 's, D, F>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let last_run = self.last_run;
-        let this_run = self.this_run;
-        let world = self.world;
-        let state = self.state;
-        unsafe {
-            QueryIter {
-                world,
-                state,
-                d_cache: D::build_cache(&state.d_state, world, last_run, this_run),
-                f_cache: F::build_cache(&state.f_state, world, last_run, this_run),
-                storages: state.storages.iter(),
-                entities: EMPTY_ENTITIES,
-                row: 0,
-            }
-        }
+        unsafe { QueryIter::new(self.world, self.state, self.last_run, self.this_run) }
+    }
+}
+
+impl<'a, 'w: 'a, 's, D: ReadOnlyQueryData, F: QueryFilter> IntoIterator
+    for &'a Query<'w, 's, D, F>
+{
+    type Item = D::Item<'a>;
+    type IntoIter = QueryIter<'a, 's, D, F>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        unsafe { QueryIter::new(self.world, self.state, self.last_run, self.this_run) }
+    }
+}
+
+impl<'a, 'w: 'a, 's, D: QueryData, F: QueryFilter> IntoIterator for &'a mut Query<'w, 's, D, F> {
+    type Item = D::Item<'a>;
+    type IntoIter = QueryIter<'a, 's, D, F>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        unsafe { QueryIter::new(self.world, self.state, self.last_run, self.this_run) }
     }
 }
 
 impl<'s, D: QueryData, F: QueryFilter> Query<'_, 's, D, F> {
+    /// Returns a mutable iterator over query results.
     pub fn iter_mut(&mut self) -> QueryIter<'_, 's, D, F> {
         unsafe { QueryIter::new(self.world, self.state, self.last_run, self.this_run) }
     }
 
+    /// Returns a read-only iterator over query results.
     pub fn iter(&self) -> QueryIter<'_, 's, D, F>
     where
         D: ReadOnlyQueryData,
@@ -159,14 +203,19 @@ impl<'s, D: QueryData, F: QueryFilter> Query<'_, 's, D, F> {
     }
 }
 
+// -----------------------------------------------------------------------------
+// QueryState -> QueryIter
+
 impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
+    /// Creates a mutable iterator from this query state and world.
     pub fn iter_mut<'s, 'w>(&'s self, world: &'w mut World) -> QueryIter<'w, 's, D, F> {
-        let last_run = world.last_run;
-        let this_run = Tick::new(*world.this_run.get_mut());
+        let last_run = world.last_run();
+        let this_run = world.this_run();
         let world = world.unsafe_world();
         unsafe { QueryIter::new(world, self, last_run, this_run) }
     }
 
+    /// Creates a read-only iterator from this query state and world.
     pub fn iter<'s, 'w>(&'s self, world: &'w World) -> QueryIter<'w, 's, D, F>
     where
         D: ReadOnlyQueryData,

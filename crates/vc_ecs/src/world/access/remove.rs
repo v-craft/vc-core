@@ -4,6 +4,41 @@ use crate::utils::DebugCheckedUnwrap;
 use crate::world::EntityOwned;
 
 impl EntityOwned<'_> {
+    /// Remove component.
+    ///
+    /// # Rules
+    ///
+    /// ## If some components do not exist
+    ///
+    /// Only existing components are removed; the program runs normally.
+    ///
+    /// ## If required components are involved
+    ///
+    /// For the specified set of components to remove `A`:
+    /// 1. Attempt to remove `A`'s required components `B`
+    /// 2. Only remove the removable parts, i.e., components that exist and are not
+    ///    depended upon by components outside of `A + B`.
+    ///
+    /// For example, given an entity `(A, B, C)` where `B` requires `A`:
+    /// You cannot remove only `A`. When removing `B`, `A` will be automatically removed.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use vc_ecs::world::World;
+    /// # use vc_ecs::component::Component;
+    /// # #[derive(Component, Debug)]
+    /// # struct Foo;
+    /// # #[derive(Component, Debug)]
+    /// # struct Bar;
+    /// let mut world = World::default();
+    ///
+    /// let mut entity = world.spawn((Foo, Bar));
+    /// assert!(entity.contains::<Bar>());
+    ///
+    /// entity.remove::<Bar>();
+    /// assert!(!entity.contains::<Bar>());
+    /// ```
     pub fn remove<B: Bundle>(&mut self) {
         let world = unsafe { self.world.full_mut() };
         let bundle_id = world.register_bundle::<B>();
@@ -16,24 +51,25 @@ impl EntityOwned<'_> {
     }
 
     #[inline(never)]
-    pub fn remove_moved(&mut self, new_arche_id: ArcheId) {
+    fn remove_moved(&mut self, new_arche_id: ArcheId) {
         let old_arche_id = self.location.arche_id;
         let old_arche = unsafe {
             self.world
-                .data_mut()
+                .full_mut()
                 .archetypes
                 .get_unchecked_mut(old_arche_id)
         };
         let new_arche = unsafe {
             self.world
-                .data_mut()
+                .full_mut()
                 .archetypes
                 .get_unchecked_mut(new_arche_id)
         };
+        assert_eq!(old_arche.table_id(), self.location.table_id);
 
         let moved = unsafe { old_arche.remove_entity(self.location.arche_row) };
         unsafe {
-            self.world.full_mut().entities.move_spawned(moved).unwrap();
+            self.world.full_mut().entities.update_row(moved).unwrap();
         }
         let new_arche_row = unsafe { new_arche.insert_entity(self.entity) };
         self.location.arche_id = new_arche_id;
@@ -56,23 +92,24 @@ impl EntityOwned<'_> {
                     .data_mut()
                     .storages
                     .tables
-                    .get_unchecked_mut(old_table_id)
+                    .get_unchecked_mut(new_table_id)
             };
             let (moved, new_row) =
                 unsafe { old_table.move_to_and_drop_missing(table_row, new_table) };
             unsafe {
-                self.world.full_mut().entities.move_spawned(moved).unwrap();
+                self.world.full_mut().entities.update_row(moved).unwrap();
             }
             self.location.table_id = new_table_id;
             self.location.table_row = new_row;
         }
 
-        let maps = unsafe { &mut self.world.data_mut().storages.maps };
+        let world = unsafe { self.world.full_mut() };
+        let maps = &mut world.storages.maps;
         old_arche.sparse_components().iter().for_each(|&id| {
             if !new_arche.contains_sparse_component(id) {
                 let map_id = unsafe { maps.get_id(id).debug_checked_unwrap() };
                 let map = unsafe { maps.get_unchecked_mut(map_id) };
-                let row = unsafe { map.free(self.entity).unwrap() };
+                let row = unsafe { map.deallocate(self.entity).unwrap() };
                 unsafe {
                     map.drop_item(row);
                 }
@@ -80,10 +117,9 @@ impl EntityOwned<'_> {
         });
 
         unsafe {
-            self.world
-                .full_mut()
+            world
                 .entities
-                .update_spawned(self.entity, self.location)
+                .update_location(self.entity, self.location)
                 .unwrap();
         }
     }

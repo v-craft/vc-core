@@ -1,4 +1,5 @@
-use thiserror::Error;
+use core::error::Error;
+use core::fmt::Display;
 
 use super::{ReadOnlySystemParam, SystemParam};
 use crate::borrow::{NonSend, NonSendMut, NonSendRef};
@@ -13,9 +14,16 @@ use crate::world::{UnsafeWorld, World};
 // -----------------------------------------------------------------------------
 // Resource
 
-#[derive(Error, Debug, Clone, Copy)]
-#[error("Resource {0} is uninitialzed before system run.")]
-pub struct UninitResource(DebugName);
+#[derive(Debug, Clone, Copy)]
+struct UninitResource(DebugName);
+
+impl Display for UninitResource {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "Resource {} is uninitialzed before system run.", self.0)
+    }
+}
+
+impl Error for UninitResource {}
 
 // -----------------------------------------------------------------------------
 // Res
