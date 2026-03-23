@@ -7,20 +7,24 @@ use super::{DeserializeDriver, DeserializeProcessor};
 
 use crate::info::{TupleInfo, TupleStructInfo, TupleVariantInfo, UnnamedField};
 use crate::ops::DynamicTuple;
-use crate::registry::TypeRegistry;
-use crate::serde::SkipSerde;
+use crate::registry::{ReflectDefault, TypeRegistry};
 
 // -----------------------------------------------------------------------------
 // Tuple-like metadata access
 
 pub(super) trait TupleLikeInfo {
+    fn name(&self) -> &'static str;
     fn field_at<E: Error>(&self, index: usize) -> Result<&UnnamedField, E>;
     fn field_len(&self) -> usize;
 }
 
 impl TupleLikeInfo for TupleInfo {
+    fn name(&self) -> &'static str {
+        self.type_path()
+    }
+
     fn field_at<E: Error>(&self, index: usize) -> Result<&UnnamedField, E> {
-        match Self::field_at(self, index) {
+        match <Self>::field_at(self, index) {
             Some(info) => Ok(info),
             None => Err(make_custom_error(format!(
                 "no field at index `{}` on tuple `{}`",
@@ -32,13 +36,17 @@ impl TupleLikeInfo for TupleInfo {
 
     #[inline]
     fn field_len(&self) -> usize {
-        Self::field_len(self)
+        <Self>::field_len(self)
     }
 }
 
 impl TupleLikeInfo for TupleStructInfo {
+    fn name(&self) -> &'static str {
+        self.type_path()
+    }
+
     fn field_at<E: Error>(&self, index: usize) -> Result<&UnnamedField, E> {
-        match Self::field_at(self, index) {
+        match <Self>::field_at(self, index) {
             Some(info) => Ok(info),
             None => Err(make_custom_error(format!(
                 "no field at index `{}` on tuple-struct `{}`",
@@ -50,13 +58,17 @@ impl TupleLikeInfo for TupleStructInfo {
 
     #[inline]
     fn field_len(&self) -> usize {
-        Self::field_len(self)
+        <Self>::field_len(self)
     }
 }
 
 impl TupleLikeInfo for TupleVariantInfo {
+    fn name(&self) -> &'static str {
+        <Self>::name(self)
+    }
+
     fn field_at<E: Error>(&self, index: usize) -> Result<&UnnamedField, E> {
-        match Self::field_at(self, index) {
+        match <Self>::field_at(self, index) {
             Some(info) => Ok(info),
             None => Err(make_custom_error(format!(
                 "no field at index `{}` on tuple variant `{}`",
@@ -68,7 +80,7 @@ impl TupleLikeInfo for TupleVariantInfo {
 
     #[inline]
     fn field_len(&self) -> usize {
-        Self::field_len(self)
+        <Self>::field_len(self)
     }
 }
 
@@ -90,23 +102,28 @@ where
     P: DeserializeProcessor,
 {
     let len = info.field_len();
-    let mut dynamic_tuple = DynamicTuple::with_capacity(len);
+    let mut dynamic = DynamicTuple::with_capacity(len);
 
     for index in 0..len {
-        let field_info = info.field_at::<V::Error>(index)?;
+        let field = info.field_at::<V::Error>(index)?;
 
-        // Skip fields annotated with `SkipSerde`.
-        if let Some(skip_serde) = field_info.get_attribute::<SkipSerde>() {
-            if let Some(val) = skip_serde.get(field_info.type_id(), registry)? {
-                dynamic_tuple.extend_boxed(val);
+        if field.skip_serde() {
+            if let Some(ctor) = registry.get_type_trait::<ReflectDefault>(field.type_id()) {
+                dynamic.extend_boxed(ctor.default());
+                continue;
+            } else {
+                return Err(make_custom_error(format!(
+                    "field `{index}: {}` on `{}` is `skip_serde` but does not provide `ReflectDefault`",
+                    field.type_info().type_path(),
+                    info.name(),
+                )));
             }
-            continue;
         }
 
-        let Some(type_meta) = registry.get(field_info.type_id()) else {
+        let Some(type_meta) = registry.get(field.type_id()) else {
             return Err(make_custom_error(format!(
                 "no TypeMeta found for type `{}`",
-                field_info.type_info().type_path(),
+                field.type_info().type_path(),
             )));
         };
 
@@ -116,25 +133,26 @@ where
             processor.as_deref_mut(),
         ))?;
 
-        let value = match value {
-            Some(val) => val,
-            None => {
-                return Err(make_custom_error(format!(
-                    "invalid length, expected: `{}`, actual: `{}`",
-                    len, index,
-                )));
-            }
+        let Some(value) = value else {
+            return Err(make_custom_error(format!(
+                "invalid length for `{}`, expected: `{}`, actual: `{}`",
+                info.name(),
+                len,
+                index,
+            )));
         };
 
-        dynamic_tuple.extend_boxed(value);
+        dynamic.extend_boxed(value);
     }
 
     if seq.next_element::<IgnoredAny>()?.is_some() {
         return Err(make_custom_error(format!(
-            "invalid length, expected: `{}`, actual: `> {}`",
-            len, len,
+            "invalid length for `{}`, expected: `{}`, actual: `>{}`",
+            info.name(),
+            len,
+            len,
         )));
     }
 
-    Ok(dynamic_tuple)
+    Ok(dynamic)
 }

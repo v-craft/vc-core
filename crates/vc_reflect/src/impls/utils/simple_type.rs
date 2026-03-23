@@ -19,7 +19,7 @@ macro_rules! impl_simple_type_reflect {
                 Clone::clone_from(self, value);
                 Ok(())
             } else {
-                Err($crate::ops::ApplyError::MismatchedTypes {
+                Err($crate::ops::ApplyError::MismatchedType {
                     from_type: ::alloc::borrow::Cow::Borrowed(
                         $crate::info::DynamicTypePath::reflect_type_path(value),
                     ),

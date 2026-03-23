@@ -5,27 +5,22 @@ use syn::{Expr, Path, Token, parse::ParseStream};
 /// A container for custom attribute expressions.
 ///
 /// This corresponds to `vc_reflect::info::CustomAttributes`.
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub(crate) struct CustomAttributes {
     attributes: Vec<Expr>,
 }
 
 impl CustomAttributes {
-    /// Inserts a custom attribute into the list.
-    pub fn push(&mut self, value: Expr) -> syn::Result<()> {
-        self.attributes.push(value);
-        Ok(())
-    }
-
     /// Parse `@` attribute.
     ///
     /// Examples:
     /// - `#[reflect(@Foo))]`
     /// - `#[reflect(@Bar::baz("qux"))]`
     /// - `#[reflect(@0..256u8)]`
-    pub fn parse_inner_stream(&mut self, input: ParseStream) -> syn::Result<()> {
+    pub fn parse_stream(&mut self, input: ParseStream) -> syn::Result<()> {
         input.parse::<Token![@]>()?;
-        self.push(input.parse()?)
+        self.attributes.push(input.parse::<Expr>()?);
+        Ok(())
     }
 
     /// If `custom_attributes` is empty, this function will return an empty token stream.

@@ -37,16 +37,17 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for SetVisitor<'_, P> {
             )));
         };
 
-        let mut dynamic_set = DynamicSet::with_capacity(set.size_hint().unwrap_or_default());
+        let capacity_hint = set.size_hint().unwrap_or_default();
+        let mut dynamic = DynamicSet::with_capacity(capacity_hint);
 
         while let Some(value) = set.next_element_seed(DeserializeDriver::new_internal(
             type_meta,
             self.registry,
             self.processor.as_deref_mut(),
         ))? {
-            dynamic_set.extend_boxed(value);
+            dynamic.extend_boxed(value);
         }
 
-        Ok(dynamic_set)
+        Ok(dynamic)
     }
 }

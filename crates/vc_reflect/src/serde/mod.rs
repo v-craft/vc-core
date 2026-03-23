@@ -22,7 +22,27 @@
 //!     - Only the outermost layer includes type paths; inner data types are inferred from field names,
 //!       using [`SerializeDriver`] internally.
 //!
-//! See code examples in [`SerializeDriver`] and [`ReflectSerializeDriver`].
+//! ### Examples
+//!
+//! ```no_run
+//! # use vc_reflect::prelude::{TypeRegistry, ReflectSerializeDriver, Reflect};
+//! #
+//! #[derive(Reflect)]
+//! #[reflect(type_path = "my_crate::MyStruct")]
+//! struct MyStruct {
+//!   value: i32
+//! }
+//!
+//! let mut registry = TypeRegistry::new();
+//! registry.register::<MyStruct>();
+//!
+//! let input = MyStruct { value: 123 };
+//!
+//! let serializer = ReflectSerializeDriver::new(&input, &registry);
+//! let output = ron::to_string(&serializer).unwrap();
+//!
+//! assert_eq!(output, r#"{"my_crate::MyStruct":(value:123)}"#);
+//! ```
 //!
 //! ## Deserialization
 //!
@@ -41,26 +61,60 @@
 //!     - Only the outermost layer requires type paths; inner data types are inferred from field names,
 //!       using [`DeserializeDriver`] internally.
 //!
-//! See code examples in [`DeserializeDriver`] and [`ReflectDeserializeDriver`].
+//! ### Examples
+//!
+//! ```no_run
+//! # use serde_core::de::DeserializeSeed;
+//! # use vc_reflect::ops::DynamicStruct;
+//! # use vc_reflect::prelude::{Reflect, FromReflect, TypeRegistry, ReflectDeserializeDriver};
+//! #
+//! #[derive(Reflect, PartialEq, Debug)]
+//! #[reflect(type_path = "my_crate::MyStruct")]
+//! struct MyStruct {
+//!   value: i32
+//! }
+//!
+//! let mut registry = TypeRegistry::new();
+//! registry.register::<MyStruct>();
+//!
+//! let input = r#"{
+//!   "my_crate::MyStruct": (
+//!     value: 123
+//!   )
+//! }"#;
+//!
+//! let mut data = ron::Deserializer::from_str(input).unwrap();
+//! let deserializer = ReflectDeserializeDriver::new(&registry);
+//!
+//! let output: Box<dyn Reflect> = deserializer.deserialize(&mut data).unwrap();
+//!
+//! // Because `MyStruct` implements FromReflect, the parser will attempt to
+//! // convert the type once through `ReflectFromReflect` at the end, and this
+//! // will inevitably succeed when the data is accurate.
+//! assert!(output.is::<MyStruct>());
+//!
+//! assert_eq!(output.take::<MyStruct>().unwrap(), MyStruct { value: 123 });
+//! ```
 //!
 //! ## Field Skipping
 //!
-//! A special attribute [`SkipSerde`] enables skipping fields during both serialization and deserialization.
-//!
-//! ### Scope of Effectiveness
-//!
+//! A special attribute `skip_serde` enables skipping fields during both serialization and deserialization.
+//!  
 //! This attribute **only** works with the default implementation (reflection-based serialization/deserialization).
 //! It has **no effect** when custom processors are provided or when types have native `serde` implementations.
 //!
-//! ### Safety Requirements
+//! ### Examples
 //!
-//! The attribute can be applied to:
-//! - Fields within structs, tuple structs, and enum variants
-//!
-//! **Cannot** be applied to:
-//! - Fields of newtype structs/enums (single-field tuple structs or enum tuple variants)
-//!
-//! See code examples in [`SkipSerde`].
+//! ```no_run
+//! # use core::marker::PhantomData;
+//! # use vc_reflect::Reflect;
+//! #[derive(Reflect)]
+//! struct Foo<T> {
+//!     data: u64,
+//!     #[reflect(skip_serde)]
+//!     _marker: PhantomData<T>,
+//! }
+//! ```
 //!
 //! [`TypeMeta`]: crate::registry::TypeMeta
 //! [`ReflectDeserialize`]: crate::registry::ReflectDeserialize
@@ -79,11 +133,9 @@ crate::cfg::debug! {
 
 mod de;
 mod ser;
-mod skip_field;
 
 // -----------------------------------------------------------------------------
 // Exports
 
 pub use de::{DeserializeDriver, DeserializeProcessor, ReflectDeserializeDriver};
 pub use ser::{ReflectSerializeDriver, SerializeDriver, SerializeProcessor};
-pub use skip_field::SkipSerde;

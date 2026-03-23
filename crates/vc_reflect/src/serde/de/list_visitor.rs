@@ -37,7 +37,8 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for ListVisitor<'_, P> {
             )));
         };
 
-        let mut dynamic = DynamicList::with_capacity(seq.size_hint().unwrap_or_default());
+        let capacity_hint = seq.size_hint().unwrap_or_default();
+        let mut dynamic = DynamicList::with_capacity(capacity_hint);
 
         while let Some(value) = seq.next_element_seed(DeserializeDriver::new_internal(
             type_meta,

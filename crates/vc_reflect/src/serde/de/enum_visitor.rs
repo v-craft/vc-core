@@ -43,57 +43,50 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for EnumVisitor<'_, P> {
 
         let value: DynamicVariant = match variant_info {
             VariantInfo::Unit(_) => variant.unit_variant()?.into(),
-            VariantInfo::Struct(struct_info) => variant
+            VariantInfo::Struct(info) => variant
                 .struct_variant(
-                    struct_info.field_names(),
+                    info.field_names(),
                     StructVariantVisitor {
-                        struct_info,
+                        struct_info: info,
                         registry: self.registry,
                         processor: self.processor,
                     },
                 )?
                 .into(),
-            VariantInfo::Tuple(tuple_info) if tuple_info.field_len() == 1 => {
-                let field = TupleLikeInfo::field_at(tuple_info, 0)?;
+            VariantInfo::Tuple(info) => {
+                if info.field_len() == 1 && !info.field_at(0).unwrap().skip_serde() {
+                    let field = TupleLikeInfo::field_at(info, 0)?;
+                    let Some(type_meta) = self.registry.get(field.type_id()) else {
+                        return Err(make_custom_error(format!(
+                            "no TypeMeta found for type `{}`",
+                            field.type_info().type_path(),
+                        )));
+                    };
 
-                crate::cfg::debug! {
-                    assert!(
-                        !field.has_attribute::<crate::serde::SkipSerde>(),
-                        "newtype can not skip field in serialization and deserialization."
-                    );
+                    let value = variant.newtype_variant_seed(DeserializeDriver::new_internal(
+                        type_meta,
+                        self.registry,
+                        self.processor,
+                    ))?;
+                    let mut dynamic = DynamicTuple::with_capacity(1);
+                    dynamic.extend_boxed(value);
+                    dynamic.into()
+                } else {
+                    let dynamic = variant.tuple_variant(
+                        info.field_len(),
+                        TupleVariantVisitor {
+                            tuple_info: info,
+                            registry: self.registry,
+                            processor: self.processor,
+                        },
+                    )?;
+                    dynamic.into()
                 }
-
-                let Some(type_meta) = self.registry.get(field.type_id()) else {
-                    return Err(make_custom_error(format!(
-                        "no TypeMeta found for type `{}`",
-                        field.type_info().type_path(),
-                    )));
-                };
-
-                let value = variant.newtype_variant_seed(DeserializeDriver::new_internal(
-                    type_meta,
-                    self.registry,
-                    self.processor,
-                ))?;
-                let mut dynamic_tuple = DynamicTuple::with_capacity(1);
-                dynamic_tuple.extend_boxed(value);
-                dynamic_tuple.into()
             }
-            VariantInfo::Tuple(tuple_info) => variant
-                .tuple_variant(
-                    tuple_info.field_len(),
-                    TupleVariantVisitor {
-                        tuple_info,
-                        registry: self.registry,
-                        processor: self.processor,
-                    },
-                )?
-                .into(),
         };
         let variant_name = variant_info.name();
-        let variant_index = self.enum_info.index_of(variant_name).expect("valid name");
-
-        let dynamic_enum = DynamicEnum::new_with_index(variant_index, variant_name, value);
+        let variant_index = self.enum_info.index_of(variant_name).unwrap();
+        let dynamic_enum = DynamicEnum::new(variant_index, variant_name, value);
 
         Ok(dynamic_enum)
     }

@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 
 use crate::derive::impl_type_path;
-use crate::impls::{GenericTypeInfoCell, NonGenericTypeInfoCell};
+use crate::impls::GenericTypeInfoCell;
 use crate::info::{ListInfo, OpaqueInfo, TypeInfo, TypePath, Typed};
 use crate::ops::{ApplyError, List, ListItemIter};
 use crate::registry::{
@@ -20,8 +20,8 @@ impl_type_path!(::alloc::borrow::Cow<'a: 'static, T: ToOwned + ?Sized>);
 
 impl Typed for Cow<'static, str> {
     fn type_info() -> &'static TypeInfo {
-        static CELL: NonGenericTypeInfoCell = NonGenericTypeInfoCell::new();
-        CELL.get_or_init(|| TypeInfo::Opaque(OpaqueInfo::new::<Self>()))
+        static INFO: TypeInfo = TypeInfo::Opaque(OpaqueInfo::new::<Cow<'static, str>>());
+        &INFO
     }
 }
 
@@ -36,7 +36,7 @@ impl Reflect for Cow<'static, str> {
         if let Some(value) = value.downcast_ref::<Self>() {
             self.clone_from(value);
         } else {
-            return Err(ApplyError::MismatchedTypes {
+            return Err(ApplyError::MismatchedType {
                 from_type: value.reflect_type_path().into(),
                 to_type: <Self as TypePath>::type_path().into(),
             });
@@ -213,7 +213,8 @@ impl<T: FromReflect + Typed + Clone> FromReflect for Cow<'static, [T]> {
 
 impl<T: FromReflect + Typed + Clone + GetTypeMeta> GetTypeMeta for Cow<'static, [T]> {
     fn get_type_meta() -> TypeMeta {
-        let mut meta = TypeMeta::with_capacity::<Self>(2);
+        let mut meta = TypeMeta::with_capacity::<Self>(3);
+        meta.insert_trait::<ReflectDefault>(FromType::<Self>::from_type());
         meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
         meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
         meta

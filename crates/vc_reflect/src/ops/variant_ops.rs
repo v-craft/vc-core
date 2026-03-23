@@ -1,3 +1,5 @@
+use core::iter::FusedIterator;
+
 use crate::Reflect;
 use crate::info::VariantKind;
 use crate::ops::{DynamicStruct, DynamicTuple, Enum, Struct, Tuple};
@@ -148,4 +150,5 @@ impl<'a> Iterator for VariantFieldIter<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for VariantFieldIter<'a> {}
+impl ExactSizeIterator for VariantFieldIter<'_> {}
+impl FusedIterator for VariantFieldIter<'_> {}

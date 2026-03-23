@@ -1,11 +1,12 @@
 use alloc::{boxed::Box, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
+use core::iter::FusedIterator;
 
 use crate::Reflect;
 use crate::impls::NonGenericTypeInfoCell;
 use crate::info::{OpaqueInfo, TypeInfo, TypePath, Typed};
-use crate::ops::{ApplyError, ReflectCloneError};
+use crate::ops::{ApplyError, DynamicTupleStruct, ReflectCloneError};
 use crate::reflection::impl_reflect_cast_fn;
 
 // -----------------------------------------------------------------------------
@@ -223,14 +224,6 @@ impl DynamicTuple {
     pub fn extend<T: Reflect>(&mut self, value: T) {
         self.extend_boxed(Box::new(value));
     }
-
-    #[inline]
-    pub(crate) fn into_tuple_struct(self) -> crate::ops::DynamicTupleStruct {
-        crate::ops::DynamicTupleStruct {
-            info: None,
-            fields: self.fields,
-        }
-    }
 }
 
 impl Reflect for DynamicTuple {
@@ -296,6 +289,24 @@ impl FromIterator<Box<dyn Reflect>> for DynamicTuple {
         Self {
             info: None,
             fields: fields.into_iter().collect(),
+        }
+    }
+}
+
+impl From<DynamicTuple> for DynamicTupleStruct {
+    fn from(value: DynamicTuple) -> Self {
+        DynamicTupleStruct {
+            info: None,
+            fields: value.fields,
+        }
+    }
+}
+
+impl From<DynamicTupleStruct> for DynamicTuple {
+    fn from(value: DynamicTupleStruct) -> Self {
+        DynamicTuple {
+            info: None,
+            fields: value.fields,
         }
     }
 }
@@ -612,7 +623,8 @@ impl<'a> Iterator for TupleFieldIter<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for TupleFieldIter<'a> {}
+impl ExactSizeIterator for TupleFieldIter<'_> {}
+impl FusedIterator for TupleFieldIter<'_> {}
 
 // -----------------------------------------------------------------------------
 // Tests

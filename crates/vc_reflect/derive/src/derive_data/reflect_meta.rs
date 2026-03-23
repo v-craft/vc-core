@@ -15,16 +15,6 @@ pub(crate) struct ReflectMeta<'a> {
     active_types: HashSet<Type, FixedState>,
 }
 
-impl core::fmt::Debug for ReflectMeta<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("ReflectMeta")
-            .field("vc_reflect_path", &self.vc_reflect_path.to_token_stream())
-            .field("type_parser", &self.type_parser)
-            .field("attrs", &self.attrs)
-            .finish()
-    }
-}
-
 impl<'a> ReflectMeta<'a> {
     #[inline]
     pub fn new(attrs: TypeAttributes, type_parser: TypeParser<'a>) -> Self {
@@ -118,9 +108,7 @@ impl<'a> ReflectMeta<'a> {
 
                     Some(quote! {
                         #generic_info_::Type(
-                            #type_param_info_::new::<#ident>(
-                                #name
-                            )
+                            #type_param_info_::new::<#ident>(#name)
                             #with_default
                         )
                     })
@@ -158,19 +146,19 @@ impl<'a> ReflectMeta<'a> {
     }
 
     #[inline]
-    pub fn impl_with_generic(&self) -> bool {
-        self.type_parser.impl_with_generic()
+    pub fn contains_generics(&self) -> bool {
+        self.type_parser.contains_generics()
+    }
+
+    #[inline]
+    pub fn without_generics(&self) -> bool {
+        self.type_parser.without_generics()
     }
 
     #[inline]
     pub fn real_ident(&self) -> TokenStream {
         self.type_parser.real_ident()
     }
-
-    // #[inline]
-    // pub fn crate_name(&self) -> Option<StringExpr> {
-    //     self.type_parser.crate_name()
-    // }
 
     #[inline]
     pub fn module_path(&self) -> Option<StringExpr> {
@@ -180,20 +168,6 @@ impl<'a> ReflectMeta<'a> {
     #[inline]
     pub fn type_ident(&self) -> StringExpr {
         self.type_parser.type_ident()
-    }
-
-    #[inline]
-    pub fn assert_ident_tokens(&self) -> TokenStream {
-        #[cfg(debug_assertions)]
-        if let TypeParser::Primitive(_) = &self.type_parser {
-            let ident = self.real_ident();
-            return quote! {
-                mod __assert_primitive_ident {
-                    type AssertIdentValidity = #ident;
-                }
-            };
-        }
-        crate::utils::empty()
     }
 
     #[inline]
@@ -242,7 +216,7 @@ impl<'a> ReflectMeta<'a> {
     ///
     /// ## Type Itself
     ///
-    /// For the type itself, if it has lifecycle params, needs to be labeled with `'statc`.
+    /// For the type itself, if it has lifecycle params, needs to be labeled with `'static`.
     /// If it has type generic params, needs to be labeled with `Any + Send + Sync`.
     ///
     /// ## TypePath
@@ -292,8 +266,8 @@ impl<'a> ReflectMeta<'a> {
     ///     - `TypePath`: as long as one of `Typed` and `TypePath` is enabled.
     /// - Field Type(witl type param):
     ///     - `Typed + Reflect`: all implementations except for `TypePath` trait.
-    ///     - `GetTypeMeta`: only `GetTypeMeta`.
-    ///     - `FromReflect`: `FromReflect` and `GetTypeMeta`, if `FromReflect` is enabled.
+    ///     - `FromReflect`: only `FromReflect`
+    ///     - `GetTypeMeta`: `GetTypeMeta`, and `FromReflect` if `FromReflect` is enabled.
     ///
     /// Therefore, we need three function parameters to control them.
     ///
@@ -314,11 +288,12 @@ impl<'a> ReflectMeta<'a> {
 
         let add_type_path =
             self.attrs().impl_switchs.impl_type_path || self.attrs().impl_switchs.impl_typed;
+
         let add_from_reflect = add_from_reflect && self.attrs().impl_switchs.impl_from_reflect;
 
         let generics = self.generics();
 
-        let mut generic_where_clause = quote! { where };
+        let mut generic_where_clause = TokenStream::new();
 
         if generics.type_params().next().is_some() {
             generic_where_clause.extend(quote! { Self: #AnyFP + #SendFP + #SyncFP, });
@@ -348,8 +323,15 @@ impl<'a> ReflectMeta<'a> {
         }
 
         generic_where_clause.extend(quote! { #predicates });
+        let where_clause = if generic_where_clause.is_empty() {
+            crate::utils::empty()
+        } else {
+            let mut buffer = quote! { where };
+            buffer.extend(generic_where_clause);
+            buffer
+        };
 
-        (impl_generics, ty_generics, generic_where_clause)
+        (impl_generics, ty_generics, where_clause)
     }
 
     fn type_path_predicates(&self) -> impl Iterator<Item = TokenStream> + '_ {
@@ -429,7 +411,7 @@ impl<'a> ReflectMeta<'a> {
     }
 
     /// For Opaque Type
-    pub fn to_info_tokens(&self) -> TokenStream {
+    pub fn to_info_tokens(&self) -> (TokenStream, bool) {
         let vc_reflect_path = &self.vc_reflect_path;
 
         let opaque_info_ = crate::path::opaque_info_(vc_reflect_path);
@@ -438,14 +420,28 @@ impl<'a> ReflectMeta<'a> {
         let with_docs = self.with_docs_expression();
         let with_generics = self.with_generics_expression();
 
-        quote! {
-            #type_info_::Opaque(
-                #opaque_info_::new::<Self>()
-                    #with_custom_attributes
-                    #with_generics
-                    #with_docs
-            )
-        }
+        let is_const_express = with_custom_attributes.is_empty()
+            && with_docs.is_empty()
+            && with_generics.is_empty()
+            && self.without_generics();
+
+        let self_token = if is_const_express {
+            self.real_ident()
+        } else {
+            quote! { Self }
+        };
+
+        (
+            quote! {
+                #type_info_::Opaque(
+                    #opaque_info_::new::<#self_token>()
+                        #with_custom_attributes
+                        #with_generics
+                        #with_docs
+                )
+            },
+            is_const_express,
+        )
     }
 }
 
@@ -458,11 +454,11 @@ impl core::hash::Hasher for FixedHasher {
     }
 
     fn write(&mut self, bytes: &[u8]) {
-        for b in bytes {
-            self.0 = self.0.rotate_right(8).wrapping_add(*b as u64)
-        }
-        for b in bytes {
-            self.0 = self.0.rotate_right(7).wrapping_add((*b % 41) as u64)
+        for &b in bytes {
+            self.0 ^= b as u64;
+            self.0 = self.0.wrapping_mul(0x100000001b3);
+            self.0 ^= self.0 >> 32;
+            self.0 = self.0.wrapping_mul(0xc6a4a7935bd1e995);
         }
     }
 }

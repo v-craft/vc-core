@@ -15,7 +15,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
-static REFLECT_ATTRIBUTE_NAME: &str = "reflect";
+static REFLECT_ATTRIBUTE: &str = "reflect";
 
 // -----------------------------------------------------------------------------
 // Modules
@@ -241,37 +241,24 @@ mod utils;
 ///
 /// This attribute can be applied at the type, field, and enum variant levels.
 ///
-/// ## SkipSerde
+/// ## skip_serde
 ///
-/// There is a special attribute called `SkipSerde`, which can only be used on fields.
-/// This attribute skips the field during serialization and uses the provided attribute value during deserialization.
+/// There is a special attribute called `skip_serde`, which can only be used on fields.
+///
+/// This attribute skips the field during serialization and uses the provided `ReflectDefault` during deserialization.
 ///
 /// ```rust, ignore
 /// #[derive(Reflect)]
 /// struct A<T> {
-///     #[reflect(@SkipSerde::Default)]
-///     _marker: PhantomData<T>,
 ///     text: String
+///     #[reflect(skip_serde)]
+///     _marker: PhantomData<T>,
 /// }
 /// ```
 ///
 /// Important: This only takes effect with the default serialization provided by the reflection system.
 /// If the type is annotated with `reflect(serde)` and supports serialization via the serde library,
 /// this field attribute will not have any effect.
-///
-/// ## ignore (Experimental)
-///
-/// The `ignore` attribute causes the reflection system to **completely** ignore a field, which can lead to various issues.
-///
-/// Complete ignoring means:
-/// - The field will not be included in type information.
-/// - `field_len` will be reduced.
-/// - All reflection APIs will be unable to access this field, as if it doesn't exist.
-///
-/// Due to missing fields, `reflect_clone` may not provide a default implementation unless the type itself supports
-/// `Default` or `Clone`. `FromReflect` faces similar limitations.
-///
-/// This attribute can only be used on fields.
 #[proc_macro_derive(Reflect, attributes(reflect))]
 pub fn derive_full_reflect(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -389,12 +376,10 @@ pub fn impl_reflect_opaque(input: TokenStream) -> TokenStream {
 
     let meta = ReflectMeta::new(attrs, parser);
 
-    let assert_tokens = meta.assert_ident_tokens();
     let reflect_impls = impls::impl_opaque(&meta);
 
     quote! {
         const _: () = {
-            #assert_tokens
             #reflect_impls
         };
     }
@@ -446,13 +431,11 @@ pub fn impl_type_path(input: TokenStream) -> TokenStream {
     let parser = TypeParser::new_foreign(&type_ident, &type_path, custom_path, &generics);
 
     let meta = ReflectMeta::new(TypeAttributes::default(), parser);
-    let assert_tokens = meta.assert_ident_tokens();
 
     let type_path_impls = impls::impl_trait_type_path(&meta);
 
     quote! {
         const _: () = {
-            #assert_tokens
             #type_path_impls
         };
     }
@@ -477,16 +460,8 @@ pub fn impl_type_path(input: TokenStream) -> TokenStream {
 ///
 /// See: [`derive Reflect`](derive_full_reflect)
 #[proc_macro]
-#[allow(
-    unused_variables,
-    reason = "`input` is unused if the feature is not enabled."
-)]
 pub fn impl_auto_register(input: TokenStream) -> TokenStream {
-    #[cfg(not(feature = "auto_register"))]
-    return utils::empty().into();
-
-    #[cfg(feature = "auto_register")]
-    {
+    if ::core::cfg!(feature = "auto_register") {
         let type_path = syn::parse_macro_input!(input as syn::Type);
 
         let vc_reflect_path = path::vc_reflect();
@@ -502,6 +477,8 @@ pub fn impl_auto_register(input: TokenStream) -> TokenStream {
                 }
             };
         })
+    } else {
+        utils::empty().into()
     }
 }
 

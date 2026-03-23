@@ -14,27 +14,29 @@ use crate::derive_data::ReflectMeta;
 pub(crate) fn impl_trait_typed(
     meta: &ReflectMeta,
     type_info_tokens: TokenStream,
+    is_const_expr: bool,
     add_from_reflect: bool,
 ) -> TokenStream {
     let vc_reflect_path = meta.vc_reflect_path();
     let trait_typed_ = crate::path::typed_(vc_reflect_path);
     let type_info_ = crate::path::type_info_(vc_reflect_path);
 
-    let inner_cell_tokens = if meta.impl_with_generic() {
+    let inner_cell_tokens = if meta.contains_generics() {
         let info_cell = crate::path::generic_type_info_cell_(vc_reflect_path);
         quote! {
             static CELL: #info_cell = #info_cell::new();
-            CELL.get_or_insert::<Self>(|| {
-                #type_info_tokens
-            })
+            CELL.get_or_insert::<Self>(|| { #type_info_tokens })
+        }
+    } else if is_const_expr {
+        quote! {
+            static INFO: #type_info_ = #type_info_tokens;
+            &INFO
         }
     } else {
         let info_cell = crate::path::non_generic_type_info_cell_(vc_reflect_path);
         quote! {
             static CELL: #info_cell = #info_cell::new();
-            CELL.get_or_init(|| {
-                #type_info_tokens
-            })
+            CELL.get_or_init(|| { #type_info_tokens })
         }
     };
 

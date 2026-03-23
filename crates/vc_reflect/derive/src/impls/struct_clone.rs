@@ -5,14 +5,13 @@ use crate::derive_data::ReflectStruct;
 
 // Generate `Reflect::reflect_clone` tokens for struct and tuple-struct.
 pub(crate) fn get_struct_clone_impl(info: &ReflectStruct) -> TokenStream {
-    use crate::path::fp::{CloneFP, DefaultFP, OptionFP, ResultFP};
+    use crate::path::fp::{CloneFP, DefaultFP, ResultFP};
 
     let meta = info.meta();
     let vc_reflect_path = meta.vc_reflect_path();
     let macro_utils_ = crate::path::macro_utils_(vc_reflect_path);
     let reflect_ = crate::path::reflect_(vc_reflect_path);
     let reflect_clone_error_ = crate::path::reflect_clone_error_(vc_reflect_path);
-    let type_path_ = crate::path::type_path_(vc_reflect_path);
 
     if let Some(span) = meta.attrs().avail_traits.clone {
         let reflect_clone = syn::Ident::new("reflect_clone", span);
@@ -45,24 +44,6 @@ pub(crate) fn get_struct_clone_impl(info: &ReflectStruct) -> TokenStream {
             }
         }
     } else {
-        for field in info.fields().iter() {
-            if let Some(span) = field.attrs.ignore {
-                let field_not_cloneable = syn::Ident::new("FieldNotCloneable", span);
-                let field_name = field.field_name();
-
-                return quote! {
-                    #[inline]
-                    fn reflect_clone(&self) -> #ResultFP<#macro_utils_::Box<dyn #reflect_>, #reflect_clone_error_> {
-                        #ResultFP::Err(#reflect_clone_error_::#field_not_cloneable {
-                            type_path:  <Self as #type_path_>::type_path(),
-                            field: #field_name,
-                            variant: #OptionFP::None,
-                        })
-                    }
-                };
-            }
-        }
-
         let mut tokens = TokenStream::new();
 
         for field in info.fields().iter() {

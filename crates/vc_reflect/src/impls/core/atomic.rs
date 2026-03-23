@@ -25,11 +25,9 @@ macro_rules! impl_reflect_for_atomic {
 
         impl $crate::info::Typed for $ty {
             fn type_info() -> &'static $crate::info::TypeInfo {
-                static CELL: $crate::impls::NonGenericTypeInfoCell =
-                    $crate::impls::NonGenericTypeInfoCell::new();
-                CELL.get_or_init(|| {
-                    $crate::info::TypeInfo::Opaque($crate::info::OpaqueInfo::new::<Self>())
-                })
+                static INFO: $crate::info::TypeInfo =
+                    $crate::info::TypeInfo::Opaque($crate::info::OpaqueInfo::new::<$ty>());
+                &INFO
             }
         }
 
@@ -56,7 +54,7 @@ macro_rules! impl_reflect_for_atomic {
                     *self = <$ty>::new(value.load($ordering));
                     Ok(())
                 } else {
-                    Err($crate::ops::ApplyError::MismatchedTypes {
+                    Err($crate::ops::ApplyError::MismatchedType {
                         from_type: Into::into($crate::info::DynamicTypePath::reflect_type_path(
                             value,
                         )),

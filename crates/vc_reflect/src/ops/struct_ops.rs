@@ -3,6 +3,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
+use core::iter::FusedIterator;
 use core::ops::{Deref, DerefMut};
 
 use vc_utils::hash::HashMap;
@@ -232,26 +233,6 @@ impl DynamicStruct {
     #[inline]
     pub fn extend<T: Reflect>(&mut self, name: impl Into<Cow<'static, str>>, value: T) {
         self.extend_boxed(name, Box::new(value));
-    }
-
-    /// Gets the index of the field with the given name.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use vc_reflect::ops::DynamicStruct;
-    ///
-    /// let mut dynamic = DynamicStruct::new();
-    /// dynamic.extend("field_a", 42_i32);
-    /// dynamic.extend("field_b", "world");
-    ///
-    /// assert_eq!(dynamic.index_of("field_a"), Some(0));
-    /// assert_eq!(dynamic.index_of("field_b"), Some(1));
-    /// assert_eq!(dynamic.index_of("field_c"), None);
-    /// ```
-    #[inline]
-    pub fn index_of(&self, name: &str) -> Option<usize> {
-        self.field_indices.get(name).copied()
     }
 }
 
@@ -744,7 +725,8 @@ impl<'a> Iterator for StructFieldIter<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for StructFieldIter<'a> {}
+impl ExactSizeIterator for StructFieldIter<'_> {}
+impl FusedIterator for StructFieldIter<'_> {}
 
 // -----------------------------------------------------------------------------
 // Tests

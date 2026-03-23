@@ -53,3 +53,14 @@ pub mod __macro_exports;
 pub use reflection::{FromReflect, Reflect, reflect_hasher};
 pub use vc_reflect_derive as derive;
 pub use vc_reflect_derive::Reflect;
+
+pub mod prelude {
+    pub use crate::access::{PathAccessor, ReflectPathAccess};
+    pub use crate::info::{TypeInfo, TypePath, Typed};
+    pub use crate::registry::{
+        FromType, ReflectDefault, ReflectFromReflect, TypeMeta, TypeRegistry,
+    };
+    pub use crate::serde::{DeserializeDriver, SerializeDriver};
+    pub use crate::serde::{ReflectDeserializeDriver, ReflectSerializeDriver};
+    pub use crate::{FromReflect, Reflect};
+}

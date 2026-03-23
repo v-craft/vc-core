@@ -5,7 +5,7 @@
 /// # Example
 ///
 /// ```ignore
-/// range_invoke!(my_macro,  4: P);
+/// range_invoke!(my_macro,  4);
 /// // eq  to ↓
 /// my_macro!(0: []);
 /// my_macro!(1: [0: P0]);

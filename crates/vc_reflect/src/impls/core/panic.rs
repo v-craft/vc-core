@@ -1,13 +1,11 @@
-use crate::{
-    FromReflect, Reflect,
-    impls::NonGenericTypeInfoCell,
-    info::{OpaqueInfo, TypeInfo, TypePath, Typed},
-    ops::ApplyError,
-    registry::ReflectFromReflect,
-    registry::{FromType, GetTypeMeta, ReflectFromPtr, TypeMeta},
-};
 use alloc::boxed::Box;
 use core::panic::Location;
+
+use crate::info::{OpaqueInfo, TypeInfo, TypePath, Typed};
+use crate::ops::ApplyError;
+use crate::registry::ReflectFromReflect;
+use crate::registry::{FromType, GetTypeMeta, ReflectFromPtr, TypeMeta};
+use crate::{FromReflect, Reflect};
 
 impl TypePath for &'static Location<'static> {
     fn type_path() -> &'static str {
@@ -25,8 +23,8 @@ impl TypePath for &'static Location<'static> {
 
 impl Typed for &'static Location<'static> {
     fn type_info() -> &'static TypeInfo {
-        static CELL: NonGenericTypeInfoCell = NonGenericTypeInfoCell::new();
-        CELL.get_or_init(|| TypeInfo::Opaque(OpaqueInfo::new::<Self>()))
+        static INFO: TypeInfo = TypeInfo::Opaque(OpaqueInfo::new::<&'static Location<'static>>());
+        &INFO
     }
 }
 
@@ -38,7 +36,7 @@ impl Reflect for &'static Location<'static> {
             self.clone_from(value);
             Ok(())
         } else {
-            Err(ApplyError::MismatchedTypes {
+            Err(ApplyError::MismatchedType {
                 from_type: value.reflect_type_path().into(),
                 to_type: <Self as TypePath>::type_path().into(),
             })

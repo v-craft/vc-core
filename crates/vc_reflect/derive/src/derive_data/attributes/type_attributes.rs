@@ -1,11 +1,11 @@
 use proc_macro2::Span;
 use syn::{Attribute, Expr, ExprLit, Lit, MacroDelimiter};
-use syn::{Meta, MetaList, MetaNameValue, Path, Token};
+use syn::{Meta, MetaNameValue, Path, Token};
 use syn::{parse::ParseStream, spanned::Spanned};
 
 use super::{CustomAttributes, ReflectDocs, TraitAvailableFlags, TraitImplSwitches};
 
-use crate::REFLECT_ATTRIBUTE_NAME;
+use crate::REFLECT_ATTRIBUTE;
 
 mod kw {
     syn::custom_keyword!(TypePath);
@@ -34,7 +34,7 @@ mod kw {
     syn::custom_keyword!(type_trait);
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub(crate) struct TypeAttributes {
     /// See: [`CustomAttributes`]
     pub custom_attributes: CustomAttributes,
@@ -68,32 +68,33 @@ impl TypeAttributes {
         Ok(())
     }
 
-    /// try parse [`TypeAttributes`] from [`syn::Attribute`]
     pub fn parse_attrs(attrs: &[Attribute]) -> syn::Result<Self> {
         let mut type_attributes = TypeAttributes::default();
 
         for attribute in attrs {
             match &attribute.meta {
-                Meta::List(meta_list) if meta_list.path.is_ident(REFLECT_ATTRIBUTE_NAME) => {
-                    if let MacroDelimiter::Paren(_) = meta_list.delimiter {
-                        type_attributes.parse_meta_list(meta_list)?;
-                    } else {
+                Meta::List(meta_list) if meta_list.path.is_ident(REFLECT_ATTRIBUTE) => {
+                    if !matches!(&meta_list.delimiter, MacroDelimiter::Paren(_)) {
                         return Err(syn::Error::new(
                             meta_list.delimiter.span().join(),
                             format_args!(
-                                "`#[{REFLECT_ATTRIBUTE_NAME}(\"...\")]` must use parentheses `(` and `)`"
+                                "`#[{REFLECT_ATTRIBUTE}(\"...\")]` must use parentheses `(` and `)`"
                             ),
                         ));
                     }
+
+                    meta_list.parse_args_with(|stream: ParseStream| {
+                        type_attributes.parse_stream(stream)
+                    })?;
                 }
-                #[cfg(feature = "reflect_docs")]
-                Meta::NameValue(pair) if pair.path.is_ident("doc") => {
-                    type_attributes.docs._parse_default_docs(pair)?;
+                Meta::NameValue(pair)
+                    if ::core::cfg!(feature = "reflect_docs") && pair.path.is_ident("doc") =>
+                {
+                    type_attributes.docs.parse_default_docs(pair)?;
                 }
                 _ => continue,
             }
         }
-
         Ok(type_attributes)
     }
 
@@ -102,7 +103,7 @@ impl TypeAttributes {
             if stream.is_empty() {
                 break;
             }
-            self.parse_inner_attribute(stream)?;
+            self.parse_stream_internal(stream)?;
             if stream.is_empty() {
                 break;
             }
@@ -111,25 +112,8 @@ impl TypeAttributes {
         Ok(())
     }
 
-    fn parse_meta_list(&mut self, meta: &MetaList) -> syn::Result<()> {
-        meta.parse_args_with(|stream: ParseStream| {
-            loop {
-                if stream.is_empty() {
-                    break;
-                }
-                self.parse_inner_attribute(stream)?;
-                if stream.is_empty() {
-                    break;
-                }
-                stream.parse::<Token![,]>()?;
-            }
-            Ok(())
-        })
-    }
-
-    fn parse_inner_attribute(&mut self, input: ParseStream) -> syn::Result<()> {
+    fn parse_stream_internal(&mut self, input: ParseStream) -> syn::Result<()> {
         let lookahead = input.lookahead1();
-        // This order is related to the probability of the ideal state occurring.
         if lookahead.peek(Token![@]) {
             self.parse_custom_attribute(input)
         } else if lookahead.peek(kw::doc) {
@@ -187,15 +171,17 @@ impl TypeAttributes {
 
     // #[reflect(@expr)]
     fn parse_custom_attribute(&mut self, input: ParseStream) -> syn::Result<()> {
-        self.custom_attributes.parse_inner_stream(input)
+        self.custom_attributes.parse_stream(input)
     }
 
-    /// This function can be used when the `reflect_docs` feature is disabled.
-    /// When the feature is not enabled, it will not do anything.
+    // #[reflect(docs = "...")]
     fn parse_docs(&mut self, input: ParseStream) -> syn::Result<()> {
-        // #[reflect(docs = "...")]
         let pair = input.parse::<MetaNameValue>()?;
-        self.docs._parse_custom_docs(&pair)
+        if ::core::cfg!(feature = "reflect_docs") {
+            self.docs.parse_custom_docs(&pair)
+        } else {
+            Ok(())
+        }
     }
 
     // #[reflect(serde)]

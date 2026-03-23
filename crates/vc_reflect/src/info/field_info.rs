@@ -34,6 +34,7 @@ pub struct NamedField {
     type_info: fn() -> &'static TypeInfo,
     // Use `Option` to reduce unnecessary heap requests (when empty content).
     custom_attributes: Option<Arc<CustomAttributes>>,
+    skip_serde: bool,
     #[cfg(feature = "reflect_docs")]
     docs: Option<&'static str>,
 }
@@ -51,6 +52,7 @@ impl NamedField {
             type_info: T::type_info,
             type_id: TypeId::of::<T>(),
             custom_attributes: None,
+            skip_serde: false,
             #[cfg(feature = "reflect_docs")]
             docs: None,
         }
@@ -78,6 +80,31 @@ impl NamedField {
     #[inline]
     pub fn type_info(&self) -> &'static TypeInfo {
         (self.type_info)()
+    }
+
+    /// Replaces stored skip_serde flag.
+    #[inline]
+    pub fn with_skip_serde(self, val: bool) -> Self {
+        Self {
+            skip_serde: val,
+            ..self
+        }
+    }
+
+    /// Checks whether the field should be skipped during (de)serialization, defaults to `false`.
+    ///
+    /// This flag only affects reflection-based (de)serialization.
+    /// If a custom Serde implementation is provided by the user,
+    /// this flag has no effect.
+    ///
+    /// When set to `true`, the corresponding type must be
+    /// registered with [`ReflectDefault`] in the registry;
+    /// otherwise, deserialization  will inevitably fail.
+    ///
+    /// [`ReflectDefault`]: crate::registry::ReflectDefault
+    #[inline]
+    pub const fn skip_serde(&self) -> bool {
+        self.skip_serde
     }
 }
 
@@ -108,6 +135,7 @@ pub struct UnnamedField {
     type_info: fn() -> &'static TypeInfo,
     // Use `Option` to reduce unnecessary heap requests (when empty content).
     custom_attributes: Option<Arc<CustomAttributes>>,
+    skip_serde: bool,
     #[cfg(feature = "reflect_docs")]
     docs: Option<&'static str>,
 }
@@ -125,6 +153,7 @@ impl UnnamedField {
             type_info: T::type_info,
             type_id: TypeId::of::<T>(),
             custom_attributes: None,
+            skip_serde: false,
             #[cfg(feature = "reflect_docs")]
             docs: None,
         }
@@ -152,5 +181,30 @@ impl UnnamedField {
     #[inline]
     pub fn type_info(&self) -> &'static TypeInfo {
         (self.type_info)()
+    }
+
+    /// Replaces stored skip_serde flag.
+    #[inline]
+    pub fn with_skip_serde(self, val: bool) -> Self {
+        Self {
+            skip_serde: val,
+            ..self
+        }
+    }
+
+    /// Checks whether the field should be skipped during (de)serialization, defaults to `false`.
+    ///
+    /// This flag only affects reflection-based (de)serialization.
+    /// If a custom Serde implementation is provided by the user,
+    /// this flag has no effect.
+    ///
+    /// When set to `true`, the corresponding type must be
+    /// registered with [`ReflectDefault`] in the registry;
+    /// otherwise, deserialization  will inevitably fail.
+    ///
+    /// [`ReflectDefault`]: crate::registry::ReflectDefault
+    #[inline]
+    pub const fn skip_serde(&self) -> bool {
+        self.skip_serde
     }
 }

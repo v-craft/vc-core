@@ -38,39 +38,33 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for TupleStructVisitor<'_, P> {
             self.registry,
             self.processor,
         )
-        .map(DynamicTuple::into_tuple_struct)
+        .map(DynamicTuple::into)
     }
 
     fn visit_newtype_struct<D: Deserializer<'de>>(
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
-        let field_info = self
-            .tuple_struct_info
-            .field_at(0)
-            .ok_or(make_custom_error("Field at index 0 not found"))?;
+        let field = self.tuple_struct_info.field_at(0).unwrap();
 
-        let Some(type_meta) = self.registry.get(field_info.type_id()) else {
+        // If the length is `1` and the field is `skip_serde`,
+        // it should call 'visit_tuple' instead of 'visit_newtype_struct'.
+        assert!(self.tuple_struct_info.field_len() == 1 && !field.skip_serde());
+
+        let Some(type_meta) = self.registry.get(field.type_id()) else {
             return Err(make_custom_error(format!(
                 "no TypeMeta found for type `{}`",
-                field_info.type_info().type_path(),
+                field.type_info().type_path(),
             )));
         };
 
-        let mut dynamic_tuple = DynamicTupleStruct::with_capacity(1);
-
-        crate::cfg::debug! {
-            assert!(
-                !field_info.has_attribute::<crate::serde::SkipSerde>(),
-                "newtype can not skip field in serialization and deserialization."
-            );
-        }
+        let mut dynamic = DynamicTupleStruct::with_capacity(1);
 
         let de = DeserializeDriver::new_internal(type_meta, self.registry, self.processor);
         let value = de.deserialize(deserializer)?;
 
-        dynamic_tuple.extend_boxed(value);
+        dynamic.extend_boxed(value);
 
-        Ok(dynamic_tuple)
+        Ok(dynamic)
     }
 }

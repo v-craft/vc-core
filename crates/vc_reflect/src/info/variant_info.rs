@@ -381,6 +381,15 @@ impl VariantInfo {
         }
     }
 
+    /// Returns the number of fields in this variant.
+    pub fn field_len(&self) -> usize {
+        match self {
+            Self::Struct(info) => info.field_len(),
+            Self::Tuple(info) => info.field_len(),
+            Self::Unit(_) => 0,
+        }
+    }
+
     /// The docstring of the underlying variant, if any.
     ///
     /// If `reflect_docs` feature is not enabled, this function always return `None`.

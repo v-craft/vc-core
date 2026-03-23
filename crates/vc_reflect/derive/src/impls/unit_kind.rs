@@ -17,7 +17,8 @@ pub(crate) fn impl_unit(meta: &ReflectMeta) -> proc_macro2::TokenStream {
 
     // trait: Typed
     let typed_trait_tokens = if meta.attrs().impl_switchs.impl_typed {
-        impl_trait_typed(meta, meta.to_info_tokens(), false)
+        let (info_tokens, is_const_expr) = meta.to_info_tokens();
+        impl_trait_typed(meta, info_tokens, is_const_expr, false)
     } else {
         crate::utils::empty()
     };
@@ -93,7 +94,7 @@ fn get_unit_apply_impl(meta: &ReflectMeta) -> proc_macro2::TokenStream {
 
     let err = quote! {
         #ResultFP::Err(
-            #apply_error_::MismatchedTypes {
+            #apply_error_::MismatchedType {
                 from_type: #macro_utils_::Cow::Borrowed(#dynamic_type_path_::reflect_type_path(__input__)),
                 to_type: #macro_utils_::Cow::Borrowed(<Self as #type_path_>::type_path()),
             }

@@ -17,7 +17,6 @@ use crate::ops::Enum;
 /// use vc_reflect::info::{Typed, EnumInfo};
 ///
 /// let info = <Option<i32> as Typed>::type_info().as_enum().unwrap();
-/// assert!(info.contains_variant("Some"));
 /// assert!(info.variant("None").is_some());
 /// ```
 #[derive(Clone, Debug)]
@@ -74,11 +73,6 @@ impl EnumInfo {
             .map(|name| self.variants.get(name).unwrap()) // variants names should be valid
     }
 
-    /// Returns `true` if a variant with the given name exists.
-    pub fn contains_variant(&self, name: &str) -> bool {
-        self.variants.contains_key(name)
-    }
-
     /// Returns the list of variant names in declaration order.
     #[inline]
     pub fn variant_names(&self) -> &[&'static str] {
@@ -100,7 +94,7 @@ impl EnumInfo {
 
     /// Returns the number of variants.
     #[inline]
-    pub fn variant_count(&self) -> usize {
+    pub fn variant_len(&self) -> usize {
         self.variants.len()
     }
 }

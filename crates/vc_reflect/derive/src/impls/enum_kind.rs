@@ -21,7 +21,7 @@ pub(crate) fn impl_enum(info: &ReflectEnum) -> TokenStream {
 
     // trait: Typed
     let typed_trait_tokens = if meta.attrs().impl_switchs.impl_typed {
-        impl_trait_typed(meta, info.to_info_tokens(), true)
+        impl_trait_typed(meta, info.to_info_tokens(), false, true)
     } else {
         crate::utils::empty()
     };
@@ -149,9 +149,6 @@ fn impl_trait_enum(info: &ReflectEnum) -> TokenStream {
         ) -> usize {
             let mut field_len = 0;
             for field in fields.iter() {
-                if field.attrs.ignore.is_some() {
-                    continue;
-                };
                 f(field);
                 field_len += 1;
             }
@@ -166,15 +163,15 @@ fn impl_trait_enum(info: &ReflectEnum) -> TokenStream {
             }
             EnumVariantFields::Unnamed(fields) => {
                 let field_len = process_fields(fields, |field: &StructField| {
-                    let reflection_index = field.reflection_index.unwrap();
+                    let field_index = field.field_index;
 
-                    let declare_field = syn::Index::from(field.declaration_index);
+                    let declare_field = syn::Index::from(field_index);
 
                     enum_field_at.push(quote! {
-                        #variant_path_ { #declare_field : __value, .. } if #ref_index == #reflection_index => #OptionFP::Some(__value)
+                        #variant_path_ { #declare_field : __value, .. } if #ref_index == #field_index => #OptionFP::Some(__value)
                     });
                     enum_field_at_mut.push(quote! {
-                        #variant_path_ { #declare_field : __value, .. } if #ref_index == #reflection_index => #OptionFP::Some(__value)
+                        #variant_path_ { #declare_field : __value, .. } if #ref_index == #field_index => #OptionFP::Some(__value)
                     });
                 });
 
@@ -186,7 +183,7 @@ fn impl_trait_enum(info: &ReflectEnum) -> TokenStream {
                 let field_len = process_fields(fields, |field: &StructField| {
                     let field_ident = field.data.ident.as_ref().unwrap();
                     let field_name = field_ident.to_string();
-                    let reflection_index = field.reflection_index.unwrap();
+                    let field_index = field.field_index;
 
                     enum_field.push(quote! {
                         #variant_path_{ #field_ident: __value__, .. } if #ref_name == #field_name => #OptionFP::Some(__value__)
@@ -195,16 +192,13 @@ fn impl_trait_enum(info: &ReflectEnum) -> TokenStream {
                         #variant_path_{ #field_ident: __value__, .. } if #ref_name == #field_name => #OptionFP::Some(__value__)
                     });
                     enum_field_at.push(quote! {
-                        #variant_path_{ #field_ident: __value__, .. } if #ref_index == #reflection_index => #OptionFP::Some(__value__)
+                        #variant_path_{ #field_ident: __value__, .. } if #ref_index == #field_index => #OptionFP::Some(__value__)
                     });
                     enum_field_at_mut.push(quote! {
-                        #variant_path_{ #field_ident: __value__, .. } if #ref_index == #reflection_index => #OptionFP::Some(__value__)
+                        #variant_path_{ #field_ident: __value__, .. } if #ref_index == #field_index => #OptionFP::Some(__value__)
                     });
-                    // enum_index_of.push(quote! {
-                    //     #variant_path_{ .. } if #ref_name == #field_name => #OptionFP::Some(#reflection_index)
-                    // });
                     enum_name_at.push(quote! {
-                        #variant_path_{ .. } if #ref_index == #reflection_index => #OptionFP::Some(#field_name)
+                        #variant_path_{ .. } if #ref_index == #field_index => #OptionFP::Some(#field_name)
                     });
                 });
 
@@ -259,12 +253,10 @@ fn impl_trait_enum(info: &ReflectEnum) -> TokenStream {
                 }
             }
 
-            #[inline]
             fn iter_fields(&self) -> #variant_field_iter_ {
                 #variant_field_iter_::new(self)
             }
 
-            #[inline]
             fn field_len(&self) -> usize {
                 match self {
                     #(#enum_field_len,)*
@@ -272,7 +264,6 @@ fn impl_trait_enum(info: &ReflectEnum) -> TokenStream {
                 }
             }
 
-            #[inline]
             fn variant_name(&self) -> &str {
                 match self {
                     #(#enum_variant_name,)*
@@ -280,7 +271,6 @@ fn impl_trait_enum(info: &ReflectEnum) -> TokenStream {
                 }
             }
 
-            #[inline]
             fn variant_index(&self) -> usize {
                 match self {
                     #(#enum_variant_index,)*
@@ -288,7 +278,6 @@ fn impl_trait_enum(info: &ReflectEnum) -> TokenStream {
                 }
             }
 
-            #[inline]
             fn variant_kind(&self) -> #variant_kind_ {
                 match self {
                     #(#enum_variant_kind,)*
@@ -361,7 +350,6 @@ fn get_enum_to_dynamic_impl(meta: &ReflectMeta) -> TokenStream {
     let enum_ = crate::path::enum_(vc_reflect_path);
 
     quote! {
-        #[inline]
         fn to_dynamic(&self) -> #macro_utils_::Box<dyn #reflect_> {
             #macro_utils_::Box::new(<Self as #enum_>::to_dynamic_enum(self) )
         }
@@ -370,21 +358,19 @@ fn get_enum_to_dynamic_impl(meta: &ReflectMeta) -> TokenStream {
 
 /// Generate `Reflect::reflect_clone` implementation tokens.
 fn get_enum_clone_impl(info: &ReflectEnum) -> TokenStream {
-    use crate::path::fp::{CloneFP, OptionFP, ResultFP};
+    use crate::path::fp::{CloneFP, ResultFP};
 
     let meta = info.meta();
     let vc_reflect_path = meta.vc_reflect_path();
     let macro_utils_ = crate::path::macro_utils_(vc_reflect_path);
     let reflect_ = crate::path::reflect_(vc_reflect_path);
     let reflect_clone_error_ = crate::path::reflect_clone_error_(vc_reflect_path);
-    let type_path_ = crate::path::type_path_(vc_reflect_path);
 
     if let Some(span) = meta.attrs().avail_traits.clone {
         let reflect_clone = Ident::new("reflect_clone", span);
 
         // use `Clone::clone` directly.
         quote! {
-            #[inline]
             fn #reflect_clone(&self) -> #ResultFP<#macro_utils_::Box<dyn #reflect_>, #reflect_clone_error_> {
                 #ResultFP::Ok(#macro_utils_::Box::new(<Self as #CloneFP>::clone(self)))
             }
@@ -395,7 +381,6 @@ fn get_enum_clone_impl(info: &ReflectEnum) -> TokenStream {
 
         for variant in info.variants.iter() {
             let ident = &variant.data.ident;
-            let variant_name_ = ident.to_string();
             let variant_path_ = quote!( Self::#ident );
 
             match variant.data.fields {
@@ -405,23 +390,6 @@ fn get_enum_clone_impl(info: &ReflectEnum) -> TokenStream {
                     });
                 }
                 syn::Fields::Named(..) | syn::Fields::Unnamed(..) => {
-                    if let Some(ignored_field) =
-                        variant.fields().iter().find(|f| f.attrs.ignore.is_some())
-                    {
-                        let span = ignored_field.attrs.ignore.unwrap();
-                        let field_name = ignored_field.field_name();
-
-                        let field_not_cloneable = Ident::new("FieldNotCloneable", span);
-
-                        match_tokens.extend(quote! {
-                            #variant_path_ => #ResultFP::Err(#reflect_clone_error_::#field_not_cloneable {
-                                type_path:  <Self as #type_path_>::type_path()
-                                field: #field_name,
-                                variant: #OptionFP::Some(#variant_name_),
-                            }),
-                        });
-                        continue;
-                    }
                     let mut member_tokens = TokenStream::new();
                     let mut clone_tokens = TokenStream::new();
                     for (index, field) in variant.fields().iter().enumerate() {
@@ -610,13 +578,6 @@ fn impl_enum_from_reflect(info: &ReflectEnum) -> TokenStream {
                 });
             }
             syn::Fields::Named(..) | syn::Fields::Unnamed(..) => {
-                if variant.fields().iter().any(|f| f.attrs.ignore.is_some()) {
-                    // Cannot construct if ignored fields exist.
-                    match_tokens.extend(quote! {
-                        #variant_name_ => { return #OptionFP::None; },
-                    });
-                    continue;
-                }
                 let mut clone_tokens = TokenStream::new();
 
                 for field in variant.fields().iter() {
@@ -629,7 +590,7 @@ fn impl_enum_from_reflect(info: &ReflectEnum) -> TokenStream {
                             quote! { #enum_::field(#input_, #name)? }
                         }
                         None => {
-                            let index = field.declaration_index;
+                            let index = field.field_index;
                             quote! { #enum_::field_at(#input_, #index)? }
                         }
                     };

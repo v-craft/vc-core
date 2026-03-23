@@ -70,25 +70,22 @@ impl<'a> ReflectDerive<'a> {
     }
 
     fn colloct_struct_field(fields: &'a Fields) -> syn::Result<Vec<StructField<'a>>> {
-        let mut active_index = 0;
+        if fields.len() > u16::MAX as usize {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                "the number of fields in reflected struct cannot exceed `65535`.",
+            ));
+        }
 
         let mut res: Vec<StructField<'a>> = Vec::with_capacity(fields.len());
 
-        for (declaration_index, field) in fields.iter().enumerate() {
+        for (field_index, field) in fields.iter().enumerate() {
             let attrs = FieldAttributes::parse_attrs(&field.attrs)?;
-
-            let reflection_index = if attrs.ignore.is_some() {
-                None
-            } else {
-                active_index += 1;
-                Some(active_index - 1)
-            };
 
             res.push(StructField {
                 data: field,
                 attrs,
-                declaration_index,
-                reflection_index,
+                field_index,
             });
         }
 
@@ -102,6 +99,13 @@ impl<'a> ReflectDerive<'a> {
             return Err(syn::Error::new(
                 Span::call_site(),
                 "reflection macros do not support empty enum.",
+            ));
+        }
+
+        if variants.len() > u16::MAX as usize {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                "the number of variants in reflected enum cannot exceed `65535`.",
             ));
         }
 
@@ -119,13 +123,6 @@ impl<'a> ReflectDerive<'a> {
                 fields: variant_fields,
                 attrs: FieldAttributes::parse_attrs(&variant.attrs)?,
             };
-
-            if let Some(span) = variant_item.attrs.ignore {
-                return Err(syn::Error::new(
-                    span,
-                    "`#[reflect(ignore)]` can only be used for fields, cannot be used for enum variants.",
-                ));
-            }
 
             res.push(variant_item);
         }

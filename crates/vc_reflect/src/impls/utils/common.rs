@@ -620,7 +620,7 @@ pub fn enum_apply<'b>(
 
     if x.variant_name() == y.variant_name() {
         if x.variant_kind() != y.variant_kind() {
-            return Err(ApplyError::MismatchedTypes {
+            return Err(ApplyError::MismatchedType {
                 from_type: Cow::Owned(y.variant_path()),
                 to_type: Cow::Owned(x.variant_path()),
             });
@@ -916,7 +916,7 @@ pub fn list_apply(x: &mut dyn List, y: &dyn Reflect) -> Result<(), ApplyError> {
             };
 
             if let Err(v) = x.try_push(v) {
-                return Err(ApplyError::MismatchedTypes {
+                return Err(ApplyError::MismatchedType {
                     from_type: Cow::Owned(format!("List<{}>", v.reflect_type_path())),
                     to_type: Cow::Borrowed(x.reflect_type_path()),
                 });
@@ -1121,7 +1121,7 @@ pub fn map_apply(x: &mut dyn Map, y: &dyn Reflect) -> Result<(), ApplyError> {
             };
 
             if let Err((k, v)) = x.try_insert(k, v) {
-                return Err(ApplyError::MismatchedTypes {
+                return Err(ApplyError::MismatchedType {
                     from_type: Cow::Owned(format!(
                         "Map<{}, {}>",
                         k.reflect_type_path(),
@@ -1336,7 +1336,7 @@ pub fn set_apply(x: &mut dyn Set, y: &dyn Reflect) -> Result<(), ApplyError> {
                 y_val.to_dynamic()
             };
             if let Err(v) = x.try_insert(v) {
-                return Err(ApplyError::MismatchedTypes {
+                return Err(ApplyError::MismatchedType {
                     from_type: Cow::Owned(format!("Set<{}>", v.reflect_type_path())),
                     to_type: Cow::Borrowed(x.reflect_type_path()),
                 });

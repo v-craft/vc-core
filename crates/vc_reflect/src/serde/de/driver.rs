@@ -258,7 +258,10 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for DeserializeDriver<'_
                 Ok(Box::new(dynamic_struct))
             }
             TypeInfo::TupleStruct(tuple_struct_info) => {
-                let mut dynamic_tuple_struct = if tuple_struct_info.field_len() == 1 {
+                let is_new_type = tuple_struct_info.field_len() == 1
+                    && !tuple_struct_info.field_at(0).unwrap().skip_serde();
+
+                let mut dynamic_tuple_struct = if is_new_type {
                     deserializer.deserialize_newtype_struct(
                         tuple_struct_info.type_ident(),
                         TupleStructVisitor {
@@ -427,15 +430,16 @@ impl<'de, P: DeserializeProcessor> DeserializeSeed<'de> for DeserializeDriver<'_
 ///
 /// ```
 /// # use serde_core::de::DeserializeSeed;
-/// # use vc_reflect::{Reflect, FromReflect};
-/// # use vc_reflect::{ops::DynamicStruct, registry::TypeRegistry, serde::ReflectDeserializeDriver};
+/// # use vc_reflect::prelude::{Reflect, FromReflect, TypeRegistry, ReflectDeserializeDriver};
+/// # use vc_reflect::ops::DynamicStruct;
+/// #
 /// #[derive(Reflect, PartialEq, Debug)]
 /// #[reflect(type_path = "my_crate::MyStruct")]
 /// struct MyStruct {
 ///   value: i32
 /// }
 ///
-/// let mut registry = TypeRegistry::default();
+/// let mut registry = TypeRegistry::new();
 /// registry.register::<MyStruct>();
 ///
 /// let input = r#"{

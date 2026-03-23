@@ -41,6 +41,7 @@ pub trait SerializeProcessor {
 }
 
 impl SerializeProcessor for () {
+    #[inline]
     fn try_serialize<S: Serializer>(
         &self,
         _value: &dyn Reflect,

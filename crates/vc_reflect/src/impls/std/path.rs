@@ -1,15 +1,11 @@
-use crate::{
-    FromReflect, Reflect,
-    derive::{impl_reflect_opaque, impl_type_path},
-    impls::NonGenericTypeInfoCell,
-    info::{OpaqueInfo, TypeInfo, Typed},
-    registry::{
-        FromType, GetTypeMeta, TypeMeta, ReflectDeserialize, ReflectFromPtr,
-        ReflectFromReflect, ReflectSerialize
-    }
-};
 use alloc::borrow::Cow;
 use std::path::Path;
+
+use crate::{FromReflect, Reflect};
+use crate::derive::{impl_reflect_opaque, impl_type_path};
+use crate::info::{OpaqueInfo, TypeInfo, Typed};
+use crate::registry::{ReflectDefault, FromType, GetTypeMeta, ReflectDeserialize};
+use crate::registry::{ReflectFromPtr, ReflectFromReflect, ReflectSerialize, TypeMeta};
 
 impl_reflect_opaque!(::std::path::PathBuf(full));
 
@@ -17,8 +13,8 @@ impl_type_path!(::std::path::Path);
 
 impl Typed for &'static Path {
     fn type_info() -> &'static TypeInfo {
-        static CELL: NonGenericTypeInfoCell = NonGenericTypeInfoCell::new();
-        CELL.get_or_init(|| TypeInfo::Opaque(OpaqueInfo::new::<Self>()))
+        static INFO: TypeInfo = TypeInfo::Opaque(OpaqueInfo::new::<&'static Path>());
+        &INFO
     }
 }
 
@@ -45,8 +41,8 @@ impl GetTypeMeta for &'static Path {
 
 impl Typed for Cow<'static, Path> {
     fn type_info() -> &'static TypeInfo {
-        static CELL: NonGenericTypeInfoCell = NonGenericTypeInfoCell::new();
-        CELL.get_or_init(|| TypeInfo::Opaque(OpaqueInfo::new::<Self>()))
+        static INFO: TypeInfo = TypeInfo::Opaque(OpaqueInfo::new::<Cow<'static, Path>>());
+        &INFO
     }
 }
 
@@ -64,6 +60,7 @@ impl FromReflect for Cow<'static, Path> {
 impl GetTypeMeta for Cow<'static, Path> {
     fn get_type_meta() -> TypeMeta {
         let mut type_meta: TypeMeta = TypeMeta::with_capacity::<Self>(4);
+        type_meta.insert_trait::<ReflectDefault>(FromType::<Self>::from_type());
         type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
         type_meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
         type_meta.insert_trait::<ReflectDeserialize>(FromType::<Self>::from_type());

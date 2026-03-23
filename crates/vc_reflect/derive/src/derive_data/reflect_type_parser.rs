@@ -1,9 +1,7 @@
 use crate::utils::StringExpr;
 use quote::{ToTokens, quote};
-use syn::{
-    GenericParam, Generics, Ident, LitStr, Path, TypeParam, punctuated::Punctuated,
-    spanned::Spanned,
-};
+use syn::{GenericParam, Generics, Ident, LitStr, Path};
+use syn::{punctuated::Punctuated, spanned::Spanned};
 
 /// A container used to parse type paths and generic parameters.
 ///
@@ -27,12 +25,6 @@ pub(crate) enum TypeParser<'a> {
         custom_path: Option<Path>,
         generics: &'a Generics,
     },
-}
-
-impl core::fmt::Debug for TypeParser<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        core::fmt::Debug::fmt(&self.real_ident(), f)
-    }
 }
 
 impl<'a> TypeParser<'a> {
@@ -83,13 +75,17 @@ impl<'a> TypeParser<'a> {
     }
 
     /// Whether an implementation of `Typed` or `TypePath` should be generic.
-    pub(super) fn impl_with_generic(&self) -> bool {
+    pub(super) fn contains_generics(&self) -> bool {
         // exist non-lifecycle generic parameters
-        !self
-            .generics()
+        self.generics()
             .params
             .iter()
-            .all(|param| matches!(param, GenericParam::Lifetime(_)))
+            .any(|param| !matches!(param, GenericParam::Lifetime(_)))
+    }
+
+    /// Whether an implementation of `Typed` or `TypePath` should be generic.
+    pub(super) fn without_generics(&self) -> bool {
+        self.generics().params.is_empty()
     }
 
     /// This name is used in `impl ... for #real_ident {...}`.
@@ -135,24 +131,6 @@ impl<'a> TypeParser<'a> {
         }
     }
 
-    // pub(super) fn crate_name(&self) -> Option<StringExpr> {
-    //     if let Some(path) = self.get_path() {
-    //         let crate_name = &path
-    //             .segments
-    //             .first()
-    //             .expect("If Path/CustomPath is exist, can not be empty.")
-    //             .ident;
-    //         return Some(StringExpr::from(crate_name));
-    //     }
-
-    //     match self {
-    //         Self::Local { .. } => Some(StringExpr::Borrowed(quote! {
-    //             ::core::module_path!().split(':').next().unwrap()
-    //         })),
-    //         _ => None,
-    //     }
-    // }
-
     pub(super) fn module_path(&self) -> Option<StringExpr> {
         if let Some(path) = self.get_path() {
             let path_string = path
@@ -184,15 +162,18 @@ impl<'a> TypeParser<'a> {
     /// This string can be used with a `GenericTypePathCell` in a `TypePath` implementation.
     ///
     /// The `ty_generic_fn` param maps [`TypeParam`]s to [`StringExpr`]s.
-    fn reduce_generics(
-        generics: &Generics,
-        mut ty_generic_fn: impl FnMut(&TypeParam) -> StringExpr,
-        vc_reflect_path: &Path,
-    ) -> StringExpr {
+    fn reduce_generics(generics: &Generics, vc_reflect_path: &Path) -> StringExpr {
         let macro_utils_ = crate::path::macro_utils_(vc_reflect_path);
+        let type_path_ = crate::path::type_path_(vc_reflect_path);
 
         let mut params = generics.params.iter().filter_map(|param| match param {
-            GenericParam::Type(type_param) => Some(ty_generic_fn(type_param)),
+            GenericParam::Type(type_param) => {
+                let ident = &type_param.ident;
+
+                Some(StringExpr::Borrowed(quote! {
+                    <#ident as #type_path_>::type_name()
+                }))
+            }
             GenericParam::Const(const_param) => {
                 let ident = &const_param.ident;
                 let ty = &const_param.ty;
@@ -221,18 +202,8 @@ impl<'a> TypeParser<'a> {
             Self::Local { generics, .. } | Self::Foreign { generics, .. } => {
                 let type_ident = self.type_ident();
 
-                if self.impl_with_generic() {
-                    let type_path_ = crate::path::type_path_(vc_reflect_path);
-
-                    let generics = TypeParser::reduce_generics(
-                        generics,
-                        |TypeParam { ident, .. }| {
-                            StringExpr::Borrowed(quote! {
-                                <#ident as #type_path_>::type_name()
-                            })
-                        },
-                        vc_reflect_path,
-                    );
+                if self.contains_generics() {
+                    let generics = TypeParser::reduce_generics(generics, vc_reflect_path);
 
                     StringExpr::from_iter(
                         [
@@ -262,18 +233,8 @@ impl<'a> TypeParser<'a> {
                     .module_path()
                     .expect("Non-Primitive type, try to parse type_path but get module_path fail.");
 
-                if self.impl_with_generic() {
-                    let type_path = crate::path::type_path_(vc_reflect_path);
-
-                    let generics = TypeParser::reduce_generics(
-                        generics,
-                        |TypeParam { ident, .. }| {
-                            StringExpr::Borrowed(quote! {
-                                <#ident as #type_path>::type_path()
-                            })
-                        },
-                        vc_reflect_path,
-                    );
+                if self.contains_generics() {
+                    let generics = TypeParser::reduce_generics(generics, vc_reflect_path);
 
                     StringExpr::from_iter(
                         [

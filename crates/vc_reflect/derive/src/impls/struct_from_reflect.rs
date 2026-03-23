@@ -76,8 +76,6 @@ pub(crate) fn impl_struct_from_reflect(
                 return #OptionFP::Some(__this);
             }
         }
-    } else if info.fields().iter().any(|f| f.attrs.ignore.is_some()) {
-        crate::utils::empty()
     } else {
         quote! {
             if let #reflect_ref_::#struct_kind_(#input_) = #reflect_::reflect_ref(#input_) {

@@ -2,7 +2,6 @@ use alloc::format;
 
 use serde_core::ser::SerializeTupleStruct;
 use serde_core::{Serialize, Serializer};
-use vc_utils::vec::FastVec;
 
 use super::error_utils::make_custom_error;
 use super::{SerializeDriver, SerializeProcessor};
@@ -10,7 +9,6 @@ use super::{SerializeDriver, SerializeProcessor};
 use crate::info::TypeInfo;
 use crate::ops::TupleStruct;
 use crate::registry::TypeRegistry;
-use crate::serde::SkipSerde;
 
 /// A serializer for [`TupleStruct`] values.
 pub(super) struct TupleStructSerializer<'a, P: SerializeProcessor> {
@@ -23,7 +21,7 @@ impl<P: SerializeProcessor> Serialize for TupleStructSerializer<'_, P> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let Some(type_info) = self.tuple_struct.represented_type_info() else {
             return Err(make_custom_error(format! {
-                "cannot get represented type info for `{}`",
+                "missing represented type info for `{}`",
                 self.tuple_struct.reflect_type_path()
             }));
         };
@@ -34,30 +32,43 @@ impl<P: SerializeProcessor> Serialize for TupleStructSerializer<'_, P> {
             )));
         };
 
-        let field_indecies = tuple_struct_info
-            .iter()
-            .filter(|f| !f.has_attribute::<SkipSerde>())
-            .map(|f| f.index())
-            .collect::<FastVec<_, 8>>();
+        if self.tuple_struct.field_len() != tuple_struct_info.field_len() {
+            return Err(make_custom_error(format!(
+                "Field count mismatch: expect `{}` has {} fields, actual `{}` has {} fields",
+                tuple_struct_info.type_path(),
+                tuple_struct_info.field_len(),
+                self.tuple_struct.reflect_type_path(),
+                self.tuple_struct.field_len(),
+            )));
+        }
 
-        let mut state = serializer
-            .serialize_tuple_struct(tuple_struct_info.type_ident(), field_indecies.len())?;
+        let type_ident = tuple_struct_info.type_ident();
+        let field_len = tuple_struct_info.field_len();
+        let serde_len = tuple_struct_info.iter().filter(|f| !f.skip_serde()).count();
 
-        for &index in field_indecies.as_slice() {
-            if let Some(value) = self.tuple_struct.field(index) {
+        if field_len == 1 && serde_len == 1 {
+            vc_utils::cold_path();
+            let value = self.tuple_struct.field(0).unwrap();
+            serializer.serialize_newtype_struct(
+                type_ident,
+                &SerializeDriver::new_internal(value, self.registry, self.processor),
+            )
+        } else {
+            let mut state = serializer.serialize_tuple_struct(type_ident, serde_len)?;
+
+            for index in tuple_struct_info
+                .iter()
+                .filter_map(|f| (!f.skip_serde()).then_some(f.index()))
+            {
+                let value = self.tuple_struct.field(index).unwrap();
                 state.serialize_field(&SerializeDriver::new_internal(
                     value,
                     self.registry,
                     self.processor,
                 ))?;
-            } else {
-                return Err(make_custom_error(format!(
-                    "field `{index}` was missing while serializing type {}",
-                    tuple_struct_info.type_path()
-                )));
             }
-        }
 
-        state.end()
+            state.end()
+        }
     }
 }

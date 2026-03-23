@@ -46,8 +46,7 @@ impl ReflectDocs {
     ///
     /// Examples:
     /// - `#[doc = "..."]`
-    #[cfg(feature = "reflect_docs")]
-    pub fn _parse_default_docs(&mut self, pair: &MetaNameValue) -> syn::Result<()> {
+    pub fn parse_default_docs(&mut self, pair: &MetaNameValue) -> syn::Result<()> {
         if self.enabled && !self.is_custom {
             if let Expr::Lit(syn::ExprLit {
                 lit: Lit::Str(lit_str),
@@ -73,7 +72,7 @@ impl ReflectDocs {
     /// Examples:
     /// - `#[reflect(doc = "...")]`
     /// - `#[reflect(doc = false)]`
-    pub fn _parse_custom_docs(&mut self, pair: &MetaNameValue) -> syn::Result<()> {
+    pub fn parse_custom_docs(&mut self, pair: &MetaNameValue) -> syn::Result<()> {
         if self.enabled {
             if let Expr::Lit(expr_lit) = &pair.value {
                 match &expr_lit.lit {
@@ -91,7 +90,7 @@ impl ReflectDocs {
                                 "Explicit `true` is invalid, it's default value if `reflect_docs` feature is enabled.",
                             ));
                         }
-                        self.enabled = false;
+                        self.enabled = lit_bool.value();
                         self.docs.clear();
                     }
                     _ => {

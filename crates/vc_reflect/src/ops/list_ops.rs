@@ -1,6 +1,7 @@
 use alloc::{boxed::Box, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
+use core::iter::FusedIterator;
 
 use crate::Reflect;
 use crate::impls::NonGenericTypeInfoCell;
@@ -121,10 +122,10 @@ impl DynamicList {
     /// This can be used to avoid reallocations when you know approximately
     /// how many elements will be added to the list.
     #[inline]
-    pub fn with_capacity(capcity: usize) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
             info: None,
-            values: Vec::with_capacity(capcity),
+            values: Vec::with_capacity(capacity),
         }
     }
 
@@ -782,6 +783,7 @@ impl<'a> Iterator for ListItemIter<'a> {
 }
 
 impl ExactSizeIterator for ListItemIter<'_> {}
+impl FusedIterator for ListItemIter<'_> {}
 
 // -----------------------------------------------------------------------------
 // Tests

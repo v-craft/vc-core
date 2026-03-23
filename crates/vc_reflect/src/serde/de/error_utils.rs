@@ -14,7 +14,7 @@ crate::cfg::debug! {
 /// other useful information, such as the [type info stack].
 ///
 /// [type info stack]: crate::type_info_stack::TypeInfoStack
-#[inline]
+#[cold]
 pub(super) fn make_custom_error<E: Error>(msg: impl Display) -> E {
     crate::cfg::debug! {
         if {

@@ -1,32 +1,38 @@
+use alloc::boxed::Box;
 use alloc::format;
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use core::fmt;
 
 use serde_core::de::{Error, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_core::{Deserialize, Deserializer};
+use vc_utils::hash::HashMap;
 
 use super::error_utils::make_custom_error;
 use super::{DeserializeDriver, DeserializeProcessor};
 
+use crate::Reflect;
 use crate::info::{NamedField, StructInfo, StructVariantInfo};
 use crate::ops::DynamicStruct;
-use crate::registry::TypeRegistry;
-use crate::serde::SkipSerde;
+use crate::registry::{ReflectDefault, TypeRegistry};
 
 // -----------------------------------------------------------------------------
 // Struct-like metadata access
 
 /// A helper trait for accessing type information from struct-like types.
 pub(super) trait StructLikeInfo {
+    fn name(&self) -> &'static str;
     fn field<E: Error>(&self, name: &str) -> Result<&NamedField, E>;
     fn field_at<E: Error>(&self, index: usize) -> Result<&NamedField, E>;
     fn field_len(&self) -> usize;
-    fn iter_fields(&self) -> impl ExactSizeIterator<Item = &NamedField>;
 }
 
 impl StructLikeInfo for StructInfo {
+    fn name(&self) -> &'static str {
+        self.type_path()
+    }
+
     fn field<E: Error>(&self, name: &str) -> Result<&NamedField, E> {
-        Self::field(self, name).ok_or_else(|| {
+        <Self>::field(self, name).ok_or_else(|| {
             Error::custom(format!(
                 "no field named `{}` on struct `{}`",
                 name,
@@ -36,7 +42,7 @@ impl StructLikeInfo for StructInfo {
     }
 
     fn field_at<E: Error>(&self, index: usize) -> Result<&NamedField, E> {
-        Self::field_at(self, index).ok_or_else(|| {
+        <Self>::field_at(self, index).ok_or_else(|| {
             Error::custom(format!(
                 "no field at index `{}` on struct `{}`",
                 index,
@@ -47,18 +53,17 @@ impl StructLikeInfo for StructInfo {
 
     #[inline]
     fn field_len(&self) -> usize {
-        Self::field_len(self)
-    }
-
-    #[inline]
-    fn iter_fields(&self) -> impl ExactSizeIterator<Item = &NamedField> {
-        self.iter()
+        <Self>::field_len(self)
     }
 }
 
 impl StructLikeInfo for StructVariantInfo {
+    fn name(&self) -> &'static str {
+        <Self>::name(self)
+    }
+
     fn field<E: Error>(&self, name: &str) -> Result<&NamedField, E> {
-        Self::field(self, name).ok_or_else(|| {
+        <Self>::field(self, name).ok_or_else(|| {
             Error::custom(format!(
                 "no field named `{}` on variant `{}`",
                 name,
@@ -68,7 +73,7 @@ impl StructLikeInfo for StructVariantInfo {
     }
 
     fn field_at<E: Error>(&self, index: usize) -> Result<&NamedField, E> {
-        Self::field_at(self, index).ok_or_else(|| {
+        <Self>::field_at(self, index).ok_or_else(|| {
             Error::custom(format!(
                 "no field at index `{}` on variant `{}`",
                 index,
@@ -79,19 +84,13 @@ impl StructLikeInfo for StructVariantInfo {
 
     #[inline]
     fn field_len(&self) -> usize {
-        Self::field_len(self)
-    }
-
-    #[inline]
-    fn iter_fields(&self) -> impl ExactSizeIterator<Item = &NamedField> {
-        self.iter()
+        <Self>::field_len(self)
     }
 }
 
 // -----------------------------------------------------------------------------
 // Ident parser
 
-#[derive(Debug, Clone, Eq, PartialEq)]
 struct Ident(pub String);
 
 impl<'de> Deserialize<'de> for Ident {
@@ -107,7 +106,7 @@ impl<'de> Deserialize<'de> for Ident {
 
             #[inline]
             fn visit_str<E: Error>(self, value: &str) -> Result<Self::Value, E> {
-                Ok(Ident(value.to_string()))
+                Ok(Ident(String::from(value)))
             }
 
             #[inline]
@@ -137,37 +136,54 @@ where
     V: MapAccess<'de>,
     P: DeserializeProcessor,
 {
-    let mut dynamic_struct = DynamicStruct::with_capacity(info.field_len());
+    let field_len = info.field_len();
+    let mut buffer: HashMap<String, Box<dyn Reflect>> = HashMap::with_capacity(field_len);
 
     while let Some(Ident(key)) = map.next_key::<Ident>()? {
         let field = info.field::<V::Error>(&key)?;
-
-        // cannot skip here, we need to call `next_value_seed`.
-
         let Some(type_meta) = registry.get(field.type_id()) else {
             return Err(make_custom_error(format!(
                 "no TypeMeta found for type `{}`",
                 field.type_info().type_path(),
             )));
         };
-
         let value = map.next_value_seed(DeserializeDriver::new_internal(
             type_meta,
             registry,
             processor.as_deref_mut(),
         ))?;
-        dynamic_struct.extend_boxed(key, value);
+        buffer.insert(key, value);
     }
 
-    for field in info.iter_fields() {
-        if let Some(skip_serde) = field.get_attribute::<SkipSerde>()
-            && let Some(val) = skip_serde.get(field.type_id(), registry)?
-        {
-            dynamic_struct.extend_boxed(field.name(), val);
+    let mut dynamic = DynamicStruct::with_capacity(field_len);
+
+    for index in 0..field_len {
+        let field = info.field_at::<V::Error>(index)?;
+        let field_name: &'static str = field.name();
+
+        if let Some(value) = buffer.remove(field_name) {
+            dynamic.extend_boxed(field_name, value);
+        } else if field.skip_serde() {
+            if let Some(ctor) = registry.get_type_trait::<ReflectDefault>(field.type_id()) {
+                dynamic.extend_boxed(field_name, ctor.default());
+                continue;
+            } else {
+                return Err(make_custom_error(format!(
+                    "field `{field_name}: {}` on `{}` is `skip_serde` but does not provide `ReflectDefault`",
+                    field.type_info().type_path(),
+                    info.name(),
+                )));
+            }
+        } else {
+            return Err(make_custom_error(format!(
+                "missing field `{field_name}: {}` on `{}`",
+                field.type_info().type_path(),
+                info.name(),
+            )));
         }
     }
 
-    Ok(dynamic_struct)
+    Ok(dynamic)
 }
 
 /// Deserializes a [struct-like] type from a sequence of fields, returning a [`DynamicStruct`].
@@ -185,16 +201,23 @@ where
     P: DeserializeProcessor,
 {
     let len = info.field_len();
-    let mut dynamic_struct = DynamicStruct::with_capacity(len);
+    let mut dynamic = DynamicStruct::with_capacity(len);
 
     for index in 0..len {
         let field = info.field_at::<V::Error>(index)?;
+        let field_name = field.name();
 
-        if let Some(skip_serde) = field.get_attribute::<SkipSerde>() {
-            if let Some(value) = skip_serde.get(field.type_id(), registry)? {
-                dynamic_struct.extend_boxed(field.name(), value);
+        if field.skip_serde() {
+            if let Some(ctor) = registry.get_type_trait::<ReflectDefault>(field.type_id()) {
+                dynamic.extend_boxed(field_name, ctor.default());
+                continue;
+            } else {
+                return Err(make_custom_error(format!(
+                    "field `{field_name}: {}` on `{}` is `skip_serde` but does not provide `ReflectDefault`",
+                    field.type_info().type_path(),
+                    info.name(),
+                )));
             }
-            continue;
         }
 
         let Some(type_meta) = registry.get(field.type_id()) else {
@@ -210,25 +233,26 @@ where
             processor.as_deref_mut(),
         ))?;
 
-        let value = match value {
-            Some(val) => val,
-            None => {
-                return Err(make_custom_error(format!(
-                    "invalid length, expected: `{}`, actual: `{}`",
-                    len, index,
-                )));
-            }
+        let Some(value) = value else {
+            return Err(make_custom_error(format!(
+                "invalid length for `{}`, expected: `{}`, actual: `{}`",
+                info.name(),
+                len,
+                index,
+            )));
         };
 
-        dynamic_struct.extend_boxed(field.name(), value);
+        dynamic.extend_boxed(field_name, value);
     }
 
     if seq.next_element::<IgnoredAny>()?.is_some() {
         return Err(make_custom_error(format!(
-            "invalid length, expected: `{}`, actual: `> {}`",
-            len, len,
+            "invalid length for `{}`, expected: `{}`, actual: `>{}`",
+            info.name(),
+            len,
+            len,
         )));
     }
 
-    Ok(dynamic_struct)
+    Ok(dynamic)
 }

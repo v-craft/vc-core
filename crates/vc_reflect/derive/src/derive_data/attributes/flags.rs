@@ -1,7 +1,6 @@
 use proc_macro2::Span;
 
 /// A struct used to control whether a trait needs to be implemented.
-#[derive(Debug)]
 pub(crate) struct TraitImplSwitches {
     /// Default is `true`, use `#[reflect(TypePath = false)]`  to disable it.
     /// Then Users can(must) impl it in a more customized way.
@@ -50,7 +49,7 @@ impl Default for TraitImplSwitches {
 }
 
 /// A struct used to record whether the specified trait is available.
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub(crate) struct TraitAvailableFlags {
     pub default: Option<Span>,
     pub clone: Option<Span>,

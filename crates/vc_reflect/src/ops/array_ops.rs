@@ -1,6 +1,7 @@
 use alloc::{boxed::Box, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
+use core::iter::FusedIterator;
 
 use crate::Reflect;
 use crate::impls::NonGenericTypeInfoCell;
@@ -639,7 +640,8 @@ impl<'a> Iterator for ArrayItemIter<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for ArrayItemIter<'a> {}
+impl ExactSizeIterator for ArrayItemIter<'_> {}
+impl FusedIterator for ArrayItemIter<'_> {}
 
 // -----------------------------------------------------------------------------
 // Tests

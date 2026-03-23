@@ -220,10 +220,56 @@ impl TypeRegistry {
     /// // Its type data
     /// assert!(type_registry.get_type_trait::<ReflectDefault>(TypeId::of::<Foo>()).is_some());
     /// ```
-    pub fn register<T: GetTypeMeta>(&mut self) {
+    pub fn register<T: GetTypeMeta>(&mut self) -> &mut Self {
         if self.register_internal(TypeId::of::<T>(), T::get_type_meta) {
             T::register_dependencies(self);
         }
+        self
+    }
+
+    /// Attempts to register the referenced type `T` if it has not yet been registered.
+    ///
+    /// See [`register`](TypeRegistry::register) for more details.
+    #[inline]
+    pub fn register_by_val<T: GetTypeMeta>(&mut self, _: &T) -> &mut Self {
+        self.register::<T>()
+    }
+
+    /// Registers the type data `D` for type `T`.
+    ///
+    /// Most of the time [`TypeRegistry::register`] can be used instead
+    /// to register a type you derived `Reflect` for.
+    ///
+    /// However, in cases where you want to add a piece of type trait
+    /// that was not included in the list of `#[reflect(...)]` type trait in the derive,
+    /// or where the type is generic and cannot register e.g.
+    /// `ReflectSerialize` unconditionally without knowing the specific type parameters,
+    /// this method can be used to insert additional type trait.
+    ///
+    /// # Panic
+    ///
+    /// Panic if type `T` is not registered.
+    ///
+    /// # Example
+    /// ```
+    /// use vc_reflect::registry::{TypeRegistry, ReflectSerialize, ReflectDeserialize};
+    ///
+    /// let mut type_registry = TypeRegistry::default();
+    /// type_registry
+    ///     .register::<Option<String>>()
+    ///     .register_type_trait::<Option<String>, ReflectSerialize>()
+    ///     .register_type_trait::<Option<String>, ReflectDeserialize>();
+    /// ```
+    pub fn register_type_trait<T: Typed, D: TypeTrait + FromType<T>>(&mut self) -> &mut Self {
+        match self.type_meta_table.get_mut(&TypeId::of::<T>()) {
+            Some(type_meta) => type_meta.insert_trait(D::from_type()),
+            None => panic!(
+                "Called `TypeRegistry::register_type_trait`, but the type `{}` of type_trait `{}` without registering",
+                T::type_path(),
+                core::any::type_name::<D>(),
+            ),
+        }
+        self
     }
 
     /// Automatically registers all non-generic types annotated with `#[reflect(auto_register)]`
@@ -290,45 +336,6 @@ impl TypeRegistry {
             } else {
                 false
             }
-        }
-    }
-
-    /// Attempts to register the referenced type `T` if it has not yet been registered.
-    ///
-    /// See [`register`](TypeRegistry::register) for more details.
-    #[inline]
-    pub fn register_by_val<T: GetTypeMeta>(&mut self, _: &T) {
-        self.register::<T>();
-    }
-
-    /// Registers the type data `D` for type `T`.
-    ///
-    /// Most of the time [`TypeRegistry::register`] can be used instead
-    /// to register a type you derived `Reflect` for.
-    ///
-    /// However, in cases where you want to add a piece of type trait
-    /// that was not included in the list of `#[reflect(...)]` type trait in the derive,
-    /// or where the type is generic and cannot register e.g.
-    /// `ReflectSerialize` unconditionally without knowing the specific type parameters,
-    /// this method can be used to insert additional type trait.
-    ///
-    /// # Example
-    /// ```
-    /// use vc_reflect::registry::{TypeRegistry, ReflectSerialize, ReflectDeserialize};
-    ///
-    /// let mut type_registry = TypeRegistry::default();
-    /// type_registry.register::<Option<String>>();
-    /// type_registry.register_type_trait::<Option<String>, ReflectSerialize>();
-    /// type_registry.register_type_trait::<Option<String>, ReflectDeserialize>();
-    /// ```
-    pub fn register_type_trait<T: Typed, D: TypeTrait + FromType<T>>(&mut self) {
-        match self.type_meta_table.get_mut(&TypeId::of::<T>()) {
-            Some(type_meta) => type_meta.insert_trait(D::from_type()),
-            None => panic!(
-                "Called `TypeRegistry::register_type_trait`, but the type `{}` of type_trait `{}` without registering",
-                T::type_path(),
-                core::any::type_name::<D>(),
-            ),
         }
     }
 

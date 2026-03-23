@@ -52,7 +52,7 @@ As a dynamic reflection system, this library aims to support:
 ### Derive reflection and inspect type info
 
 ```rust
-use vc_reflect::{Reflect, info::Typed};
+use vc_reflect::prelude::*;
 
 #[derive(Reflect)]
 struct Player {
@@ -71,8 +71,7 @@ assert_eq!(info.index_of("health"), Some(2));
 ### Read nested data with path access
 
 ```rust
-use vc_reflect::Reflect;
-use vc_reflect::access::{PathAccessor, ReflectPathAccess};
+use vc_reflect::prelude::*;
 
 #[derive(Reflect)]
 struct Inventory {
@@ -98,9 +97,8 @@ assert_eq!(first_slot, Some("Sword"));
 
 ```rust
 use core::any::TypeId;
-use vc_reflect::Reflect;
+use vc_reflect::prelude::*;
 use vc_reflect::ops::Struct;
-use vc_reflect::registry::{ReflectDefault, TypeRegistry};
 
 #[derive(Reflect, Default)]
 #[reflect(default, auto_register)]
@@ -130,13 +128,37 @@ assert!(enemy.species.is_empty());
 assert_eq!(enemy.hp, 100);
 ```
 
-These examples cover the most common entry points:
+### Reflect based serialization an deserialization
 
-- derive `Reflect` to expose runtime type information
-- use `TypeRegistry` when you need metadata or constructors without holding an instance
-- use `access` helpers to inspect nested reflected data from strings or cached paths
+```rust
+use serde_core::de::DeserializeSeed;
+use core::marker::PhantomData;
+use vc_reflect::prelude::*;
 
+#[derive(Reflect, PartialEq, Debug)]
+#[reflect(type_path = "example::MyStruct")]
+struct MyStruct {
+    value: i32,
+    #[reflect(skip_serde)]
+    _marker: PhantomData<i32>,
+}
 
+let mut registry = TypeRegistry::new();
+registry.register::<MyStruct>();
+
+let value = MyStruct { value: 123, _marker: PhantomData };
+
+// serialize
+let driver = ReflectSerializeDriver::new(&value, &registry);
+let text = ron::to_string(&driver).unwrap();
+assert_eq!(text, r#"{"example::MyStruct":(value:123)}"#);
+
+// deserialize
+let mut wrapper = ron::Deserializer::from_str(&text).unwrap();
+let driver = ReflectDeserializeDriver::new(&registry);
+let dynamic: Box<dyn Reflect> = driver.deserialize(&mut wrapper).unwrap();
+assert_eq!(dynamic.take::<MyStruct>().unwrap(), value);
+```
 
 ## Feature Flags
 

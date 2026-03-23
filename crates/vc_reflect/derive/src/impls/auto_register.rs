@@ -7,7 +7,7 @@ pub(crate) fn get_auto_register_impl(meta: &ReflectMeta) -> proc_macro2::TokenSt
 
     if let Some(span) = meta.attrs().auto_register {
         // Invalid for generic types.
-        if meta.impl_with_generic() {
+        if meta.contains_generics() {
             return crate::utils::empty();
         }
 

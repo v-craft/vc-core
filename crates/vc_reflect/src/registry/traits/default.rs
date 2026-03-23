@@ -6,14 +6,36 @@ use crate::registry::FromType;
 
 /// A container providing [`Default`] support for reflected types.
 ///
-/// Then, you can create a reflect value using [`TypeRegistry`] and [`TypeId`] (or [`TypePath`]).
+/// Use this to create a reflected default value via [`TypeRegistry`] and [`TypeId`] (or [`TypePath`]).
 ///
-/// # Examples
+/// # Creating a instance
+///
+/// You can create one directly using [`FromType`]:
 ///
 /// ```
-/// use vc_reflect::{Reflect, registry::{TypeRegistry, ReflectDefault}};
+/// use vc_reflect::prelude::*;
 ///
-/// let registry = TypeRegistry::new(); // `new` will register some basic type
+/// #[derive(Reflect, Default)]
+/// struct Foo;
+///
+/// let defaulter: ReflectDefault = FromType::<Foo>::from_type();
+/// ```
+///
+/// # Automatic registration
+///
+/// When using the type registry, [`ReflectDefault`] is automatically registered for common types:
+///
+/// - Integer types: `u8`-`u128`, `i8`-`i128`, `usize`, `isize`
+/// - Primitives: `()`, `bool`, `char`, `f32`, `f64`
+/// - String types: `String`, `&'static str`
+/// - Collections: `Vec<T>`, `BinaryHeap<T>`, `VecDeque<T>`
+/// - Map types: `BTreeMap<K, V>`, `BTreeSet<T>`
+/// - Others: `Option<T>`, `PhantomData<T>`, `Duration` ...
+///
+/// ```
+/// use vc_reflect::prelude::*;
+///
+/// let registry = TypeRegistry::new(); // `new` registers basic types automatically
 ///
 /// let generator = registry
 ///     .get_with_type_name("String").unwrap()
@@ -22,6 +44,45 @@ use crate::registry::FromType;
 /// let s: Box<dyn Reflect> = generator.default();
 ///
 /// assert_eq!(s.take::<String>().unwrap(), "");
+/// ```
+///
+/// # Derive macro support
+///
+/// If a type implements `Default` and is annotated with `#[reflect(default)]`, [`ReflectDefault`]
+/// will be automatically registered when the type is added to the registry:
+///
+/// ```
+/// use core::any::TypeId;
+/// use vc_reflect::prelude::*;
+///
+/// #[derive(Reflect, Default)]
+/// #[reflect(default)]
+/// struct Foo;
+///
+/// let mut registry = TypeRegistry::default();
+/// registry.register::<Foo>();
+///
+/// let defaulter = registry.get_type_trait::<ReflectDefault>(TypeId::of::<Foo>());
+/// assert!(defaulter.is_some());
+/// ```
+///
+/// # Manual registration
+///
+/// If you're unsure whether a type has [`ReflectDefault`] registered, you can add it manually:
+///
+/// ```
+/// use core::any::TypeId;
+/// use vc_reflect::prelude::*;
+///
+/// #[derive(Reflect, Default)]
+/// struct Foo;
+///
+/// let mut registry = TypeRegistry::default();
+/// registry.register::<Foo>();
+/// registry.register_type_trait::<Foo, ReflectDefault>();
+///
+/// let defaulter = registry.get_type_trait::<ReflectDefault>(TypeId::of::<Foo>());
+/// assert!(defaulter.is_some());
 /// ```
 ///
 /// [`TypePath`]: crate::info::TypePath::type_path

@@ -1464,9 +1464,12 @@ impl<'a, T: 'a + Clone, const N: usize> Extend<&'a T> for FastVecData<T, N> {
     /// assert_eq!(vec, [1, 2, 3, 4, 5, 6]);
     /// ```
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
-        for item in iter {
+        let iter = iter.into_iter();
+        self.reserve(iter.size_hint().0);
+
+        iter.for_each(|item| {
             self.push(item.clone());
-        }
+        });
     }
 }
 
@@ -1484,9 +1487,12 @@ impl<T, const N: usize> Extend<T> for FastVecData<T, N> {
     /// assert_eq!(vec, [1, 2, 3, 4, 5, 6]);
     /// ```
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        for item in iter {
+        let iter = iter.into_iter();
+        self.reserve(iter.size_hint().0);
+
+        iter.for_each(|item| {
             self.push(item);
-        }
+        });
     }
 }
 

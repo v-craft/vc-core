@@ -323,12 +323,12 @@ impl TypePathTable {
     #[inline]
     pub fn crate_name(&self) -> Option<&'static str> {
         let s = (self.module_path)()?;
-        for (index, &c) in s.as_bytes().iter().enumerate() {
-            if c == b':' {
-                return Some(&s[0..index]);
-            }
+        let index = s.as_bytes().iter().position(|&item| item == b':');
+        if let Some(index) = index {
+            Some(&s[..index])
+        } else {
+            Some(s)
         }
-        Some(s)
     }
 }
 
@@ -568,12 +568,12 @@ mod tests {
         let s = "你好::world";
 
         let f = |s: &'static str| {
-            for (index, &c) in s.as_bytes().iter().enumerate() {
-                if c == b':' {
-                    return Some(&s[0..index]);
-                }
+            let index = s.as_bytes().iter().position(|&item| item == b':');
+            if let Some(index) = index {
+                Some(&s[..index])
+            } else {
+                Some(s)
             }
-            return Some(s);
         };
 
         let hello = f(s);

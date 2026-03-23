@@ -5,11 +5,11 @@ use syn::{MetaNameValue, Token, parse::ParseStream};
 
 use super::{CustomAttributes, ReflectDocs};
 
-use crate::REFLECT_ATTRIBUTE_NAME;
+use crate::REFLECT_ATTRIBUTE;
 
 mod kw {
     syn::custom_keyword!(doc);
-    syn::custom_keyword!(ignore);
+    syn::custom_keyword!(skip_serde);
 }
 
 #[derive(Default)]
@@ -18,8 +18,8 @@ pub(crate) struct FieldAttributes {
     pub custom_attributes: CustomAttributes,
     /// Custom docs: `#[doc = ""]` or `#[reflect(docs = "")]`
     pub docs: ReflectDocs,
-    /// Determines how this field should be ignored if at all.
-    pub ignore: Option<Span>,
+    /// Determines how this field should be skipped during reflect (de)serialization.
+    pub skip_serde: Option<Span>,
 }
 
 impl FieldAttributes {
@@ -28,22 +28,22 @@ impl FieldAttributes {
 
         for attribute in attrs {
             match &attribute.meta {
-                Meta::List(meta_list) if meta_list.path.is_ident(REFLECT_ATTRIBUTE_NAME) => {
-                    if let MacroDelimiter::Paren(_) = meta_list.delimiter {
-                        // ↑ Muse use `()` in `#[reflect(...)]`, instead of `{...}` or `[...]`.
-                        field_attributes.parse_meta_list(meta_list)?;
-                    } else {
+                Meta::List(meta_list) if meta_list.path.is_ident(REFLECT_ATTRIBUTE) => {
+                    if !matches!(&meta_list.delimiter, MacroDelimiter::Paren(_)) {
                         return Err(syn::Error::new(
                             meta_list.delimiter.span().join(),
                             format_args!(
-                                "`#[{REFLECT_ATTRIBUTE_NAME}(\"...\")]` must use parentheses `(` and `)`"
+                                "`#[{REFLECT_ATTRIBUTE}(\"...\")]` must use parentheses `(` and `)`"
                             ),
                         ));
                     }
+
+                    field_attributes.parse_meta_list(meta_list)?;
                 }
-                #[cfg(feature = "reflect_docs")]
-                Meta::NameValue(pair) if pair.path.is_ident("doc") => {
-                    field_attributes.docs._parse_default_docs(pair)?;
+                Meta::NameValue(pair)
+                    if ::core::cfg!(feature = "reflect_docs") && pair.path.is_ident("doc") =>
+                {
+                    field_attributes.docs.parse_default_docs(pair)?;
                 }
                 _ => continue,
             }
@@ -53,6 +53,7 @@ impl FieldAttributes {
     }
 
     fn parse_meta_list(&mut self, meta: &MetaList) -> syn::Result<()> {
+        // meta.parse_nested_meta(||)
         meta.parse_args_with(|stream: ParseStream| {
             loop {
                 if stream.is_empty() {
@@ -74,15 +75,15 @@ impl FieldAttributes {
             self.parse_custom_attribute(input)
         } else if lookahead.peek(kw::doc) {
             self.parse_docs(input)
-        } else if lookahead.peek(kw::ignore) {
-            self.parse_ignore(input)
+        } else if lookahead.peek(kw::skip_serde) {
+            self.parse_skip_serde(input)
         } else {
             Err(lookahead.error())
         }
     }
 
     fn parse_custom_attribute(&mut self, input: ParseStream) -> syn::Result<()> {
-        self.custom_attributes.parse_inner_stream(input)
+        self.custom_attributes.parse_stream(input)
     }
 
     /// This function can be used when the `reflect_docs` feature is disabled.
@@ -90,12 +91,12 @@ impl FieldAttributes {
     fn parse_docs(&mut self, input: ParseStream) -> syn::Result<()> {
         // #[reflect(docs = "...")]
         let pair = input.parse::<MetaNameValue>()?;
-        self.docs._parse_custom_docs(&pair)
+        self.docs.parse_custom_docs(&pair)
     }
 
-    fn parse_ignore(&mut self, input: ParseStream) -> syn::Result<()> {
-        let s = input.parse::<kw::ignore>()?.span;
-        self.ignore = Some(s);
+    fn parse_skip_serde(&mut self, input: ParseStream) -> syn::Result<()> {
+        let s = input.parse::<kw::skip_serde>()?.span;
+        self.skip_serde = Some(s);
         Ok(())
     }
 }

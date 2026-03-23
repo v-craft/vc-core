@@ -171,6 +171,10 @@ use crate::ops::{ReflectMut, ReflectOwned, ReflectRef};
 /// [`DynamicTypePath`]: crate::info::DynamicTypePath
 /// [`DynamicTyped`]: crate::info::DynamicTyped
 /// [`Any`]: core::any::Any
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` does not implement `Reflect`",
+    note = "consider annotating `{Self}` with `#[derive(Reflect)]`"
+)]
 pub trait Reflect: DynamicTypePath + DynamicTyped + Send + Sync + Any {
     /// Casts this type to a fully-reflected value.
     ///

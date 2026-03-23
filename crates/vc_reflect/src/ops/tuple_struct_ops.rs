@@ -1,6 +1,7 @@
 use alloc::{boxed::Box, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
+use core::iter::FusedIterator;
 
 use crate::Reflect;
 use crate::impls::NonGenericTypeInfoCell;
@@ -539,7 +540,8 @@ impl<'a> Iterator for TupleStructFieldIter<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for TupleStructFieldIter<'a> {}
+impl ExactSizeIterator for TupleStructFieldIter<'_> {}
+impl FusedIterator for TupleStructFieldIter<'_> {}
 
 // -----------------------------------------------------------------------------
 // Tests

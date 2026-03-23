@@ -30,8 +30,7 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for OptionVisitor<'_, P> {
     where
         E: Error,
     {
-        let option = DynamicEnum::new("None", ());
-        Ok(option)
+        Ok(DynamicEnum::new(1, "None", ()))
     }
 
     fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
@@ -47,11 +46,7 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for OptionVisitor<'_, P> {
 
         match variant_info {
             VariantInfo::Tuple(tuple_info) if tuple_info.field_len() == 1 => {
-                let Some(field) = tuple_info.field_at(0) else {
-                    return Err(make_custom_error(format!(
-                        "invalid variant, expected `Some(_)` but got: {tuple_info:?}"
-                    )));
-                };
+                let field = tuple_info.field_at(0).unwrap();
 
                 let Some(type_meta) = self.registry.get(field.type_id()) else {
                     return Err(make_custom_error(format!(
@@ -62,11 +57,11 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for OptionVisitor<'_, P> {
 
                 let de = DeserializeDriver::new_internal(type_meta, self.registry, self.processor);
 
-                let mut value = DynamicTuple::with_capacity(1);
+                let mut variant = DynamicTuple::with_capacity(1);
 
-                value.extend_boxed(de.deserialize(deserializer)?);
+                variant.extend_boxed(de.deserialize(deserializer)?);
 
-                let option = DynamicEnum::new("Some", value);
+                let option = DynamicEnum::new(0, "Some", variant);
                 Ok(option)
             }
             info => Err(Error::custom(format!(

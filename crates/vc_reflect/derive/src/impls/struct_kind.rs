@@ -22,7 +22,7 @@ pub(crate) fn impl_struct(info: &ReflectStruct) -> TokenStream {
 
     // trait: Typed
     let typed_trait_tokens = if meta.attrs().impl_switchs.impl_typed {
-        impl_trait_typed(meta, info.to_info_tokens(false), false)
+        impl_trait_typed(meta, info.to_info_tokens(false), false, false)
     } else {
         crate::utils::empty()
     };

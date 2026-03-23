@@ -15,9 +15,7 @@ pub(crate) struct ReflectStruct<'a> {
 pub(crate) struct StructField<'a> {
     pub data: &'a Field,
     pub attrs: FieldAttributes,
-    pub declaration_index: usize,
-    /// This index accounts for the removal of [ignored] fields.
-    pub reflection_index: Option<usize>,
+    pub field_index: usize,
 }
 
 // -----------------------------------------------------------------------------
@@ -36,12 +34,7 @@ impl<'a> StructField<'a> {
 
         let name = match &self.data.ident {
             Some(ident) => ident.to_string().to_token_stream(), // String Literal
-            None => match self.reflection_index {
-                Some(index) => index.to_token_stream(),
-                None => unreachable!(
-                    "`StructField::to_info_tokens` is only allowed to be called for active fields."
-                ),
-            },
+            None => self.field_index.to_token_stream(),
         };
 
         let ty = &self.data.ty;
@@ -55,29 +48,28 @@ impl<'a> StructField<'a> {
         // If feature is diabled, this function will return a empty TokenStream, so it's safe.
         let with_docs = self.attrs.docs.get_expression_with();
 
+        let with_skip_serde = if self.attrs.skip_serde.is_some() {
+            quote! { .with_skip_serde(true) }
+        } else {
+            crate::utils::empty()
+        };
+
         quote! {
             #field_info::new::<#ty>(#name)
+                #with_skip_serde
                 #with_custom_attributes
                 #with_docs
         }
     }
 
-    /// Returns a token stream for generating a `FieldId` for this field.
-    pub fn field_name(&self) -> proc_macro2::TokenStream {
-        match &self.data.ident {
-            Some(ident) => ident.to_string().to_token_stream(),
-            None => self.declaration_index.to_string().to_token_stream(),
-        }
-    }
-
-    /// Generates a [`Member`] based on this field.
+    /// Generates a [`syn::Member`] based on this field.
     ///
     /// If the field is unnamed, the declaration index is used.
     /// This allows this member to be used for both active and ignored fields.
     pub fn to_member(&self) -> syn::Member {
         match &self.data.ident {
             Some(ident) => syn::Member::Named(ident.clone()),
-            None => syn::Member::Unnamed(self.declaration_index.into()),
+            None => syn::Member::Unnamed(self.field_index.into()),
         }
     }
 
@@ -86,12 +78,9 @@ impl<'a> StructField<'a> {
     /// - Named fields return values similar to `"name"`.
     /// - Unnamedfields return values similar to `2`.
     pub fn reflect_accessor(&self) -> proc_macro2::TokenStream {
-        if self.attrs.ignore.is_some() {
-            panic!("Non-active fields cannot obtain reflect_accessor.");
-        }
         match &self.data.ident {
             Some(ident) => ident.to_string().to_token_stream(),
-            None => self.reflection_index.to_token_stream(),
+            None => self.field_index.to_token_stream(),
         }
     }
 }
@@ -123,9 +112,7 @@ impl<'a> ReflectStruct<'a> {
 
     /// Get an iterator of fields which are exposed to the reflection API.
     pub fn active_fields(&self) -> impl Iterator<Item = &StructField<'a>> {
-        self.fields()
-            .iter()
-            .filter(|field| field.attrs.ignore.is_none())
+        self.fields().iter()
     }
 
     pub fn to_info_tokens(&self, is_tuple: bool) -> proc_macro2::TokenStream {

@@ -45,7 +45,6 @@ pub(crate) use info::*;
 pub(crate) use ops::*;
 pub(crate) use registry::*;
 
-#[cfg(feature = "auto_register")]
 #[inline(always)]
 pub(crate) fn auto_register_(
     vc_reflect_path: &syn::Path,

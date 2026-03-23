@@ -43,7 +43,8 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for MapVisitor<'_, P> {
             )));
         };
 
-        let mut dynamic_map = DynamicMap::with_capacity(map.size_hint().unwrap_or_default());
+        let capacity_hint = map.size_hint().unwrap_or_default();
+        let mut dynamic = DynamicMap::with_capacity(capacity_hint);
 
         while let Some(key) = map.next_key_seed(DeserializeDriver::new_internal(
             key_meta,
@@ -56,9 +57,9 @@ impl<'de, P: DeserializeProcessor> Visitor<'de> for MapVisitor<'_, P> {
                 self.processor.as_deref_mut(),
             ))?;
 
-            dynamic_map.extend_boxed(key, value);
+            dynamic.extend_boxed(key, value);
         }
 
-        Ok(dynamic_map)
+        Ok(dynamic)
     }
 }

@@ -1,5 +1,5 @@
-use crate::impls::NonGenericTypeInfoCell;
 use crate::info::{OpaqueInfo, TypeInfo, TypePath, Typed};
+use crate::prelude::ReflectDefault;
 use crate::registry::{FromType, GetTypeMeta, TypeMeta};
 use crate::registry::{ReflectFromPtr, ReflectFromReflect, ReflectSerialize};
 use crate::{FromReflect, Reflect};
@@ -24,8 +24,8 @@ impl TypePath for str {
 
 impl Typed for &'static str {
     fn type_info() -> &'static TypeInfo {
-        static CELL: NonGenericTypeInfoCell = NonGenericTypeInfoCell::new();
-        CELL.get_or_init(|| TypeInfo::Opaque(OpaqueInfo::new::<Self>()))
+        static INFO: TypeInfo = TypeInfo::Opaque(OpaqueInfo::new::<&'static str>());
+        &INFO
     }
 }
 
@@ -35,7 +35,8 @@ impl Reflect for &'static str {
 
 impl GetTypeMeta for &'static str {
     fn get_type_meta() -> TypeMeta {
-        let mut type_meta = TypeMeta::with_capacity::<Self>(3);
+        let mut type_meta = TypeMeta::with_capacity::<Self>(4);
+        type_meta.insert_trait::<ReflectDefault>(FromType::<Self>::from_type());
         type_meta.insert_trait::<ReflectFromPtr>(FromType::<Self>::from_type());
         type_meta.insert_trait::<ReflectFromReflect>(FromType::<Self>::from_type());
         type_meta.insert_trait::<ReflectSerialize>(FromType::<Self>::from_type());

@@ -39,7 +39,7 @@ use crate::reflection::impl_reflect_cast_fn;
 ///
 /// // Create a DynamicEnum to represent the new value
 /// let mut dyn_enum = DynamicEnum::new(
-///   "None",
+///   1, "None",
 ///   DynamicVariant::Unit
 /// );
 ///
@@ -98,46 +98,18 @@ impl DynamicEnum {
     ///
     /// ```
     /// # use vc_reflect::{Reflect, ops::{DynamicEnum, DynamicVariant}};
-    /// let mut dynamic_option = DynamicEnum::new(
-    ///     "None",
-    ///     DynamicVariant::Unit
-    /// );
+    /// let mut dynamic_option = DynamicEnum::new(1, "None", ());
     /// ```
     #[inline]
-    pub fn new<I: Into<Cow<'static, str>>, V: Into<DynamicVariant>>(
-        variant_name: I,
-        variant: V,
-    ) -> Self {
+    pub fn new<I, V>(index: usize, name: I, variant: V) -> Self
+    where
+        I: Into<Cow<'static, str>>,
+        V: Into<DynamicVariant>,
+    {
         Self {
             info: None,
-            variant_index: 0,
-            variant_name: variant_name.into(),
-            variant: variant.into(),
-        }
-    }
-
-    /// Create a new [`DynamicEnum`] with a variant index to represent an enum at runtime.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use vc_reflect::{Reflect, ops::{DynamicEnum, DynamicVariant}};
-    /// let mut dynamic_option = DynamicEnum::new_with_index(
-    ///     0,
-    ///     "None",
-    ///     DynamicVariant::Unit
-    /// );
-    /// ```
-    #[inline]
-    pub fn new_with_index<I: Into<Cow<'static, str>>, V: Into<DynamicVariant>>(
-        variant_index: usize,
-        variant_name: I,
-        variant: V,
-    ) -> Self {
-        Self {
-            info: None,
-            variant_index,
-            variant_name: variant_name.into(),
+            variant_index: index,
+            variant_name: name.into(),
             variant: variant.into(),
         }
     }
@@ -169,51 +141,21 @@ impl DynamicEnum {
     ///
     /// ```
     /// # use vc_reflect::{Reflect, ops::{DynamicEnum, DynamicVariant, DynamicTuple}};
-    /// let mut dynamic_option = DynamicEnum::new(
-    ///     "None",
-    ///     DynamicVariant::Unit
-    /// );
+    /// let mut dynamic_option = DynamicEnum::new(1, "None", ());
     ///
     /// let mut val = DynamicTuple::new();
     /// val.extend(1);
     ///
-    /// dynamic_option.set_variant("Some", val);
+    /// dynamic_option.set_variant(0, "Some", val);
     /// ```
     #[inline]
-    pub fn set_variant<I: Into<Cow<'static, str>>, V: Into<DynamicVariant>>(
-        &mut self,
-        name: I,
-        variant: V,
-    ) {
+    pub fn set_variant<I, V>(&mut self, index: usize, name: I, variant: V)
+    where
+        I: Into<Cow<'static, str>>,
+        V: Into<DynamicVariant>,
+    {
         self.variant_name = name.into();
-        self.variant = variant.into();
-    }
-
-    /// Set the current enum variant represented by this struct along with its variant index.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use vc_reflect::{Reflect, ops::{DynamicEnum, DynamicVariant, DynamicTuple}};
-    /// let mut dynamic_option = DynamicEnum::new(
-    ///     "None",
-    ///     DynamicVariant::Unit
-    /// );
-    ///
-    /// let mut val = DynamicTuple::new();
-    /// val.extend(1);
-    ///
-    /// dynamic_option.set_variant_with_index(1, "Some", val);
-    /// ```
-    #[inline]
-    pub fn set_variant_with_index<I: Into<Cow<'static, str>>, V: Into<DynamicVariant>>(
-        &mut self,
-        variant_index: usize,
-        variant_name: I,
-        variant: V,
-    ) {
-        self.variant_index = variant_index;
-        self.variant_name = variant_name.into();
+        self.variant_index = index;
         self.variant = variant.into();
     }
 
@@ -226,7 +168,7 @@ impl DynamicEnum {
     /// let mut val = DynamicTuple::new();
     /// val.extend(1);
     ///
-    /// let dynamic_option = DynamicEnum::new("Some", val);
+    /// let dynamic_option = DynamicEnum::new(0, "Some", val);
     ///
     /// if let DynamicVariant::Tuple(tuple) = dynamic_option.variant() {
     ///     /* ... */
@@ -242,8 +184,7 @@ impl DynamicEnum {
     /// Using the mut reference to switch to a different variant will ___not___ update the
     /// internal tracking of the variant name and index.
     ///
-    /// If you want to switch variants, prefer one of the setters:
-    /// [`DynamicEnum::set_variant`] or [`DynamicEnum::set_variant_with_index`].
+    /// If you want to switch variants, can use [`DynamicEnum::set_variant`].
     ///
     /// # Examples
     ///
@@ -252,7 +193,7 @@ impl DynamicEnum {
     /// let mut val = DynamicTuple::new();
     /// val.extend(1);
     ///
-    /// let mut dynamic_option = DynamicEnum::new("Some", val);
+    /// let mut dynamic_option = DynamicEnum::new(0, "Some", val);
     ///
     /// if let DynamicVariant::Tuple(tuple) = dynamic_option.variant_mut() {
     ///     /* ... */
@@ -261,17 +202,6 @@ impl DynamicEnum {
     #[inline]
     pub fn variant_mut(&mut self) -> &mut DynamicVariant {
         &mut self.variant
-    }
-
-    /// Gets the index of the field with the given name.
-    ///
-    /// For non-[`VariantKind::Struct`] variants, return `None` always.
-    pub fn index_of(&self, name: &str) -> Option<usize> {
-        if let DynamicVariant::Struct(data) = &self.variant {
-            data.index_of(name)
-        } else {
-            None
-        }
     }
 
     /// Create a [`DynamicEnum`] from an existing one.
@@ -306,7 +236,7 @@ impl DynamicEnum {
     #[inline(never)]
     pub fn from_ref<TEnum: Enum + ?Sized>(value: &TEnum) -> Self {
         let mut dyn_enum = match value.variant_kind() {
-            VariantKind::Unit => DynamicEnum::new_with_index(
+            VariantKind::Unit => DynamicEnum::new(
                 value.variant_index(),
                 value.variant_name().to_owned(),
                 DynamicVariant::Unit,
@@ -316,7 +246,7 @@ impl DynamicEnum {
                 for field in value.iter_fields() {
                     data.extend_boxed(field.value().to_dynamic());
                 }
-                DynamicEnum::new_with_index(
+                DynamicEnum::new(
                     value.variant_index(),
                     value.variant_name().to_owned(),
                     DynamicVariant::Tuple(data),
@@ -328,7 +258,7 @@ impl DynamicEnum {
                     let name = field.name().unwrap();
                     data.extend_boxed(name.to_owned(), field.value().to_dynamic());
                 }
-                DynamicEnum::new_with_index(
+                DynamicEnum::new(
                     value.variant_index(),
                     value.variant_name().to_owned(),
                     DynamicVariant::Struct(data),
@@ -386,7 +316,8 @@ impl Reflect for DynamicEnum {
                     DynamicVariant::Struct(dyn_struct)
                 }
             };
-            self.set_variant(y.variant_name().to_owned(), dyn_variant);
+
+            self.set_variant(y.variant_index(), y.variant_name().to_owned(), dyn_variant);
         }
         Ok(())
     }

@@ -22,7 +22,7 @@ pub(crate) fn impl_tuple_struct(info: &ReflectStruct) -> TokenStream {
 
     // trait: Typed
     let typed_trait_tokens = if meta.attrs().impl_switchs.impl_typed {
-        impl_trait_typed(meta, info.to_info_tokens(true), false)
+        impl_trait_typed(meta, info.to_info_tokens(true), false, false)
     } else {
         crate::utils::empty()
     };
@@ -197,7 +197,6 @@ fn get_tuple_struct_eq_impl(meta: &ReflectMeta) -> TokenStream {
         let reflect_eq = Ident::new("reflect_eq", span);
 
         quote! {
-            #[inline]
             fn #reflect_eq(&self, __other__: &dyn #reflect_) -> #OptionFP<bool> {
                 if let #OptionFP::Some(__value__) = <dyn #reflect_>::downcast_ref::<Self>(__other__) {
                     return #OptionFP::Some( #PartialEqFP::eq(self, __value__) );
@@ -227,7 +226,6 @@ fn get_tuple_struct_cmp_impl(meta: &ReflectMeta) -> TokenStream {
         let reflect_cmp = Ident::new("reflect_cmp", span);
 
         quote! {
-            #[inline]
             fn #reflect_cmp(&self, __other__: &dyn #reflect_) -> #OptionFP<::core::cmp::Ordering> {
                 if let #OptionFP::Some(__value__) = <dyn #reflect_>::downcast_ref::<Self>(__other__) {
                     return #PartialOrdFP::partial_cmp(self, __value__);
@@ -257,7 +255,6 @@ fn get_tuple_struct_hash_impl(meta: &ReflectMeta) -> TokenStream {
         let reflect_hash = Ident::new("reflect_hash", span);
 
         quote! {
-            #[inline]
             fn #reflect_hash(&self) -> #OptionFP<u64> {
                 let mut hasher = #reflect_hasher();
                 <Self as #HashFP>::hash(self, &mut hasher);

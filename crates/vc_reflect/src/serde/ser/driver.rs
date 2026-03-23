@@ -89,6 +89,7 @@ use crate::registry::{ReflectSerialize, TypeRegistry};
 ///
 /// ```
 /// # use vc_reflect::{registry::TypeRegistry, serde::SerializeDriver, Reflect};
+/// #
 /// #[derive(Reflect, PartialEq, Debug)]
 /// struct MyStruct {
 ///   value: i32
@@ -292,20 +293,22 @@ impl<'a, P: SerializeProcessor> Serialize for SerializeDriver<'a, P> {
 /// # Examples
 ///
 /// ```
-/// # use vc_reflect::{registry::TypeRegistry, serde::ReflectSerializeDriver, Reflect};
-/// #[derive(Reflect, PartialEq, Debug)]
+/// # use vc_reflect::prelude::{TypeRegistry, ReflectSerializeDriver, Reflect};
+/// #
+/// #[derive(Reflect)]
+/// #[reflect(auto_register)]
 /// #[reflect(type_path = "my_crate::MyStruct")]
 /// struct MyStruct {
 ///   value: i32
 /// }
 ///
 /// let mut registry = TypeRegistry::new();
-/// registry.register::<MyStruct>();
+/// registry.auto_register();
 ///
 /// let input = MyStruct { value: 123 };
 ///
-/// let reflect_serializer = ReflectSerializeDriver::new(&input, &registry);
-/// let output = ron::to_string(&reflect_serializer).unwrap();
+/// let serializer = ReflectSerializeDriver::new(&input, &registry);
+/// let output = ron::to_string(&serializer).unwrap();
 ///
 /// assert_eq!(output, r#"{"my_crate::MyStruct":(value:123)}"#);
 /// ```
@@ -356,14 +359,11 @@ impl<P: SerializeProcessor> Serialize for ReflectSerializeDriver<'_, P> {
             TYPE_INFO_STACK.with_borrow_mut(|stack|stack.clear());
         }
 
-        let info = match self.value.represented_type_info() {
-            Some(info) => info,
-            None => {
-                return Err(ser::Error::custom(format!(
-                    "cannot get represented type from type: `{}`.",
-                    self.value.reflect_type_path(),
-                )));
-            }
+        let Some(info) = self.value.represented_type_info() else {
+            return Err(ser::Error::custom(format!(
+                "cannot get represented type from type: `{}`.",
+                self.value.reflect_type_path(),
+            )));
         };
 
         let mut state = serializer.serialize_map(Some(1))?;
